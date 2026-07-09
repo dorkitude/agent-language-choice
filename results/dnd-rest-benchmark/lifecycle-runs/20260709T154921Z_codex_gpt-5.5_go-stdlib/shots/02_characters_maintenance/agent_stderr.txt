@@ -1,0 +1,3231 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4794-093a-75c1-bfcc-276031f2b170
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: go-stdlib
+        Language: go
+        Framework/runtime: stdlib
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Go 1.26.5, net/http, and encoding/json. Do not add third-party packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Go service structure first so the new character endpoints fit the current routing and response conventions.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+M  ../../../../../../.gitmodules
+R  ../../../../../../20260608-agenda.md -> ../../../../../2026-06-08-ingest-time-compilation/20260608-agenda.md
+R  ../../../../../../20260608-paper.md -> ../../../../../2026-06-08-ingest-time-compilation/20260608-paper.md
+R  ../../../../../../README.md -> ../../../../../2026-06-08-ingest-time-compilation/README.md
+R  ../../../../../../isc -> ../../../../../2026-06-08-ingest-time-compilation/isc
+R  ../../../../../../records/ies-2026-acceptance-email.md -> ../../../../../2026-06-08-ingest-time-compilation/records/ies-2026-acceptance-email.md
+?? ../../../../../../README.md
+?? ../../../../
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+shots/02_characters_maintenance/PROMPT.md
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+dndeval-core-report.json
+VERSION-PINS.json
+main.go
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+agent_last_message.txt
+setup.json
+go.mod
+
+codex
+The workspace has a small stdlib Go app already. Git status is showing unrelated changes far above this benchmark directory, so I’ll ignore those and only touch files in the current run directory.
+exec
+/bin/zsh -lc "sed -n '1,240p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"regexp"
+	"sort"
+	"strconv"
+)
+
+var diceExpression = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/v1/dice/stats", diceStatsHandler)
+	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	addr := "127.0.0.1:" + port
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+type diceStatsRequest struct {
+	Expression string `json:"expression"`
+}
+
+type diceStatsResponse struct {
+	DiceCount int     `json:"dice_count"`
+	Sides     int     `json:"sides"`
+	Modifier  int     `json:"modifier"`
+	Min       int     `json:"min"`
+	Max       int     `json:"max"`
+	Average   float64 `json:"average"`
+}
+
+func diceStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req diceStatsRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	count, sides, modifier, err := parseDiceExpression(req.Expression)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid expression")
+		return
+	}
+
+	minimum := count + modifier
+	maximum := count*sides + modifier
+	average := float64(count)*(float64(sides)+1)/2 + float64(modifier)
+
+	writeJSON(w, http.StatusOK, diceStatsResponse{
+		DiceCount: count,
+		Sides:     sides,
+		Modifier:  modifier,
+		Min:       minimum,
+		Max:       maximum,
+		Average:   average,
+	})
+}
+
+func parseDiceExpression(expression string) (int, int, int, error) {
+	matches := diceExpression.FindStringSubmatch(expression)
+	if matches == nil {
+		return 0, 0, 0, errors.New("expression does not match dice grammar")
+	}
+
+	count, err := strconv.Atoi(matches[1])
+	if err != nil || count <= 0 {
+		return 0, 0, 0, errors.New("invalid dice count")
+	}
+
+	sides, err := strconv.Atoi(matches[2])
+	if err != nil || sides <= 0 {
+		return 0, 0, 0, errors.New("invalid die sides")
+	}
+
+	modifier := 0
+	if matches[4] != "" {
+		modifier, err = strconv.Atoi(matches[4])
+		if err != nil {
+			return 0, 0, 0, errors.New("invalid modifier")
+		}
+		if matches[3] == "-" {
+			modifier = -modifier
+		}
+	}
+
+	return count, sides, modifier, nil
+}
+
+type abilityCheckRequest struct {
+	Roll     int `json:"roll"`
+	Modifier int `json:"modifier"`
+	DC       int `json:"dc"`
+}
+
+type abilityCheckResponse struct {
+	Total   int  `json:"total"`
+	Success bool `json:"success"`
+	Margin  int  `json:"margin"`
+}
+
+func abilityCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req abilityCheckRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	total := req.Roll + req.Modifier
+	writeJSON(w, http.StatusOK, abilityCheckResponse{
+		Total:   total,
+		Success: total >= req.DC,
+		Margin:  total - req.DC,
+	})
+}
+
+type adjustedXPRequest struct {
+	Party    []partyMember `json:"party"`
+	Monsters []monster     `json:"monsters"`
+}
+
+type partyMember struct {
+	Level int `json:"level"`
+}
+
+type monster struct {
+	CR    string `json:"cr"`
+	Count int    `json:"count"`
+}
+
+type thresholds struct {
+	Easy   int `json:"easy"`
+	Medium int `json:"medium"`
+	Hard   int `json:"hard"`
+	Deadly int `json:"deadly"`
+}
+
+type adjustedXPResponse struct {
+	BaseXP       int        `json:"base_xp"`
+	MonsterCount int        `json:"monster_count"`
+	Multiplier   float64    `json:"multiplier"`
+	AdjustedXP   float64    `json:"adjusted_xp"`
+	Difficulty   string     `json:"difficulty"`
+	Thresholds   thresholds `json:"thresholds"`
+}
+
+var monsterXP = map[string]int{
+	"0":   10,
+	"1/8": 25,
+	"1/4": 50,
+	"1/2": 100,
+	"1":   200,
+	"2":   450,
+	"3":   700,
+	"4":   1100,
+	"5":   1800,
+}
+
+func adjustedXPHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req adjustedXPRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	baseXP := 0
+	monsterCount := 0
+	for _, monster := range req.Monsters {
+		xp, ok := monsterXP[monster.CR]
+		if !ok || monster.Count <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid monster")
+			return
+		}
+		baseXP += xp * monster.Count
+		monsterCount += monster.Count
+	}
+
+	partyThresholds := thresholds{}
+	for _, member := range req.Party {
+		if member.Level != 3 {
+			writeError(w, http.StatusBadRequest, "unsupported party level")
+			return
+		}
+		partyThresholds.Easy += 75
+		partyThresholds.Medium += 150
+		partyThresholds.Hard += 225
+		partyThresholds.Deadly += 400
+	}
+
+	multiplier := monsterMultiplier(monsterCount)
+	adjustedXP := float64(baseXP) * multiplier
+	writeJSON(w, http.StatusOK, adjustedXPResponse{
+		BaseXP:       baseXP,
+		MonsterCount: monsterCount,
+		Multiplier:   multiplier,
+		AdjustedXP:   adjustedXP,
+		Difficulty:   difficulty(adjustedXP, partyThresholds),
+		Thresholds:   partyThresholds,
+	})
+}
+
+func monsterMultiplier(count int) float64 {
+
+exec
+/bin/zsh -lc 'cat go.mod' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+module dndrest
+
+go 1.26
+
+exec
+/bin/zsh -lc "sed -n '1,220p' PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: go-stdlib
+        Language: go
+        Framework/runtime: stdlib
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Go 1.26.5, net/http, and encoding/json. Do not add third-party packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+go run .
+
+exec
+/bin/zsh -lc "sed -n '241,520p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+	switch {
+	case count <= 0:
+		return 0
+	case count == 1:
+		return 1
+	case count == 2:
+		return 1.5
+	case count <= 6:
+		return 2
+	case count <= 10:
+		return 2.5
+	case count <= 14:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func difficulty(adjustedXP float64, t thresholds) string {
+	switch {
+	case t.Deadly > 0 && adjustedXP >= float64(t.Deadly):
+		return "deadly"
+	case t.Hard > 0 && adjustedXP >= float64(t.Hard):
+		return "hard"
+	case t.Medium > 0 && adjustedXP >= float64(t.Medium):
+		return "medium"
+	case t.Easy > 0 && adjustedXP >= float64(t.Easy):
+		return "easy"
+	default:
+		return "trivial"
+	}
+}
+
+type initiativeOrderRequest struct {
+	Combatants []combatant `json:"combatants"`
+}
+
+type combatant struct {
+	Name string `json:"name"`
+	Dex  int    `json:"dex"`
+	Roll int    `json:"roll"`
+}
+
+type initiativeEntry struct {
+	Name  string `json:"name"`
+	Score int    `json:"score"`
+}
+
+type initiativeOrderResponse struct {
+	Order []initiativeEntry `json:"order"`
+}
+
+func initiativeOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req initiativeOrderRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	combatants := append([]combatant(nil), req.Combatants...)
+	sort.SliceStable(combatants, func(i, j int) bool {
+		leftScore := combatants[i].Roll + combatants[i].Dex
+		rightScore := combatants[j].Roll + combatants[j].Dex
+		if leftScore != rightScore {
+			return leftScore > rightScore
+		}
+		if combatants[i].Dex != combatants[j].Dex {
+			return combatants[i].Dex > combatants[j].Dex
+		}
+		return combatants[i].Name < combatants[j].Name
+	})
+
+	order := make([]initiativeEntry, 0, len(combatants))
+	for _, combatant := range combatants {
+		order = append(order, initiativeEntry{
+			Name:  combatant.Name,
+			Score: combatant.Roll + combatant.Dex,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+}
+
+func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	return false
+}
+
+func readJSON(r *http.Request, dst any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	if decoder.Decode(&struct{}{}) != io.EOF {
+		return fmt.Errorf("request body must contain a single json value")
+	}
+	return nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		log.Printf("write response: %v", err)
+	}
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, errorResponse{Error: message})
+}
+
+codex
+I found the app is a single `main.go` with strict JSON decoding and JSON error responses. I’m adding the three handlers plus shared helper functions for score validation, modifier math, and proficiency so derived stats can reuse the same rules.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+codex
+The new routes are in place. I’ll format and compile-check now; I won’t start the HTTP server, per the benchmark contract.
+exec
+/bin/zsh -lc 'gofmt -w main.go' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+ exited 1 in 233ms:
+FAIL	dndrest [setup failed]
+# dndrest
+open /Users/dorkitude/Library/Caches/go-build/8a/8acb3230b84e2928922b8c9a8d65b339fee2a6ea3b21ef69dbaad040a06085af-d: operation not permitted
+FAIL
+
+codex
+`go test` hit the sandbox because the default Go build cache is under the user Library. I’ll rerun with `GOCACHE` inside the writable workspace so the compile check stays within the allowed directory.
+exec
+/bin/zsh -lc 'GOCACHE="$PWD/.gocache" go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+ succeeded in 3585ms:
+?   	dndrest	[no test files]
+
+2026-07-09T15:53:02.814441Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'rm -rf .gocache'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -rf .gocache'` rejected: blocked by policy\")" }
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+codex
+The compile check passes with the workspace-local Go cache. Cleanup of that generated cache directory is blocked by policy, so I’ll leave `.gocache` as a local build artifact rather than forcing it.
+exec
+/bin/zsh -lc 'find . -maxdepth 1 -type d -name .gocache -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+./.gocache
+
+exec
+/bin/zsh -lc 'git diff -- main.go run.sh go.mod' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+exec
+/bin/zsh -lc 'git status --short -- main.go run.sh go.mod .gocache' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+exec
+/bin/zsh -lc 'ls -ld .gocache' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+drwxr-xr-x@ 260 dorkitude  staff  8320 Jul  9 08:52 .gocache
+
+ succeeded in 0ms:
+?? .gocache/
+?? go.mod
+?? main.go
+?? run.sh
+
+exec
+/bin/zsh -lc 'rg -n "characters|abilityModifier|proficiencyBonus|derivedStats" main.go' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+29:	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+30:	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+31:	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+331:type abilityModifierRequest struct {
+335:type abilityModifierResponse struct {
+340:func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+345:	var req abilityModifierRequest
+355:	writeJSON(w, http.StatusOK, abilityModifierResponse{
+357:		Modifier: abilityModifier(req.Score),
+381:	bonus, ok := proficiencyBonus(req.Level)
+408:type derivedStatsRequest struct {
+414:type derivedStatsResponse struct {
+422:func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
+427:	var req derivedStatsRequest
+433:	bonus, ok := proficiencyBonus(req.Level)
+444:		Str: abilityModifier(req.Abilities.Str),
+445:		Dex: abilityModifier(req.Abilities.Dex),
+446:		Con: abilityModifier(req.Abilities.Con),
+447:		Int: abilityModifier(req.Abilities.Int),
+448:		Wis: abilityModifier(req.Abilities.Wis),
+449:		Cha: abilityModifier(req.Abilities.Cha),
+457:	writeJSON(w, http.StatusOK, derivedStatsResponse{
+479:func abilityModifier(score int) int {
+483:func proficiencyBonus(level int) (int, bool) {
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+exec
+/bin/zsh -lc 'find .gocache -type f -delete; find .gocache -type d -empty -delete' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+ succeeded in 186ms:
+exec
+/bin/zsh -lc 'find . -maxdepth 1 -type d -name .gocache -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short -- main.go run.sh go.mod .gocache' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+?? go.mod
+?? main.go
+?? run.sh
+
+exec
+/bin/zsh -lc "sed -n '320,505p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+	order := make([]initiativeEntry, 0, len(combatants))
+	for _, combatant := range combatants {
+		order = append(order, initiativeEntry{
+			Name:  combatant.Name,
+			Score: combatant.Roll + combatant.Dex,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+}
+
+type abilityModifierRequest struct {
+	Score int `json:"score"`
+}
+
+type abilityModifierResponse struct {
+	Score    int `json:"score"`
+	Modifier int `json:"modifier"`
+}
+
+func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req abilityModifierRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if !validAbilityScore(req.Score) {
+		writeError(w, http.StatusBadRequest, "invalid score")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, abilityModifierResponse{
+		Score:    req.Score,
+		Modifier: abilityModifier(req.Score),
+	})
+}
+
+type proficiencyRequest struct {
+	Level int `json:"level"`
+}
+
+type proficiencyResponse struct {
+	Level            int `json:"level"`
+	ProficiencyBonus int `json:"proficiency_bonus"`
+}
+
+func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req proficiencyRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	bonus, ok := proficiencyBonus(req.Level)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid level")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, proficiencyResponse{
+		Level:            req.Level,
+		ProficiencyBonus: bonus,
+	})
+}
+
+type abilities struct {
+	Str int `json:"str"`
+	Dex int `json:"dex"`
+	Con int `json:"con"`
+	Int int `json:"int"`
+	Wis int `json:"wis"`
+	Cha int `json:"cha"`
+}
+
+type armor struct {
+	Base   int  `json:"base"`
+	Shield bool `json:"shield"`
+	DexCap int  `json:"dex_cap"`
+}
+
+type derivedStatsRequest struct {
+	Level     int       `json:"level"`
+	Abilities abilities `json:"abilities"`
+	Armor     armor     `json:"armor"`
+}
+
+type derivedStatsResponse struct {
+	Level            int       `json:"level"`
+	ProficiencyBonus int       `json:"proficiency_bonus"`
+	HPMax            int       `json:"hp_max"`
+	ArmorClass       int       `json:"armor_class"`
+	Modifiers        abilities `json:"modifiers"`
+}
+
+func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req derivedStatsRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	bonus, ok := proficiencyBonus(req.Level)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid level")
+		return
+	}
+	if !validAbilities(req.Abilities) {
+		writeError(w, http.StatusBadRequest, "invalid abilities")
+		return
+	}
+
+	modifiers := abilities{
+		Str: abilityModifier(req.Abilities.Str),
+		Dex: abilityModifier(req.Abilities.Dex),
+		Con: abilityModifier(req.Abilities.Con),
+		Int: abilityModifier(req.Abilities.Int),
+		Wis: abilityModifier(req.Abilities.Wis),
+		Cha: abilityModifier(req.Abilities.Cha),
+	}
+
+	shieldBonus := 0
+	if req.Armor.Shield {
+		shieldBonus = 2
+	}
+
+	writeJSON(w, http.StatusOK, derivedStatsResponse{
+		Level:            req.Level,
+		ProficiencyBonus: bonus,
+		HPMax:            req.Level * (6 + modifiers.Con),
+		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
+		Modifiers:        modifiers,
+	})
+}
+
+func validAbilityScore(score int) bool {
+	return score >= 1 && score <= 30
+}
+
+func validAbilities(a abilities) bool {
+	return validAbilityScore(a.Str) &&
+		validAbilityScore(a.Dex) &&
+		validAbilityScore(a.Con) &&
+		validAbilityScore(a.Int) &&
+		validAbilityScore(a.Wis) &&
+		validAbilityScore(a.Cha)
+}
+
+func abilityModifier(score int) int {
+	return floorDiv(score-10, 2)
+}
+
+func proficiencyBonus(level int) (int, bool) {
+	if level < 1 || level > 20 {
+		return 0, false
+	}
+	return 2 + (level-1)/4, true
+}
+
+func floorDiv(n, d int) int {
+	q := n / d
+	if n%d != 0 && (n < 0) != (d < 0) {
+		q--
+	}
+	return q
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+codex
+The workspace is clean of the temporary cache again. I’m doing one final compile check with `GOCACHE` in `/private/tmp` so no generated files remain in the run directory.
+exec
+/bin/zsh -lc 'GOCACHE=/private/tmp/codex-go-cache-dndrest go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+ succeeded in 3046ms:
+?   	dndrest	[no test files]
+
+codex
+Implemented the character maintenance stage in [main.go](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go:29):
+
+- Added `POST /v1/characters/ability-modifier`
+- Added `POST /v1/characters/proficiency`
+- Added `POST /v1/characters/derived-stats`
+- Reused strict JSON decoding and existing JSON error behavior
+- Preserved [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/run.sh:1), which starts the server in the foreground with `go run .`
+
+Verification: `GOCACHE=/private/tmp/codex-go-cache-dndrest go test ./...` passes. I did not start the server.
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index c0bb27045ed0215dda8b2705409b604284572d49..434d949901cba4e4f658afbba6cfa62b747b60cb
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -26,6 +26,9 @@
+ 	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+ 	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+ 	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
++	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
++	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
++	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -325,6 +328,180 @@
+ 	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+ }
+ 
++type abilityModifierRequest struct {
++	Score int `json:"score"`
++}
++
++type abilityModifierResponse struct {
++	Score    int `json:"score"`
++	Modifier int `json:"modifier"`
++}
++
++func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req abilityModifierRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++	if !validAbilityScore(req.Score) {
++		writeError(w, http.StatusBadRequest, "invalid score")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, abilityModifierResponse{
++		Score:    req.Score,
++		Modifier: abilityModifier(req.Score),
++	})
++}
++
++type proficiencyRequest struct {
++	Level int `json:"level"`
++}
++
++type proficiencyResponse struct {
++	Level            int `json:"level"`
++	ProficiencyBonus int `json:"proficiency_bonus"`
++}
++
++func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req proficiencyRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++
++	writeJSON(w, http.StatusOK, proficiencyResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++	})
++}
++
++type abilities struct {
++	Str int `json:"str"`
++	Dex int `json:"dex"`
++	Con int `json:"con"`
++	Int int `json:"int"`
++	Wis int `json:"wis"`
++	Cha int `json:"cha"`
++}
++
++type armor struct {
++	Base   int  `json:"base"`
++	Shield bool `json:"shield"`
++	DexCap int  `json:"dex_cap"`
++}
++
++type derivedStatsRequest struct {
++	Level     int       `json:"level"`
++	Abilities abilities `json:"abilities"`
++	Armor     armor     `json:"armor"`
++}
++
++type derivedStatsResponse struct {
++	Level            int       `json:"level"`
++	ProficiencyBonus int       `json:"proficiency_bonus"`
++	HPMax            int       `json:"hp_max"`
++	ArmorClass       int       `json:"armor_class"`
++	Modifiers        abilities `json:"modifiers"`
++}
++
++func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req derivedStatsRequest
++	if err := readJSON(r, &req); err != nil {
++		writeError(w, http.StatusBadRequest, "invalid json")
++		return
++	}
++
++	bonus, ok := proficiencyBonus(req.Level)
++	if !ok {
++		writeError(w, http.StatusBadRequest, "invalid level")
++		return
++	}
++	if !validAbilities(req.Abilities) {
++		writeError(w, http.StatusBadRequest, "invalid abilities")
++		return
++	}
++
++	modifiers := abilities{
++		Str: abilityModifier(req.Abilities.Str),
++		Dex: abilityModifier(req.Abilities.Dex),
++		Con: abilityModifier(req.Abilities.Con),
++		Int: abilityModifier(req.Abilities.Int),
++		Wis: abilityModifier(req.Abilities.Wis),
++		Cha: abilityModifier(req.Abilities.Cha),
++	}
++
++	shieldBonus := 0
++	if req.Armor.Shield {
++		shieldBonus = 2
++	}
++
++	writeJSON(w, http.StatusOK, derivedStatsResponse{
++		Level:            req.Level,
++		ProficiencyBonus: bonus,
++		HPMax:            req.Level * (6 + modifiers.Con),
++		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
++		Modifiers:        modifiers,
++	})
++}
++
++func validAbilityScore(score int) bool {
++	return score >= 1 && score <= 30
++}
++
++func validAbilities(a abilities) bool {
++	return validAbilityScore(a.Str) &&
++		validAbilityScore(a.Dex) &&
++		validAbilityScore(a.Con) &&
++		validAbilityScore(a.Int) &&
++		validAbilityScore(a.Wis) &&
++		validAbilityScore(a.Cha)
++}
++
++func abilityModifier(score int) int {
++	return floorDiv(score-10, 2)
++}
++
++func proficiencyBonus(level int) (int, bool) {
++	if level < 1 || level > 20 {
++		return 0, false
++	}
++	return 2 + (level-1)/4, true
++}
++
++func floorDiv(n, d int) int {
++	q := n / d
++	if n%d != 0 && (n < 0) != (d < 0) {
++		q--
++	}
++	return q
++}
++
++func minInt(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
+ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+ 	if r.Method == method {
+ 		return true
+
+tokens used
+31,946

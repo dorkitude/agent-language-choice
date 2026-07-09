@@ -1,0 +1,17 @@
+All five endpoints produce byte-for-byte spec-matching output through `./run.sh`. 🎲✨
+
+## Summary
+
+Implemented a single-file Go stdlib server (`main.go`, no third-party deps) using `net/http` + `encoding/json`:
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Strict `<count>d<sides>[±mod]` parser → 400 on any malformed expression (empty count/sides, non-positive, trailing sign, duplicate `d`, etc.) |
+| `POST /v1/checks/ability` | `total = roll+modifier`, `success = total>=dc`, `margin = total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count multipliers, summed level-3 party thresholds, difficulty ranking `trivial→deadly`; 400 on unsupported CR/level |
+| `POST /v1/initiative/order` | Sort: score desc → dex desc → name asc; empty list yields `[]` not `null` |
+
+**Key representation call:** used `float64` for `average`, `multiplier`, and `adjusted_xp`, and `int` for the genuinely integral fields (`base_xp`, `monster_count`, thresholds). Reasoning: the spec renders `"multiplier": 2` and `"average": 10` *without* a trailing `.0` — which a Python-float reference would emit as `2.0`. That points to a JS/Go/Ruby-style float reference where whole floats render bare. Go's `float64` JSON marshaling does exactly this (10→`10`, 1.5→`1.5`, 3.5→`3.5`), and every value these formulas can produce is either `.0` or `.5` — both exactly representable in float64. The `count<=1`/`==2`/`3-6`/`7-10`/`11-14`/`15+` multiplier bands all verified, including the `1.5` case (`adjusted_xp` 600) and `trivial` difficulty.
+
+The existing `run.sh` (`go run .`, foreground) and `go.mod` were already correct and untouched. Method-pattern routing gives automatic 405s on wrong verbs; unknown paths 404. No server was left running. 🚀

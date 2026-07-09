@@ -1,0 +1,28 @@
+Done! 🐉🎲
+
+## Summary
+
+Built a pure-PHP-stdlib D&D REST engine (no Composer, just the built-in server) in `index.php`, with the existing `run.sh` already doing the right thing:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+```
+
+**Endpoints implemented** (all verified against the spec samples — exact byte-for-byte matches):
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex parses `<count>d<sides>[±<mod>]`, validates `count>0` & `sides>0`, else 400. `average = count*(sides+1)/2 + modifier` (int when whole, float when fractional). |
+| `POST /v1/checks/ability` | `total = roll+modifier`, `success = total>=dc`, `margin = total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count-based multipliers (1/1.5/2/2.5/3/4), summed level-3 thresholds, difficulty = highest threshold reached |
+| `POST /v1/initiative/order` | `score = roll+dex`, sort by score desc → dex desc → name asc |
+
+**Key correctness details:**
+- PHP's `/` yields an `int` when evenly divisible and `float` otherwise, and `json_encode` drops trailing `.0` — so `2d6+3` emits `"average":10` and `850*2` emits `"adjusted_xp":1700` exactly like the spec, while `1d6` correctly emits `3.5` and the 1.5× multiplier emits `1.5`.
+- Strict regex anchored with `\A...\z` (plus `trim`) rejects malformed expressions (`0d6`, `2d0`, `abc`, `2d6+3+4`, missing field, malformed JSON) with 400.
+- Deterministic, single-file router; no packages; server runs in foreground on `127.0.0.1:$PORT`.
+
+`./run.sh` is ready to go. 🎲

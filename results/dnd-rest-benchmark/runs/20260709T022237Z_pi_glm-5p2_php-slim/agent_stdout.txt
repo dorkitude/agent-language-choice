@@ -1,0 +1,24 @@
+All my test servers are cleaned up. 🧹
+
+## Done, Chef! 🎲🐉
+
+The D&D REST engine is implemented in `index.php` (PHP 8.5.8 + Slim 4.15.2 + slim/psr7 1.8.0), and `run.sh` starts it in the foreground on `127.0.0.1:$PORT`.
+
+### Endpoints (all verified against the spec samples)
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` |
+
+### Key correctness details
+- **Dice grammar** parsed with a strict anchored regex `/^(\d+)d(\d+)(?:([+-])(\d+))?$/`; non-positive `count`/`sides` and malformed expressions → `400`. `average = (min+max)/2`, emitted as int when whole (so `2d6+3`→`10`, `1d6`→`3.5`).
+- **Encounter multipliers** map exactly to the 1 / 1.5 / 2 / 2.5 / 3 / 4 tiers; thresholds summed across the party; difficulty picks the highest reached (`trivial`→`deadly`).
+- **Initiative** sorts by score desc → dex desc → name asc (verified with tie-break tests).
+
+### Root cause I fixed 🎯
+Slim 4's `App::run()` does **not** auto-install `ErrorMiddleware`, so by default an unknown route (or any uncaught handler exception) leaks as a PHP fatal rendered as **HTML with a `200` status** — silently wrong. I added the canonical `addRoutingMiddleware()` + `addErrorMiddleware()` (LIFO stack → error middleware is outermost) and registered a JSON default error handler, so 404/405/500 now return proper status codes with `{"error": ...}` JSON, consistent with the all-JSON contract.
+
+The server is not running — `./run.sh` is ready to launch it. 🚀

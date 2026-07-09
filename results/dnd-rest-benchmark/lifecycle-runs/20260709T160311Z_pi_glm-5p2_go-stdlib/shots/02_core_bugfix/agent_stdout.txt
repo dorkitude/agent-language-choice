@@ -1,0 +1,18 @@
+Done, Chef! 🍳
+
+## Root cause
+
+The `average` field in `diceStatsResp` was typed as `int`, so the computation `(min + max) / 2` used **integer division**. For `1d20-1`: `(0 + 19) / 2 = 9` (truncated), but the evaluator wanted `9.5`.
+
+## Fix
+
+Two minimal changes in `main.go`:
+
+1. Changed `Average` field type from `int` → `float64` in the `diceStatsResp` struct.
+2. Changed the computation to float division: `(float64(min) + float64(max)) / 2`.
+
+Go's `encoding/json` emits the shortest round-tripping form, so:
+- `2d6+3` → `average: 10` (whole numbers stay clean ✓ — matches the spec example)
+- `1d20-1` → `average: 9.5` (fractional averages now preserved ✓)
+
+All other endpoints were left untouched, `go vet` is clean, and `./run.sh` (which runs the server in the foreground via `go run .`) is ready to go. 🎲

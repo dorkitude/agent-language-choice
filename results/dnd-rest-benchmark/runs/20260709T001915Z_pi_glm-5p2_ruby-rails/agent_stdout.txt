@@ -1,0 +1,19 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+Built a minimal single-file **Rails 8.1.3 API** app (Ruby 4.0.5) implementing all four D&D REST endpoints.
+
+### Files
+- **`app.rb`** — defines `DndApi::Application` (api-only, production) + a single `DndController` with all endpoints, draws routes, and calls `Rails.application.initialize!` (needed because `config.ru` only `require`s + `run`s, never booting initializers like the logger).
+- **`run.sh`** — `bundle exec rackup -o 127.0.0.1 -p "$PORT"` in the foreground (kept, sets `RAILS_ENV=production`).
+- **`config.ru`** — unchanged (already `require_relative './app'; run Rails.application`).
+
+### Key implementation notes
+- **`/v1/dice/stats`**: regex `\A(\d+)d(\d+)(?:([+-])(\d+))?\z`; `count`/`sides` must be `> 0` else `400`; `average` = exact statistical mean (`(min+max)/2`), returned as int when whole (e.g. `10`) and float otherwise (e.g. `10.5`).
+- **`/v1/encounters/adjusted-xp`**: CR→XP table, monster-count multipliers (`1, 1.5, 2, 2.5, 3, 4`), party thresholds summed across level-3 members, difficulty = highest threshold reached (`trivial`→`deadly`). `adjusted_xp` is the exact product (`52.5` when fractional, `1700` when whole).
+- **`/v1/initiative/order`**: `score = roll + dex`, sorted by score desc → dex desc → name asc.
+- **`/v1/checks/ability`**: `total = roll + modifier`, `success = total >= dc`.
+- Request bodies are parsed directly from `request.raw_post` (Content-Type agnostic), so the harness need not send `application/json`.
+
+All four spec sample responses match **byte-for-byte**, invalid dice expressions return `400`, and the server boots cleanly on `127.0.0.1:$PORT`. 🗡️

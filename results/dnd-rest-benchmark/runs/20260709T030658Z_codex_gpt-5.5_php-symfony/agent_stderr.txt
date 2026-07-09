@@ -1,0 +1,3108 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f44d7-c9ec-78b0-92da-843817990a15
+--------
+user
+You are participating in a programming-language benchmark.
+
+        Target: php-symfony
+        Language: php
+        Framework/runtime: symfony-components
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8, Composer 2.10.2, Symfony HttpFoundation 8.1.1, and Symfony Routing 8.1.0. Implement routing with Symfony components.
+
+        Contract:
+        - Implement the D&D REST API described below.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Do not edit files outside the current working directory.
+        - Prefer deterministic, minimal code.
+
+        Challenge spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the workspace to see what Symfony component skeleton is already present, then implement only the API surface the benchmark needs.
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+vendor/symfony/polyfill-mbstring/bootstrap72.php
+vendor/symfony/polyfill-mbstring/composer.json
+vendor/symfony/polyfill-mbstring/README.md
+vendor/symfony/polyfill-mbstring/bootstrap.php
+vendor/symfony/polyfill-mbstring/Mbstring.php
+vendor/symfony/polyfill-mbstring/Resources/unidata/upperCase.php
+vendor/symfony/polyfill-mbstring/Resources/unidata/titleCaseRegexp.php
+vendor/symfony/polyfill-mbstring/Resources/unidata/lowerCase.php
+vendor/symfony/polyfill-mbstring/Resources/unidata/caseFolding.php
+vendor/symfony/polyfill-mbstring/LICENSE
+vendor/symfony/polyfill-mbstring/bootstrap80.php
+vendor/symfony/http-foundation/Session/SessionBagInterface.php
+vendor/symfony/http-foundation/Session/SessionBagProxy.php
+vendor/symfony/http-foundation/Session/SessionFactory.php
+vendor/symfony/http-foundation/Session/Flash/FlashBag.php
+vendor/symfony/http-foundation/Session/Flash/FlashBagInterface.php
+vendor/symfony/http-foundation/Session/Flash/AutoExpireFlashBag.php
+vendor/symfony/http-foundation/Session/SessionInterface.php
+vendor/symfony/http-foundation/Session/Storage/MockArraySessionStorage.php
+vendor/symfony/http-foundation/Session/Storage/MetadataBag.php
+vendor/symfony/http-foundation/Session/Storage/PhpBridgeSessionStorageFactory.php
+vendor/symfony/http-foundation/Session/Storage/MockFileSessionStorage.php
+vendor/symfony/http-foundation/Session/Storage/SessionStorageFactoryInterface.php
+vendor/symfony/http-foundation/Session/Storage/PhpBridgeSessionStorage.php
+vendor/symfony/http-foundation/Session/Storage/NativeSessionStorageFactory.php
+vendor/symfony/http-foundation/Session/Storage/Proxy/AbstractProxy.php
+vendor/symfony/http-foundation/Session/Storage/Proxy/SessionHandlerProxy.php
+vendor/symfony/http-foundation/Session/Storage/MockFileSessionStorageFactory.php
+vendor/symfony/http-foundation/Session/Storage/SessionStorageInterface.php
+vendor/symfony/http-foundation/Session/Storage/NativeSessionStorage.php
+vendor/symfony/http-foundation/Session/Storage/Handler/MemcachedSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/StrictSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/RedisSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/MongoDbSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/IdentityMarshaller.php
+vendor/symfony/http-foundation/Session/Storage/Handler/MigratingSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/NativeFileSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/MarshallingSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/PdoSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/SessionHandlerFactory.php
+vendor/symfony/http-foundation/Session/Storage/Handler/AbstractSessionHandler.php
+vendor/symfony/http-foundation/Session/Storage/Handler/NullSessionHandler.php
+vendor/symfony/http-foundation/Session/SessionUtils.php
+vendor/symfony/http-foundation/Session/Session.php
+vendor/symfony/http-foundation/Session/SessionFactoryInterface.php
+vendor/symfony/http-foundation/Session/FlashBagAwareSessionInterface.php
+vendor/symfony/http-foundation/Cookie.php
+vendor/symfony/http-foundation/Response.php
+vendor/symfony/http-foundation/InputBag.php
+vendor/symfony/http-foundation/Request.php
+vendor/symfony/http-foundation/README.md
+vendor/symfony/http-foundation/BinaryFileResponse.php
+vendor/symfony/http-foundation/ServerEvent.php
+vendor/symfony/http-foundation/RequestMatcherInterface.php
+vendor/symfony/http-foundation/JsonResponse.php
+vendor/symfony/http-foundation/StreamedResponse.php
+vendor/symfony/http-foundation/EventStreamResponse.php
+vendor/symfony/http-foundation/RedirectResponse.php
+vendor/symfony/http-foundation/RequestStack.php
+vendor/symfony/http-foundation/Session/Attribute/AttributeBag.php
+vendor/symfony/http-foundation/Session/Attribute/AttributeBagInterface.php
+vendor/symfony/http-foundation/UriSigner.php
+vendor/symfony/http-foundation/composer.json
+vendor/symfony/http-foundation/StreamedJsonResponse.php
+vendor/symfony/http-foundation/AcceptHeaderItem.php
+vendor/symfony/http-foundation/IpUtils.php
+vendor/symfony/http-foundation/ParameterBag.php
+vendor/symfony/http-foundation/ChainRequestMatcher.php
+vendor/symfony/http-foundation/UrlHelper.php
+vendor/symfony/http-foundation/HeaderBag.php
+vendor/symfony/http-foundation/FileBag.php
+run.sh
+PROMPT.md
+index.php
+setup.json
+composer.lock
+composer.json
+VERSION-PINS.json
+vendor/autoload.php
+vendor/symfony/deprecation-contracts/composer.json
+vendor/symfony/deprecation-contracts/README.md
+vendor/symfony/deprecation-contracts/function.php
+vendor/symfony/deprecation-contracts/CHANGELOG.md
+vendor/symfony/deprecation-contracts/LICENSE
+vendor/symfony/http-foundation/ResponseHeaderBag.php
+vendor/symfony/http-foundation/AcceptHeader.php
+vendor/symfony/http-foundation/HeaderUtils.php
+vendor/symfony/http-foundation/Exception/SignedUriException.php
+vendor/symfony/http-foundation/Exception/SessionNotFoundException.php
+vendor/symfony/http-foundation/Exception/JsonException.php
+vendor/symfony/http-foundation/Exception/SuspiciousOperationException.php
+vendor/symfony/http-foundation/Exception/ExpiredSignedUriException.php
+vendor/symfony/http-foundation/Exception/UnsignedUriException.php
+vendor/symfony/http-foundation/Exception/BadRequestException.php
+vendor/symfony/http-foundation/Exception/UnverifiedSignedUriException.php
+vendor/symfony/http-foundation/Exception/RequestExceptionInterface.php
+vendor/symfony/http-foundation/Exception/UnexpectedValueException.php
+vendor/symfony/http-foundation/Exception/ExceptionInterface.php
+vendor/symfony/http-foundation/Exception/ConflictingHeadersException.php
+vendor/symfony/http-foundation/Exception/LogicException.php
+vendor/symfony/http-foundation/LICENSE
+vendor/symfony/http-foundation/File/File.php
+vendor/symfony/http-foundation/CHANGELOG.md
+vendor/symfony/http-foundation/ServerBag.php
+vendor/symfony/http-foundation/File/Stream.php
+vendor/symfony/http-foundation/File/UploadedFile.php
+vendor/composer/installed.php
+vendor/composer/InstalledVersions.php
+vendor/composer/autoload_files.php
+vendor/composer/installed.json
+vendor/composer/autoload_real.php
+vendor/composer/autoload_static.php
+vendor/composer/platform_check.php
+vendor/composer/autoload_classmap.php
+vendor/composer/autoload_psr4.php
+vendor/composer/ClassLoader.php
+vendor/composer/LICENSE
+vendor/composer/autoload_namespaces.php
+vendor/symfony/http-foundation/File/Exception/NoTmpDirFileException.php
+vendor/symfony/http-foundation/File/Exception/PartialFileException.php
+vendor/symfony/http-foundation/File/Exception/FileNotFoundException.php
+vendor/symfony/http-foundation/File/Exception/FormSizeFileException.php
+vendor/symfony/http-foundation/File/Exception/UnexpectedTypeException.php
+vendor/symfony/http-foundation/File/Exception/UploadException.php
+vendor/symfony/http-foundation/File/Exception/FileException.php
+vendor/symfony/http-foundation/File/Exception/ExtensionFileException.php
+vendor/symfony/http-foundation/File/Exception/CannotWriteFileException.php
+vendor/symfony/http-foundation/File/Exception/IniSizeFileException.php
+vendor/symfony/http-foundation/File/Exception/NoFileException.php
+vendor/symfony/http-foundation/File/Exception/AccessDeniedException.php
+vendor/symfony/http-foundation/RateLimiter/AbstractRequestRateLimiter.php
+vendor/symfony/http-foundation/RateLimiter/PeekableRequestRateLimiterInterface.php
+vendor/symfony/http-foundation/RateLimiter/RequestRateLimiterInterface.php
+vendor/symfony/routing/RouteCompiler.php
+vendor/symfony/routing/LICENSE
+vendor/symfony/routing/composer.json
+vendor/symfony/routing/Attribute/Route.php
+vendor/symfony/routing/Attribute/DeprecatedAlias.php
+vendor/symfony/routing/CompiledRoute.php
+vendor/symfony/routing/RequestContextAwareInterface.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseHeaderSame.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseFormatSame.php
+vendor/symfony/http-foundation/Test/Constraint/RequestAttributeValueSame.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseHasHeader.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseIsRedirected.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseIsUnprocessable.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseIsSuccessful.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseStatusCodeSame.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseHeaderLocationSame.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseHasCookie.php
+vendor/symfony/http-foundation/Test/Constraint/SessionHasFlashMessage.php
+vendor/symfony/http-foundation/Test/Constraint/ResponseCookieValueSame.php
+vendor/symfony/http-foundation/RequestMatcher/IpsRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/SchemeRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/ExpressionRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/AttributesRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/HostRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/PortRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/IsJsonRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/QueryParameterRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/HeaderRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/PathRequestMatcher.php
+vendor/symfony/http-foundation/RequestMatcher/MethodRequestMatcher.php
+vendor/symfony/routing/Router.php
+vendor/symfony/routing/RouterInterface.php
+vendor/symfony/routing/Route.php
+vendor/symfony/routing/Requirement/Requirement.php
+vendor/symfony/routing/Requirement/EnumRequirement.php
+vendor/symfony/routing/RouteCollection.php
+vendor/symfony/routing/Matcher/RedirectableUrlMatcher.php
+vendor/symfony/routing/Loader/ClosureLoader.php
+vendor/symfony/routing/Loader/GlobFileLoader.php
+vendor/symfony/routing/Loader/DirectoryLoader.php
+vendor/symfony/routing/Loader/ContainerLoader.php
+vendor/symfony/routing/Loader/AttributeClassLoader.php
+vendor/symfony/routing/Matcher/Dumper/StaticPrefixCollection.php
+vendor/symfony/routing/Matcher/Dumper/CompiledUrlMatcherTrait.php
+vendor/symfony/routing/Matcher/Dumper/MatcherDumperInterface.php
+vendor/symfony/routing/Matcher/Dumper/MatcherDumper.php
+vendor/symfony/routing/Matcher/Dumper/CompiledUrlMatcherDumper.php
+vendor/symfony/routing/Matcher/TraceableUrlMatcher.php
+vendor/symfony/routing/Matcher/CompiledUrlMatcher.php
+vendor/symfony/routing/Matcher/UrlMatcherInterface.php
+vendor/symfony/routing/Matcher/RedirectableUrlMatcherInterface.php
+vendor/symfony/routing/Matcher/UrlMatcher.php
+vendor/symfony/routing/Matcher/ExpressionLanguageProvider.php
+vendor/symfony/routing/Matcher/RequestMatcherInterface.php
+vendor/symfony/routing/RequestContext.php
+vendor/symfony/routing/CHANGELOG.md
+vendor/symfony/routing/Generator/UrlGenerator.php
+vendor/symfony/routing/Generator/CompiledUrlGenerator.php
+vendor/symfony/routing/README.md
+vendor/symfony/routing/Generator/ConfigurableRequirementsInterface.php
+vendor/symfony/routing/Generator/UrlGeneratorInterface.php
+vendor/symfony/routing/Loader/Configurator/ImportConfigurator.php
+vendor/symfony/routing/Loader/Configurator/RoutingConfigurator.php
+vendor/symfony/routing/Loader/Configurator/AliasConfigurator.php
+vendor/symfony/routing/Loader/Configurator/RoutesReference.php
+vendor/symfony/routing/Loader/Configurator/CollectionConfigurator.php
+vendor/symfony/routing/Loader/Configurator/RouteConfigurator.php
+vendor/symfony/routing/Generator/Dumper/GeneratorDumper.php
+vendor/symfony/routing/Generator/Dumper/CompiledUrlGeneratorDumper.php
+vendor/symfony/routing/Generator/Dumper/GeneratorDumperInterface.php
+vendor/symfony/routing/Loader/Psr4DirectoryLoader.php
+vendor/symfony/routing/Loader/PhpFileLoader.php
+vendor/symfony/routing/Loader/ObjectLoader.php
+vendor/symfony/routing/Loader/ContentLoaderTrait.php
+vendor/symfony/routing/Exception/ResourceNotFoundException.php
+vendor/symfony/routing/Exception/LogicException.php
+vendor/symfony/routing/Exception/InvalidParameterException.php
+vendor/symfony/routing/Exception/RouteCircularReferenceException.php
+vendor/symfony/routing/Exception/NoConfigurationException.php
+vendor/symfony/routing/Exception/MethodNotAllowedException.php
+vendor/symfony/routing/Exception/InvalidArgumentException.php
+vendor/symfony/routing/Exception/MissingMandatoryParametersException.php
+vendor/symfony/routing/Exception/RuntimeException.php
+vendor/symfony/routing/Exception/RouteNotFoundException.php
+vendor/symfony/routing/Exception/ExceptionInterface.php
+vendor/symfony/routing/Loader/AttributeServicesLoader.php
+vendor/symfony/routing/Loader/AttributeFileLoader.php
+vendor/symfony/routing/Loader/AttributeDirectoryLoader.php
+vendor/symfony/routing/Loader/YamlFileLoader.php
+vendor/symfony/routing/Loader/schema/routing.schema.json
+vendor/symfony/routing/RouteCompilerInterface.php
+vendor/symfony/routing/Alias.php
+vendor/symfony/routing/Loader/Configurator/Traits/AddTrait.php
+vendor/symfony/routing/Loader/Configurator/Traits/RouteTrait.php
+vendor/symfony/routing/Loader/Configurator/Traits/LocalizedRouteTrait.php
+vendor/symfony/routing/Loader/Configurator/Traits/PrefixTrait.php
+vendor/symfony/routing/Loader/Configurator/Traits/HostTrait.php
+vendor/symfony/routing/Loader/schema/routing/routing-1.0.xsd
+vendor/symfony/routing/DependencyInjection/RoutingResolverPass.php
+vendor/symfony/routing/DependencyInjection/AddExpressionLanguageProvidersPass.php
+vendor/symfony/routing/DependencyInjection/RoutingControllerPass.php
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+M  ../../../../../../.gitmodules
+R  ../../../../../../20260608-agenda.md -> ../../../../../2026-06-08-ingest-time-compilation/20260608-agenda.md
+R  ../../../../../../20260608-paper.md -> ../../../../../2026-06-08-ingest-time-compilation/20260608-paper.md
+R  ../../../../../../README.md -> ../../../../../2026-06-08-ingest-time-compilation/README.md
+R  ../../../../../../isc -> ../../../../../2026-06-08-ingest-time-compilation/isc
+R  ../../../../../../records/ies-2026-acceptance-email.md -> ../../../../../2026-06-08-ingest-time-compilation/records/ies-2026-acceptance-email.md
+?? ../../../../../../README.md
+?? ../../../../
+
+codex
+The workspace already has `index.php`, `run.sh`, Composer dependencies, and the required Symfony components installed. I’m reading the small app files next, then I’ll replace the stub with the benchmark handlers if needed.
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc "sed -n '1,240p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+
+$request = Request::createFromGlobals();
+if ($request->getPathInfo() === '/health') {
+    (new JsonResponse(['ok' => true]))->send();
+    return;
+}
+(new JsonResponse(['error' => 'not found'], 404))->send();
+?>
+
+exec
+/bin/zsh -lc "sed -n '1,200p' composer.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{
+  "require": {
+    "symfony/http-foundation": "8.1.1",
+    "symfony/routing": "8.1.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
+codex
+I’m going to keep `run.sh` as the foreground PHP server and update `index.php` to use Symfony Routing plus HttpFoundation for JSON request/response handling. The code will validate bad JSON, route methods, and unsupported D&D values with 400/404/405 style responses.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..77bd5b70d119e86a5f9c18a638439949ae00798a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,259 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
++
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
++}
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++$routes = new RouteCollection();
++$routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++$routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++$routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++$routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++$routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
+ 
+ $request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++$context = new RequestContext();
++$context->fromRequest($request);
++$matcher = new UrlMatcher($routes, $context);
++
++try {
++    $parameters = $matcher->matchRequest($request);
++    $controller = $parameters['_controller'];
++    $response = $controller($request);
++} catch (ResourceNotFoundException) {
++    $response = new JsonResponse(['error' => 'not found'], 404);
++} catch (MethodNotAllowedException) {
++    $response = new JsonResponse(['error' => 'method not allowed'], 405);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++$response->send();
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..77bd5b70d119e86a5f9c18a638439949ae00798a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,259 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
++
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
++}
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++$routes = new RouteCollection();
++$routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++$routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++$routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++$routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++$routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
+ 
+ $request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++$context = new RequestContext();
++$context->fromRequest($request);
++$matcher = new UrlMatcher($routes, $context);
++
++try {
++    $parameters = $matcher->matchRequest($request);
++    $controller = $parameters['_controller'];
++    $response = $controller($request);
++} catch (ResourceNotFoundException) {
++    $response = new JsonResponse(['error' => 'not found'], 404);
++} catch (MethodNotAllowedException) {
++    $response = new JsonResponse(['error' => 'method not allowed'], 405);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++$response->send();
+
+codex
+The endpoint implementation is in place. I’m doing static syntax checks and CLI-level request probes without launching the HTTP server, so `run.sh` remains ready but not started.
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc 'REQUEST_METHOD=GET REQUEST_URI=/health SCRIPT_NAME=/index.php php index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc "printf '{\"expression\":\"2d6+3\"}' | REQUEST_METHOD=POST REQUEST_URI=/v1/dice/stats SCRIPT_NAME=/index.php CONTENT_TYPE=application/json php index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 296ms:
+No syntax errors detected in index.php
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..77bd5b70d119e86a5f9c18a638439949ae00798a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,259 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
++
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
++}
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++$routes = new RouteCollection();
++$routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++$routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++$routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++$routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++$routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
+ 
+ $request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++$context = new RequestContext();
++$context->fromRequest($request);
++$matcher = new UrlMatcher($routes, $context);
++
++try {
++    $parameters = $matcher->matchRequest($request);
++    $controller = $parameters['_controller'];
++    $response = $controller($request);
++} catch (ResourceNotFoundException) {
++    $response = new JsonResponse(['error' => 'not found'], 404);
++} catch (MethodNotAllowedException) {
++    $response = new JsonResponse(['error' => 'method not allowed'], 405);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++$response->send();
+
+ succeeded in 372ms:
+{"error":"invalid expression"}
+ succeeded in 452ms:
+{"ok":true}
+codex
+The GET probe passed; the POST probe exposed a CLI testing limitation because `php://input` is empty under that invocation. I’m factoring the dispatcher into a request handler so I can test the handlers directly without starting a server.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..a5c124941158ac3760c1e75c379181f9668c4b7a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,268 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
+ 
+-$request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++function appRoutes(): RouteCollection
++{
++    $routes = new RouteCollection();
++    $routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++    $routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++    $routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++    $routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++    $routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
++
++    return $routes;
++}
++
++function appHandle(Request $request): JsonResponse
++{
++    $context = new RequestContext();
++    $context->fromRequest($request);
++    $matcher = new UrlMatcher(appRoutes(), $context);
++
++    try {
++        $parameters = $matcher->matchRequest($request);
++        $controller = $parameters['_controller'];
++        return $controller($request);
++    } catch (ResourceNotFoundException) {
++        return new JsonResponse(['error' => 'not found'], 404);
++    } catch (MethodNotAllowedException) {
++        return new JsonResponse(['error' => 'method not allowed'], 405);
++    }
++}
++
++if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
++    appHandle(Request::createFromGlobals())->send();
++}
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..a5c124941158ac3760c1e75c379181f9668c4b7a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,268 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
+ 
+-$request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++function appRoutes(): RouteCollection
++{
++    $routes = new RouteCollection();
++    $routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++    $routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++    $routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++    $routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++    $routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
++
++    return $routes;
++}
++
++function appHandle(Request $request): JsonResponse
++{
++    $context = new RequestContext();
++    $context->fromRequest($request);
++    $matcher = new UrlMatcher(appRoutes(), $context);
++
++    try {
++        $parameters = $matcher->matchRequest($request);
++        $controller = $parameters['_controller'];
++        return $controller($request);
++    } catch (ResourceNotFoundException) {
++        return new JsonResponse(['error' => 'not found'], 404);
++    } catch (MethodNotAllowedException) {
++        return new JsonResponse(['error' => 'method not allowed'], 405);
++    }
++}
++
++if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
++    appHandle(Request::createFromGlobals())->send();
++}
+
+codex
+With the handler separated, I can now exercise each route using Symfony `Request::create(...)` directly. I’m checking the sample payloads plus a syntax pass.
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+No syntax errors detected in index.php
+
+exec
+/bin/zsh -lc "php -r 'require \"index.php\"; use Symfony\\Component\\HttpFoundation\\Request; "'$r=Request::create("/v1/dice/stats","POST",[],[],[],["CONTENT_TYPE"=>"application/json"], json_encode(["expression"=>"2d6+3"])); echo appHandle($r)->getContent(), PHP_EOL;'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc "php -r 'require \"index.php\"; use Symfony\\Component\\HttpFoundation\\Request; "'$r=Request::create("/v1/initiative/order","POST",[],[],[],["CONTENT_TYPE"=>"application/json"], json_encode(["combatants"=>[["name"=>"rogue","dex"=>3,"roll"=>14],["name"=>"ogre","dex"=>-1,"roll"=>16]]])); echo appHandle($r)->getContent(), PHP_EOL;'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}
+
+ succeeded in 0ms:
+{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}
+
+exec
+/bin/zsh -lc "php -r 'require \"index.php\"; use Symfony\\Component\\HttpFoundation\\Request; "'$r=Request::create("/v1/checks/ability","POST",[],[],[],["CONTENT_TYPE"=>"application/json"], json_encode(["roll"=>9,"modifier"=>5,"dc"=>15])); echo appHandle($r)->getContent(), PHP_EOL;'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{"total":14,"success":false,"margin":-1}
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..a5c124941158ac3760c1e75c379181f9668c4b7a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,268 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
+ 
+-$request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++function appRoutes(): RouteCollection
++{
++    $routes = new RouteCollection();
++    $routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++    $routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++    $routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++    $routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++    $routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
++
++    return $routes;
++}
++
++function appHandle(Request $request): JsonResponse
++{
++    $context = new RequestContext();
++    $context->fromRequest($request);
++    $matcher = new UrlMatcher(appRoutes(), $context);
++
++    try {
++        $parameters = $matcher->matchRequest($request);
++        $controller = $parameters['_controller'];
++        return $controller($request);
++    } catch (ResourceNotFoundException) {
++        return new JsonResponse(['error' => 'not found'], 404);
++    } catch (MethodNotAllowedException) {
++        return new JsonResponse(['error' => 'method not allowed'], 405);
++    }
++}
++
++if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
++    appHandle(Request::createFromGlobals())->send();
++}
+
+codex
+The dice, ability, and initiative sample outputs match the spec. I’m checking the encounter sample and confirming `run.sh` is executable and still foregrounds the server on `127.0.0.1:$PORT`.
+exec
+/bin/zsh -lc "ls -l run.sh && sed -n '1,80p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  73 Jul  8 20:06 run.sh
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc "php -r 'require \"index.php\"; use Symfony\\Component\\HttpFoundation\\Request; "'$r=Request::create("/v1/dice/stats","POST",[],[],[],["CONTENT_TYPE"=>"application/json"], json_encode(["expression"=>"0d6"])); $res=appHandle($r); echo $res->getStatusCode(), " ", $res->getContent(), PHP_EOL;'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+400 {"error":"invalid expression"}
+
+exec
+/bin/zsh -lc "php -r 'require \"index.php\"; use Symfony\\Component\\HttpFoundation\\Request; "'$payload=["party"=>[["level"=>3],["level"=>3],["level"=>3],["level"=>3]],"monsters"=>[["cr"=>"1","count"=>2],["cr"=>"2","count"=>1]]]; $r=Request::create("/v1/encounters/adjusted-xp","POST",[],[],[],["CONTENT_TYPE"=>"application/json"], json_encode($payload)); echo appHandle($r)->getContent(), PHP_EOL;'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..a5c124941158ac3760c1e75c379181f9668c4b7a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,268 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
+ 
+-$request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++function appRoutes(): RouteCollection
++{
++    $routes = new RouteCollection();
++    $routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++    $routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++    $routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++    $routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++    $routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
++
++    return $routes;
++}
++
++function appHandle(Request $request): JsonResponse
++{
++    $context = new RequestContext();
++    $context->fromRequest($request);
++    $matcher = new UrlMatcher(appRoutes(), $context);
++
++    try {
++        $parameters = $matcher->matchRequest($request);
++        $controller = $parameters['_controller'];
++        return $controller($request);
++    } catch (ResourceNotFoundException) {
++        return new JsonResponse(['error' => 'not found'], 404);
++    } catch (MethodNotAllowedException) {
++        return new JsonResponse(['error' => 'method not allowed'], 405);
++    }
++}
++
++if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
++    appHandle(Request::createFromGlobals())->send();
++}
+
+codex
+The encounter sample matches exactly, invalid dice expressions return 400, and `run.sh` is already executable with the correct bind behavior. I’m doing one final diff review for accidental drift.
+exec
+/bin/zsh -lc 'git diff -- index.php run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc 'git status --short index.php run.sh composer.json composer.lock' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+ succeeded in 0ms:
+?? composer.json
+?? composer.lock
+?? index.php
+?? run.sh
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..a5c124941158ac3760c1e75c379181f9668c4b7a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,268 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
+ 
+-$request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++function appRoutes(): RouteCollection
++{
++    $routes = new RouteCollection();
++    $routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++    $routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++    $routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++    $routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++    $routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
++
++    return $routes;
++}
++
++function appHandle(Request $request): JsonResponse
++{
++    $context = new RequestContext();
++    $context->fromRequest($request);
++    $matcher = new UrlMatcher(appRoutes(), $context);
++
++    try {
++        $parameters = $matcher->matchRequest($request);
++        $controller = $parameters['_controller'];
++        return $controller($request);
++    } catch (ResourceNotFoundException) {
++        return new JsonResponse(['error' => 'not found'], 404);
++    } catch (MethodNotAllowedException) {
++        return new JsonResponse(['error' => 'method not allowed'], 405);
++    }
++}
++
++if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
++    appHandle(Request::createFromGlobals())->send();
++}
+
+codex
+Implemented the D&D REST API in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php) using Symfony Routing and HttpFoundation.
+
+`run.sh` is ready and unchanged: it starts the foreground server with:
+
+```bash
+php -S 127.0.0.1:"$PORT" index.php
+```
+
+Verified without starting the server:
+- `php -l index.php`
+- Sample outputs for dice stats, ability check, adjusted XP, and initiative order
+- Invalid dice expression returns HTTP 400
+- `run.sh` is executable and binds to `127.0.0.1:$PORT`
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+index e0da5df3e9e9975342ba9da174e8d74a564f255f..a5c124941158ac3760c1e75c379181f9668c4b7a
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/runs/20260709T030658Z_codex_gpt-5.5_php-symfony/index.php
+@@ -1,13 +1,268 @@
+ <?php
++
++declare(strict_types=1);
++
+ require __DIR__ . '/vendor/autoload.php';
+ 
+ use Symfony\Component\HttpFoundation\JsonResponse;
+ use Symfony\Component\HttpFoundation\Request;
++use Symfony\Component\Routing\Exception\MethodNotAllowedException;
++use Symfony\Component\Routing\Exception\ResourceNotFoundException;
++use Symfony\Component\Routing\Matcher\UrlMatcher;
++use Symfony\Component\Routing\RequestContext;
++use Symfony\Component\Routing\Route;
++use Symfony\Component\Routing\RouteCollection;
++
++function jsonBody(Request $request): ?array
++{
++    $content = $request->getContent();
++    if ($content === '') {
++        return [];
++    }
++
++    $data = json_decode($content, true);
++    return is_array($data) ? $data : null;
++}
++
++function badRequest(string $message = 'bad request'): JsonResponse
++{
++    return new JsonResponse(['error' => $message], 400);
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
++function health(Request $request): JsonResponse
++{
++    return new JsonResponse(['ok' => true]);
++}
++
++function diceStats(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
++        return badRequest('invalid expression');
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
++        return badRequest('invalid expression');
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest('invalid expression');
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier = -$modifier;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return new JsonResponse([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => fmod($average, 1.0) === 0.0 ? (int) $average : $average,
++    ]);
++}
++
++function abilityCheck(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if (
++        $body === null
++        || !array_key_exists('roll', $body)
++        || !array_key_exists('modifier', $body)
++        || !array_key_exists('dc', $body)
++        || !isIntegerValue($body['roll'])
++        || !isIntegerValue($body['modifier'])
++        || !isIntegerValue($body['dc'])
++    ) {
++        return badRequest();
++    }
+ 
+-$request = Request::createFromGlobals();
+-if ($request->getPathInfo() === '/health') {
+-    (new JsonResponse(['ok' => true]))->send();
+-    return;
++    $total = $body['roll'] + $body['modifier'];
++    $margin = $total - $body['dc'];
++
++    return new JsonResponse([
++        'total' => $total,
++        'success' => $total >= $body['dc'],
++        'margin' => $margin,
++    ]);
+ }
+-(new JsonResponse(['error' => 'not found'], 404))->send();
+-?>
++
++function encounterMultiplier(int $monsterCount): float
++{
++    if ($monsterCount <= 1) {
++        return 1.0;
++    }
++    if ($monsterCount === 2) {
++        return 1.5;
++    }
++    if ($monsterCount <= 6) {
++        return 2.0;
++    }
++    if ($monsterCount <= 10) {
++        return 2.5;
++    }
++    if ($monsterCount <= 14) {
++        return 3.0;
++    }
++
++    return 4.0;
++}
++
++function adjustedXp(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
++        return badRequest();
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($body['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || !isset($levelThresholds[$member['level']])) {
++            return badRequest();
++        }
++
++        foreach ($thresholds as $name => $value) {
++            $thresholds[$name] = $value + $levelThresholds[$member['level']][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($body['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'], $monster['count'])
++            || !is_string($monster['cr'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++            || !array_key_exists($monster['cr'], $xpByCr)
++        ) {
++            return badRequest();
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    $multiplier = encounterMultiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    return new JsonResponse([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => fmod($multiplier, 1.0) === 0.0 ? (int) $multiplier : $multiplier,
++        'adjusted_xp' => fmod($adjustedXp, 1.0) === 0.0 ? (int) $adjustedXp : $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++function initiativeOrder(Request $request): JsonResponse
++{
++    $body = jsonBody($request);
++    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
++        return badRequest();
++    }
++
++    $combatants = [];
++    foreach ($body['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
++            || !is_string($combatant['name'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest();
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, static function (array $left, array $right): int {
++        return ($right['score'] <=> $left['score'])
++            ?: ($right['dex'] <=> $left['dex'])
++            ?: ($left['name'] <=> $right['name']);
++    });
++
++    return new JsonResponse([
++        'order' => array_map(
++            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++            $combatants
++        ),
++    ]);
++}
++
++function appRoutes(): RouteCollection
++{
++    $routes = new RouteCollection();
++    $routes->add('health', new Route('/health', ['_controller' => 'health'], [], [], '', [], ['GET']));
++    $routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'diceStats'], [], [], '', [], ['POST']));
++    $routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'abilityCheck'], [], [], '', [], ['POST']));
++    $routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjustedXp'], [], [], '', [], ['POST']));
++    $routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiativeOrder'], [], [], '', [], ['POST']));
++
++    return $routes;
++}
++
++function appHandle(Request $request): JsonResponse
++{
++    $context = new RequestContext();
++    $context->fromRequest($request);
++    $matcher = new UrlMatcher(appRoutes(), $context);
++
++    try {
++        $parameters = $matcher->matchRequest($request);
++        $controller = $parameters['_controller'];
++        return $controller($request);
++    } catch (ResourceNotFoundException) {
++        return new JsonResponse(['error' => 'not found'], 404);
++    } catch (MethodNotAllowedException) {
++        return new JsonResponse(['error' => 'method not allowed'], 405);
++    }
++}
++
++if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
++    appHandle(Request::createFromGlobals())->send();
++}
+
+tokens used
+36,714

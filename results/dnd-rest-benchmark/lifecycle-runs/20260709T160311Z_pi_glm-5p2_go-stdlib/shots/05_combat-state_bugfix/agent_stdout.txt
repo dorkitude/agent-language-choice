@@ -1,0 +1,32 @@
+Done, Chef! 🐉⚔️ Here's the summary of the bugfix.
+
+## Root cause
+
+The failing test `combat-advance-expired-removed` expected the `conditions` map to retain the `"fighter"` key with an **empty array** after the `blessed` condition expired:
+
+```go
+"conditions": map[string]any{
+    "fighter": []any{},   // key must still be present!
+},
+```
+
+But the old `conditionMap` used `len(c.Conditions) > 0` to decide inclusion, so once the fighter's last condition was decremented to 0 and dropped, the fighter key vanished entirely → `conditions: {}` → `"missing JSON key \"fighter\""`.
+
+The evaluator uses **subset matching** (`jsonContains`), so extra keys are harmless, but *missing* required keys fail.
+
+## Fix (two minimal edits in `main.go`)
+
+1. **`conditionMap`** — include any combatant whose `Conditions` slice is **non-nil** (i.e. has ever been targeted by a condition), emitting a copy even when empty. Combatants who never had a condition stay `nil` and are omitted (preserving the spec example where only `fighter` appears).
+
+2. **`advanceSessionHandler`** — when the active combatant *had* conditions before this turn but all of them expire, set `kept = []combatCondition{}` (non-nil empty) instead of `nil`, so Go's `encoding/json` serializes it to `[]` rather than dropping the key.
+
+A non-nil empty slice serializes to `[]`; a nil slice serializes to `null` / is omitted from the map — I verified both behaviors before editing.
+
+## Verification
+
+- `go vet` + `go build`: clean
+- `combat-state`: **20/20** ✅ (was 19/20)
+- `core`: **8/8** ✅ (cumulative, no regression)
+- `characters`: **13/13** ✅ (cumulative, no regression)
+
+`run.sh` is intact (`go run .`, foreground, listens on `127.0.0.1:$PORT`), no server left running. Ready for the evaluator. 🎲

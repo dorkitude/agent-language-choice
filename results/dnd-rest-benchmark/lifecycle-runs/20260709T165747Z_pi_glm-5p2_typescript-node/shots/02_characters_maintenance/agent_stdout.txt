@@ -1,0 +1,26 @@
+All done, Chef! 🎉
+
+## Summary
+
+I inherited the existing D&D REST API (TypeScript + Node stdlib `http`) and added the **characters** stage while preserving every prior core endpoint.
+
+### Changes to `src/server.ts`
+
+**1. Shared character-rule helpers** (added near the encounter helpers):
+- `abilityModifier(score)` → `Math.floor((score - 10) / 2)` — floors negative halves correctly (score 9 → -1, score 8 → -1).
+- `proficiencyBonus(level)` → `2 + Math.floor((level - 1) / 4)` — yields the exact tier table (1-4→2, 5-8→3, 9-12→4, 13-16→5, 17-20→6).
+- `isValidScore` (integer 1–30) and `isValidLevel` (integer 1–20) type guards, reused across endpoints so derived-stats uses the *same* rules as the standalone ones.
+
+**2. Three new handlers:**
+- `abilityModifierEndpoint` → `{"score", "modifier"}`
+- `proficiencyEndpoint` → `{"level", "proficiency_bonus"}`
+- `derivedStatsEndpoint` → computes all six modifiers, proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + (shield?2:0)`, returning `{"level","proficiency_bonus","hp_max","armor_class","modifiers"}`.
+
+**3. Three new routes** wired into the router, all returning 400 on invalid input.
+
+### Verification
+- ✅ Spec example reproduced exactly: derived-stats → `proficiency_bonus:3, hp_max:35, armor_class:16` with correct modifiers.
+- ✅ Edge cases: dex-cap binding, shield on/off, all proficiency tiers, ability-modifier boundaries (1→-5, 30→10).
+- ✅ Invalid inputs (out-of-range, non-integer, missing fields, non-boolean shield) all return **400**.
+- ✅ All 8 legacy core endpoints (health, dice-stats, ability-check, adjusted-xp, initiative) still respond identically.
+- ✅ `tsc` compiles clean; `./run.sh` is executable and starts the server in the foreground on `127.0.0.1:$PORT`.

@@ -1,0 +1,23 @@
+Done, Chef! 🍳 The D&D REST engine is implemented in pure Go stdlib (`net/http` + `encoding/json`), no third-party packages.
+
+## Summary
+
+**`main.go`** — single-file server with all 5 endpoints:
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parsed `NdS[±M]`; `min=count+mod`, `max=count*sides+mod`, `average=count*(sides+1)/2+mod`; 400 on invalid |
+| `POST /v1/checks/ability` | `total=roll+mod`, `success=total>=dc`, `margin=total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count multipliers, summed party thresholds, difficulty cascade (`trivial`→`deadly`) |
+| `POST /v1/initiative/order` | `score=roll+dex`, sorted by score↓, dex↓, name↑ |
+
+**`run.sh`** — `go run .` in the foreground, binds `127.0.0.1:$PORT`.
+
+### Key decisions
+- **Strict dice grammar** via regex `^(\d+)d(\d+)([+-]\d+)?$` — rejects `0d6`, `2d`, `abc`, `2d6+`, trailing junk, double signs, etc. with 400.
+- **No `.0` float problem** — verified Go's `json.Marshal` emits `10` for `float64(10)` and `3.5` for `float64(3.5)`, so `average`/`multiplier`/`adjusted_xp` use plain `float64` and render as `10`/`1.5`/`1700` exactly as the spec shows.
+- **Go 1.22+ ServeMux method patterns** (`"POST /v1/..."`) give free 405s on wrong methods.
+- **Unsupported CR/level → 400**, malformed JSON → 400.
+
+All spec sample responses match byte-for-byte. ✨

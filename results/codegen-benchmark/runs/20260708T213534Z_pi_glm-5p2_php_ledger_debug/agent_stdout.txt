@@ -1,0 +1,26 @@
+Everything checks out, Chef! 🎉
+
+## Summary
+
+The buggy CLI had one critical bug: it **overwrote** each account's balance instead of **accumulating** it.
+
+```php
+// BUG: overwrites on every row
+$balances[$parts[0]] = intval($parts[1]);
+
+// FIX: accumulate per account
+$balances[$parts[0]] = ($balances[$parts[0]] ?? 0) + intval($parts[1]);
+```
+
+I also hardened the line-ending trim from `rtrim($line, "\n")` → `rtrim($line, "\r\n")` so CRLF inputs don't poison the delta field (the `\r` would have failed the integer regex).
+
+### Changes
+- **`main.php`** — the two fixes above; `run.sh` left untouched (it already honors the `./run.sh` contract by calling `php main.php`).
+
+### Verification
+- ✅ Test 1: repeated accounts accumulate → `cash,125` / `revenue,-100`
+- ✅ Test 2: negative & zero final balances → `a,0` / `b,-5`
+- ✅ Test 3: malformed rows ignored → `y,-4` / `z,10`
+- ✅ Edge cases: empty input (no output, exit 0), CRLF endings, extra columns, empty account, lexicographic sort, leading-zero deltas parsed as decimal.
+
+`./run.sh` is ready. 🧾✨

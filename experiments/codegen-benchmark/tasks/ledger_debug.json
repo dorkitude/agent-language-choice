@@ -1,0 +1,180 @@
+{
+  "id": "ledger_debug",
+  "title": "Debug an existing account ledger CLI",
+  "category": "preexisting-repo-debugging",
+  "spec": "The current repository contains a buggy CLI. It reads CSV lines from stdin with fields `account,delta_cents`. `account` is a non-empty string without commas. `delta_cents` is a signed integer. Ignore malformed lines and lines with non-integer deltas. The program must sum all deltas per account, then output one line per account as `account,balance_cents`, sorted lexicographically by account. Accounts whose final balance is zero must still be printed. Fix the existing implementation while preserving the `./run.sh` contract.",
+  "tests": [
+    {
+      "name": "repeated accounts accumulate",
+      "stdin": "cash,100\nrevenue,-100\ncash,25\n",
+      "expected_stdout": "cash,125\nrevenue,-100\n"
+    },
+    {
+      "name": "negative and zero final balances",
+      "stdin": "a,5\na,-5\nb,-2\nb,-3\n",
+      "expected_stdout": "a,0\nb,-5\n"
+    },
+    {
+      "name": "malformed rows ignored",
+      "stdin": "z,10\nbad\nz,nope\ny,-4\n",
+      "expected_stdout": "y,-4\nz,10\n"
+    }
+  ],
+  "starter_files": {
+    "go": {
+      "go.mod": ["module ledgerdebug", "", "go 1.26"],
+      "main.go": [
+        "package main",
+        "",
+        "import (",
+        "  \"bufio\"",
+        "  \"fmt\"",
+        "  \"os\"",
+        "  \"sort\"",
+        "  \"strconv\"",
+        "  \"strings\"",
+        ")",
+        "",
+        "func main() {",
+        "  balances := map[string]int{}",
+        "  scanner := bufio.NewScanner(os.Stdin)",
+        "  for scanner.Scan() {",
+        "    parts := strings.Split(scanner.Text(), \",\")",
+        "    if len(parts) != 2 || parts[0] == \"\" {",
+        "      continue",
+        "    }",
+        "    delta, err := strconv.Atoi(parts[1])",
+        "    if err != nil {",
+        "      continue",
+        "    }",
+        "    balances[parts[0]] = delta",
+        "  }",
+        "  keys := make([]string, 0, len(balances))",
+        "  for key := range balances {",
+        "    keys = append(keys, key)",
+        "  }",
+        "  sort.Strings(keys)",
+        "  for _, key := range keys {",
+        "    fmt.Printf(\"%s,%d\\n\", key, balances[key])",
+        "  }",
+        "}"
+      ],
+      "run.sh": ["#!/usr/bin/env bash", "set -euo pipefail", "go run ."]
+    },
+    "typescript": {
+      "main.ts": [
+        "declare const process: any;",
+        "",
+        "const input = require('fs').readFileSync(0, 'utf8').trim().split(/\\n/);",
+        "const balances: Record<string, number> = {};",
+        "for (const line of input) {",
+        "  const parts = line.split(',');",
+        "  if (parts.length !== 2 || parts[0] === '') continue;",
+        "  const delta = Number(parts[1]);",
+        "  if (!Number.isInteger(delta)) continue;",
+        "  balances[parts[0]] = delta;",
+        "}",
+        "for (const key of Object.keys(balances).sort()) {",
+        "  console.log(`${key},${balances[key]}`);",
+        "}"
+      ],
+      "run.sh": [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        "tsc main.ts --lib es2020 --module commonjs --target es2020",
+        "node main.js"
+      ]
+    },
+    "python": {
+      "main.py": [
+        "import sys",
+        "",
+        "balances = {}",
+        "for line in sys.stdin:",
+        "    parts = line.rstrip('\\n').split(',')",
+        "    if len(parts) != 2 or not parts[0]:",
+        "        continue",
+        "    try:",
+        "        delta = int(parts[1])",
+        "    except ValueError:",
+        "        continue",
+        "    balances[parts[0]] = delta",
+        "",
+        "for key in sorted(balances):",
+        "    print(f'{key},{balances[key]}')"
+      ],
+      "run.sh": ["#!/usr/bin/env bash", "set -euo pipefail", "python3 main.py"]
+    },
+    "java": {
+      "Main.java": [
+        "import java.io.*;",
+        "import java.util.*;",
+        "",
+        "public class Main {",
+        "  public static void main(String[] args) throws Exception {",
+        "    Map<String, Integer> balances = new TreeMap<>();",
+        "    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));",
+        "    String line;",
+        "    while ((line = br.readLine()) != null) {",
+        "      String[] parts = line.split(\",\", -1);",
+        "      if (parts.length != 2 || parts[0].isEmpty()) continue;",
+        "      try {",
+        "        int delta = Integer.parseInt(parts[1]);",
+        "        balances.put(parts[0], delta);",
+        "      } catch (NumberFormatException ignored) {",
+        "      }",
+        "    }",
+        "    for (Map.Entry<String, Integer> e : balances.entrySet()) {",
+        "      System.out.println(e.getKey() + \",\" + e.getValue());",
+        "    }",
+        "  }",
+        "}"
+      ],
+      "run.sh": ["#!/usr/bin/env bash", "set -euo pipefail", "javac Main.java", "java Main"]
+    },
+    "ruby": {
+      "main.rb": [
+        "balances = {}",
+        "STDIN.each_line do |line|",
+        "  parts = line.chomp.split(',', -1)",
+        "  next unless parts.length == 2 && parts[0] != ''",
+        "  begin",
+        "    delta = Integer(parts[1])",
+        "  rescue ArgumentError",
+        "    next",
+        "  end",
+        "  balances[parts[0]] = delta",
+        "end",
+        "",
+        "balances.keys.sort.each do |key|",
+        "  puts \"#{key},#{balances[key]}\"",
+        "end"
+      ],
+      "run.sh": ["#!/usr/bin/env bash", "set -euo pipefail", "ruby main.rb"]
+    },
+    "php": {
+      "main.php": [
+        "<?php",
+        "$balances = [];",
+        "$handle = fopen('php://stdin', 'r');",
+        "while (($line = fgets($handle)) !== false) {",
+        "    $parts = explode(',', rtrim($line, \"\\n\"));",
+        "    if (count($parts) !== 2 || $parts[0] === '') {",
+        "        continue;",
+        "    }",
+        "    if (!preg_match('/^-?\\d+$/', $parts[1])) {",
+        "        continue;",
+        "    }",
+        "    $balances[$parts[0]] = intval($parts[1]);",
+        "}",
+        "ksort($balances, SORT_STRING);",
+        "foreach ($balances as $key => $value) {",
+        "    echo $key . ',' . $value . PHP_EOL;",
+        "}",
+        "?>"
+      ],
+      "run.sh": ["#!/usr/bin/env bash", "set -euo pipefail", "php main.php"]
+    }
+  }
+}
+

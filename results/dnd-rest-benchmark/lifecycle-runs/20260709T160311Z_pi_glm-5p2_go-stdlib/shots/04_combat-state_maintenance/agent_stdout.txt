@@ -1,0 +1,21 @@
+All done, Chef! 🎲 Here's a summary of what I added to the `go-stdlib` D&D REST API.
+
+## What I added
+
+Three new stateful combat endpoints in `main.go`, using only `net/http` + `encoding/json` + `sync` (no third-party deps):
+
+1. **`POST /v1/combat/sessions`** — creates an in-memory combat session. Computes initiative `score = roll + dex`, sorts by score desc → dex desc → name asc, starts at `round=1`, `turn_index=0`, returns `active` + `order`.
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a timed condition to a named combatant (validates target exists → 400, `duration_rounds` positive → 400, unknown session → 404).
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index`, wraps + increments `round` when going past the last combatant, and decrements the **new active** combatant's conditions at the start of their turn (removing any that hit 0). Returns the `conditions` map (only combatants with active conditions).
+
+## Key correctness details verified against the spec example
+- Create → `active: rogue(17)`, order `[rogue:17, mage:16, fighter:14]` ✓
+- Add `blessed:2` to fighter → returns fighter's conditions ✓
+- Advance #1 → active `mage`, fighter's `blessed` stays `2` (inactive combatants don't decrement) ✓
+- Advance #2 → active `fighter`, `blessed` → `1` (decremented at start of fighter's turn) ✓
+- Advance #3 → wraps, `round=2`, active `rogue`, fighter's `blessed` untouched ✓
+- Errors: unknown session → 404; unknown target / non-positive duration / bad JSON / empty combatants → 400; non-POST → 405.
+
+## Preserved
+- All prior endpoints (`/health`, `/v1/dice/stats`, `/v1/checks/ability`, `/v1/encounters/adjusted-xp`, `/v1/initiative/order`, `/v1/characters/*`) untouched and still passing.
+- `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT` via `go run .` — unchanged and executable. No server started here, per the contract. ✨

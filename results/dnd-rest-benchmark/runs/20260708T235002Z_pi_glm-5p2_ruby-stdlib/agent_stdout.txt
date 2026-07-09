@@ -1,0 +1,27 @@
+All clean. Here's the final summary, Chef 🎲
+
+## What I built
+
+**`server.rb`** — a minimal HTTP server using only Ruby stdlib (`socket` + `json`), since WEBrick isn't bundled with Ruby 4.0.5. It listens on `127.0.0.1:$PORT` via `TCPServer`, parses requests off raw sockets, and routes JSON.
+
+**`run.sh`** — unchanged, runs `ruby server.rb` in the foreground.
+
+## Endpoints (all verified against the spec samples)
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✓ |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` ✓ |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` ✓ |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` ✓ |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` ✓ |
+
+## Key correctness details
+
+- **Dice grammar**: strict regex `\A(\d+)d(\d+)(?:([+-]\d+))?\z`; non-positive `count`/`sides` or unparseable input → `400`. `average` uses the true expected value `(min+max)/2.0`, normalized to an int when whole (so `2d6+3`→`10`, `1d20`→`10.5`).
+- **XP**: CR table, count multipliers (1, 1.5, 2, 2.5, 3, 4), level-3 thresholds summed across the party. Difficulty is the highest threshold reached (`trivial`→`deadly`).
+- **Initiative**: sort by `score` desc → `dex` desc → `name` asc.
+- **Number formatting**: `norm()` renders whole floats as ints (`1.5` stays `1.5`, `2` stays `2`, `1700.0`→`1700`) so JSON matches the spec's integer style.
+- **Robustness**: malformed JSON → `400`, unknown routes → `404`, per-connection threads for concurrency (20 parallel requests all returned `200`), clean `TERM`/`INT` shutdown.
+
+No server is left running, per the contract — `./run.sh` is ready to go. 🐉

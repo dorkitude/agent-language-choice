@@ -1,0 +1,28 @@
+All clean. Here's the final summary, Chef 🍳
+
+## What I built
+
+A minimal **TypeScript 7.0.2 + Node 26.4.0 stdlib** HTTP server (no frameworks) implementing all 5 endpoints of the Core D&D REST Engine.
+
+**Files:**
+- `src/server.ts` — the implementation (Node `http` module, ESM)
+- `run.sh` — `tsc` (local 7.0.2 binary) → `node dist/server.js`, foreground
+- `tsconfig.json` — added `rootDir: "src"` and `types: ["node"]` so TS 7 emits cleanly with `@types/node@26.1.1`
+
+## Verified against every spec example (byte-for-byte)
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✅ |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` ✅ |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` ✅ |
+| `POST /v1/encounters/adjusted-xp` | exact match incl. `deadly` + summed thresholds ✅ |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` ✅ |
+
+## Edge cases covered
+- **Dice**: regex enforces positive `count`/`sides`, optional `+/-` modifier; `0d6`, `2d0`, garbage → 400. `average = (min+max)/2` (exact, e.g. `1d20`→`10.5`).
+- **Encounters**: all 9 CRs (incl. `0`, `1/8`, `1/4`, `1/2`), all 6 multiplier tiers (1, 1.5, 2, 2.5, 3, 4), level-3 thresholds summed across party, difficulty ladder `trivial→deadly`, unknown CR → 400.
+- **Initiative**: sort by score desc → dex desc → name asc (tie-breaks verified).
+- **Robustness**: malformed JSON / empty body → 400; unknown route → 404; binds `127.0.0.1` via `PORT` env.
+
+The server is stopped — `run.sh` is ready to launch it in the foreground. 🎲✨

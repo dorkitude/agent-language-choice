@@ -1,0 +1,26 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I implemented the D&D REST API as a **Vite dev-server plugin** (not a plain Node server), keeping Vite 8.1.3 + TypeScript as the framework.
+
+### Files
+- **`vite.config.ts`** — a custom Vite plugin (`dndRestApiPlugin`) whose `configureServer` hook mounts a connect middleware on `server.middlewares`. It runs *before* Vite's internal middlewares, so API routes are handled first and everything else (index.html, HMR, `/src/main.ts`) falls through to Vite normally.
+- **`run.sh`** — `cd`s to its own dir, then `exec`s the local `./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT"` in the foreground.
+
+### Endpoints
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parsed `<count>d<sides>[±mod]`; count/sides must be positive → 400 otherwise. `average = (min+max)/2` (exact, e.g. `3.5` for 1d6). |
+| `POST /v1/checks/ability` | `total=roll+mod`, `success=total>=dc`, `margin=total-dc`; modifier optional (defaults 0); non-numeric `roll`/`dc` → 400. |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count multipliers, summed party thresholds (full lvl 1–20 table; **lvl 3 = 75/150/225/400** exactly), difficulty cascade `deadly>hard>medium>easy>trivial`. |
+| `POST /v1/initiative/order` | `score=roll+dex`, sort by score desc → dex desc → name asc. |
+
+### Verification
+- `tsc --noEmit` passes clean under strict mode.
+- All spec sample responses match **byte-for-byte** (e.g. encounter returns `base_xp:850, monster_count:3, multiplier:2, adjusted_xp:1700, difficulty:"deadly", thresholds:{easy:300,medium:600,hard:900,deadly:1600}`).
+- Edge cases tested: invalid dice expressions → 400, missing/invalid fields → 400, invalid JSON → 400, tie-break ordering, fractional CRs, 1.5× multiplier, trivial difficulty, empty combatants.
+- Confirmed `run.sh` is portable (starts correctly even when invoked from `/tmp`) and listens on `127.0.0.1:$PORT`.
+
+The server is **not** left running — ready for the harness to start it via `./run.sh`. 🛡️

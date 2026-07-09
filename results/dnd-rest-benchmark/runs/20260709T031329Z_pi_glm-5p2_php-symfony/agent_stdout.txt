@@ -1,0 +1,24 @@
+All checks pass, Chef! 🎲✨
+
+## Summary
+
+Implemented the D&D REST API in **`index.php`** using Symfony HttpFoundation 8.1.1 + Routing 8.1.0, with **`run.sh`** starting `php -S 127.0.0.1:$PORT index.php` in the foreground.
+
+### Endpoints
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parses `<count>d<sides>[±mod]`, validates count/sides > 0, returns `dice_count/sides/modifier/min/max/average` (average is exact `(min+max)/2` — `10` or `3.5`); 400 on invalid |
+| `POST /v1/checks/ability` | `total = roll+modifier`, `success = total>=dc`, `margin = total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table (incl. `1/8`,`1/4`,`1/2`), 6 monster-count multipliers (1/1.5/2/2.5/3/4), summed party thresholds, highest-reached difficulty (`trivial`→`deadly`) |
+| `POST /v1/initiative/order` | Sorts by score desc → dex desc → name asc via array spaceship comparison |
+
+### Routing
+Built a `RouteCollection` with per-method constraints and dispatch through `UrlMatcher`, catching `ResourceNotFoundException`→404 and `MethodNotAllowedException`→405. Invalid JSON and bad fields → 400.
+
+### Verified against spec
+- All five sample request/response pairs reproduce **exactly** (`average:10`, `multiplier:2`, `adjusted_xp:1700`, `difficulty:"deadly"`, initiative order, etc.)
+- Edge cases: tie-breaking, fractional CRs, every multiplier tier, trivial/easy/medium/deady boundaries, exact-DC success (margin 0), fractional averages (`10.5`), 400s for bad expressions / unknown CR / invalid JSON
+- `php -l` clean; `run.sh` executable
+
+A nice bonus: PHP's `json_encode` renders whole floats as bare integers (`2.0`→`2`), so the multiplier/adjusted_xp/average fields match the spec's integer appearance while staying mathematically exact when fractional. 🛡️

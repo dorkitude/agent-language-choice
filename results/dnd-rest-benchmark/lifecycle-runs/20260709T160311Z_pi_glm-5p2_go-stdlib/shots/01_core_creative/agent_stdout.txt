@@ -1,0 +1,24 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+Created `main.go` — a single-file Go REST server using only stdlib (`net/http`, `encoding/json`, `regexp`, `sort`, `strconv`), no third-party packages. `run.sh` was already correct (`go run .`, foreground).
+
+### Endpoints implemented
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parsed `<count>d<sides>[±<mod>]`; positive count/sides enforced; invalid → 400. Returns `dice_count/sides/modifier/min/max/average` (avg = `(min+max)/2`). |
+| `POST /v1/checks/ability` | `total=roll+modifier`, `success=total>=dc`, `margin=total-dc`. |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count multipliers (1/1.5/2/2.5/3/4), level-3 thresholds summed per party member, difficulty = highest threshold reached. Unknown CR → 400. |
+| `POST /v1/initiative/order` | `score=roll+dex`, sorted by score desc → dex desc → name asc. |
+
+### Key design decisions (rooted in the spec's number formatting)
+
+- **`average` as int**: spec shows bare `10` (not `10.0`), and `(min+max)/2` integer division is mathematically identical to `count*(sides+1)/2+mod` for integers → matches `2d6+3 → 10` exactly.
+- **`multiplier`/`adjusted_xp` as `float64`**: Go's json renders whole floats without decimals (`2.0→"2"`, `1700.0→"1700"`) — which matches the spec's bare `2` and `1700`, while still supporting `1.5`/`2.5` and fractional results like `52.5`.
+- **Strict dice regex** `^([1-9][0-9]*)d([1-9][0-9]*)(?:([+-])([0-9]+))?$` — rejects `0d6`, `2d6+`, leading zeros, trailing junk, all → 400.
+
+### Verified against every spec example
+All five sample responses match byte-for-byte (modulo key order, which JSON parsers ignore), plus edge cases: 1.5/2.5/4 multipliers, tie-breaking, unknown CR, malformed JSON, missing fields, and 404s. 🛡️

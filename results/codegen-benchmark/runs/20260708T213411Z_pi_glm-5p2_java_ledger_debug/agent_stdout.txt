@@ -1,0 +1,22 @@
+Done! 🎉 The ledger CLI is fixed, Chef.
+
+## What was wrong
+
+The buggy `Main.java` had one critical bug: it used **`balances.put(parts[0], delta)`**, which **overwrites** the balance on each repeated account instead of accumulating. So `cash,100` then `cash,25` yielded `cash,25` instead of `cash,125`.
+
+## The fix
+
+In `Main.java`:
+1. **`put` → `merge(..., Long::sum)`** — accumulates deltas per account (the actual bug).
+2. **`int`/`Integer` → `long`/`Long`** — prevents silent overflow when summing many or large deltas (e.g. two `2000000000` rows now correctly sum to `4000000000`), and accepts deltas beyond 32-bit `int` range, matching the spec's "signed integer" wording.
+
+Everything else was already correct and is preserved:
+- `split(",", -1)` + `parts.length != 2` rejects malformed rows (extra/missing commas).
+- `parts[0].isEmpty()` rejects empty account names.
+- `try/catch NumberFormatException` rejects non-integer deltas (including whitespace-padded ones, since `Long.parseLong` doesn't trim).
+- `TreeMap` gives lexicographic sorting.
+- Zero-balance accounts are still printed (they stay in the map).
+
+## Contract preserved
+
+`run.sh` is unchanged — `javac Main.java` then `java Main`, reading stdin → writing stdout. All three provided tests pass, plus extra edge cases (empty input, empty account, empty delta, `+5`, overflow sums, lone newline) all behave correctly. ✅

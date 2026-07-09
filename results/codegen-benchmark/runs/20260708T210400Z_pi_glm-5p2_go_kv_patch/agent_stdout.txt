@@ -1,0 +1,24 @@
+Build and vet pass, all 3 spec tests produce exactly the expected output. The empty case produced nothing (the `(end)` printed immediately with no preceding output). 
+
+All done, Chef! 🍳 Here's the summary:
+
+## Solution: Apply timestamped key-value patches
+
+**Files created in the working directory:**
+- `main.go` — the Go implementation (stdlib only: `bufio`, `encoding/json`, `os`, `sort`)
+- `go.mod` — module `kvpatch` so `go run .` works
+- `run.sh` — POSIX shell wrapper: `cd` to its own dir, then `exec go run .`
+
+**Algorithm:**
+1. Read stdin line-by-line with a buffered scanner, parsing each non-empty line as JSON (`ts`, `op`, `key`, `value`).
+2. **Stable sort** by `ts` ascending — `sort.SliceStable` preserves input order for ties, exactly as required.
+3. Apply ops in order: `set` writes `key→value` into the map; `delete` removes the key.
+4. Collect keys, `sort.Strings` (bytewise/lexicographic), and emit `key=value\n` each. Empty map → print nothing.
+
+**Verification (all 3 spec tests + extras):**
+- ✅ Out-of-order `ts` → ordered output (`alpha=first`, `beta=late`)
+- ✅ Tied `ts` stability + delete → `a=new` (old→new preserved, `b` deleted)
+- ✅ Empty final map → no output
+- ✅ Empty input → no output
+- ✅ Lexicographic byte sort (`A` < `Z` < `a`)
+- ✅ `go build` and `go vet` clean, deterministic, no network.

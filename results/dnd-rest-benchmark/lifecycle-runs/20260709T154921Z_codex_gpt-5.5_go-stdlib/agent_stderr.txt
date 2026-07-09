@@ -1,0 +1,1319 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4798-b2e0-7192-9c46-ef25c81b2d10
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: go-stdlib
+        Language: go
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Go 1.26.5, net/http, and encoding/json. Do not add third-party packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:56937 passed=false tests=19/20
+PASS	health	0ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{}}
+
+
+Error: suite failed: 19/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Go code and the current combat response shape, then make the smallest change that preserves existing endpoints while matching the evaluator’s expected JSON keys.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+M  ../../../../../../.gitmodules
+R  ../../../../../../20260608-agenda.md -> ../../../../../2026-06-08-ingest-time-compilation/20260608-agenda.md
+R  ../../../../../../20260608-paper.md -> ../../../../../2026-06-08-ingest-time-compilation/20260608-paper.md
+R  ../../../../../../README.md -> ../../../../../2026-06-08-ingest-time-compilation/README.md
+R  ../../../../../../isc -> ../../../../../2026-06-08-ingest-time-compilation/isc
+R  ../../../../../../records/ies-2026-acceptance-email.md -> ../../../../../2026-06-08-ingest-time-compilation/records/ies-2026-acceptance-email.md
+?? ../../../../../../README.md
+?? ../../../../
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/PROMPT.md
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+dndeval-core-report.json
+VERSION-PINS.json
+main.go
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+go.mod
+dndeval-combat-state-report.json
+
+codex
+The repository status shows unrelated changes outside this benchmark directory, so I’m ignoring those. The relevant app appears to be a small `main.go` plus `run.sh`.
+exec
+/bin/zsh -lc "sed -n '1,260p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+var diceExpression = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+var combatSessions = newCombatStore()
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/v1/dice/stats", diceStatsHandler)
+	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
+	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
+	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	addr := "127.0.0.1:" + port
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+type diceStatsRequest struct {
+	Expression string `json:"expression"`
+}
+
+type diceStatsResponse struct {
+	DiceCount int     `json:"dice_count"`
+	Sides     int     `json:"sides"`
+	Modifier  int     `json:"modifier"`
+	Min       int     `json:"min"`
+	Max       int     `json:"max"`
+	Average   float64 `json:"average"`
+}
+
+func diceStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req diceStatsRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	count, sides, modifier, err := parseDiceExpression(req.Expression)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid expression")
+		return
+	}
+
+	minimum := count + modifier
+	maximum := count*sides + modifier
+	average := float64(count)*(float64(sides)+1)/2 + float64(modifier)
+
+	writeJSON(w, http.StatusOK, diceStatsResponse{
+		DiceCount: count,
+		Sides:     sides,
+		Modifier:  modifier,
+		Min:       minimum,
+		Max:       maximum,
+		Average:   average,
+	})
+}
+
+func parseDiceExpression(expression string) (int, int, int, error) {
+	matches := diceExpression.FindStringSubmatch(expression)
+	if matches == nil {
+		return 0, 0, 0, errors.New("expression does not match dice grammar")
+	}
+
+	count, err := strconv.Atoi(matches[1])
+	if err != nil || count <= 0 {
+		return 0, 0, 0, errors.New("invalid dice count")
+	}
+
+	sides, err := strconv.Atoi(matches[2])
+	if err != nil || sides <= 0 {
+		return 0, 0, 0, errors.New("invalid die sides")
+	}
+
+	modifier := 0
+	if matches[4] != "" {
+		modifier, err = strconv.Atoi(matches[4])
+		if err != nil {
+			return 0, 0, 0, errors.New("invalid modifier")
+		}
+		if matches[3] == "-" {
+			modifier = -modifier
+		}
+	}
+
+	return count, sides, modifier, nil
+}
+
+type abilityCheckRequest struct {
+	Roll     int `json:"roll"`
+	Modifier int `json:"modifier"`
+	DC       int `json:"dc"`
+}
+
+type abilityCheckResponse struct {
+	Total   int  `json:"total"`
+	Success bool `json:"success"`
+	Margin  int  `json:"margin"`
+}
+
+func abilityCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req abilityCheckRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	total := req.Roll + req.Modifier
+	writeJSON(w, http.StatusOK, abilityCheckResponse{
+		Total:   total,
+		Success: total >= req.DC,
+		Margin:  total - req.DC,
+	})
+}
+
+type adjustedXPRequest struct {
+	Party    []partyMember `json:"party"`
+	Monsters []monster     `json:"monsters"`
+}
+
+type partyMember struct {
+	Level int `json:"level"`
+}
+
+type monster struct {
+	CR    string `json:"cr"`
+	Count int    `json:"count"`
+}
+
+type thresholds struct {
+	Easy   int `json:"easy"`
+	Medium int `json:"medium"`
+	Hard   int `json:"hard"`
+	Deadly int `json:"deadly"`
+}
+
+type adjustedXPResponse struct {
+	BaseXP       int        `json:"base_xp"`
+	MonsterCount int        `json:"monster_count"`
+	Multiplier   float64    `json:"multiplier"`
+	AdjustedXP   float64    `json:"adjusted_xp"`
+	Difficulty   string     `json:"difficulty"`
+	Thresholds   thresholds `json:"thresholds"`
+}
+
+var monsterXP = map[string]int{
+	"0":   10,
+	"1/8": 25,
+	"1/4": 50,
+	"1/2": 100,
+	"1":   200,
+	"2":   450,
+	"3":   700,
+	"4":   1100,
+	"5":   1800,
+}
+
+func adjustedXPHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req adjustedXPRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	baseXP := 0
+	monsterCount := 0
+	for _, monster := range req.Monsters {
+		xp, ok := monsterXP[monster.CR]
+		if !ok || monster.Count <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid monster")
+			return
+		}
+		baseXP += xp * monster.Count
+		monsterCount += monster.Count
+	}
+
+	partyThresholds := thresholds{}
+	for _, member := range req.Party {
+		if member.Level != 3 {
+			writeError(w, http.StatusBadRequest, "unsupported party level")
+			return
+		}
+		partyThresholds.Easy += 75
+		partyThresholds.Medium += 150
+		partyThresholds.Hard += 225
+		partyThresholds.Deadly += 400
+	}
+
+	multiplier := monsterMultiplier(monsterCount)
+	adjustedXP := float64(baseXP) * multiplier
+	writeJSON(w, http.StatusOK, adjustedXPResponse{
+		BaseXP:       baseXP,
+		MonsterCount: monsterCount,
+		Multiplier:   multiplier,
+		AdjustedXP:   adjustedXP,
+		Difficulty:   difficulty(adjustedXP, partyThresholds),
+		Thresholds:   partyThresholds,
+	})
+}
+
+func monsterMultiplier(count int) float64 {
+	switch {
+	case count <= 0:
+		return 0
+	case count == 1:
+		return 1
+	case count == 2:
+		return 1.5
+	case count <= 6:
+		return 2
+	case count <= 10:
+		return 2.5
+	case count <= 14:
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+go run .
+
+exec
+/bin/zsh -lc 'cat go.mod' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+module dndrest
+
+go 1.26
+
+exec
+/bin/zsh -lc "sed -n '260,620p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+	case count <= 14:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func difficulty(adjustedXP float64, t thresholds) string {
+	switch {
+	case t.Deadly > 0 && adjustedXP >= float64(t.Deadly):
+		return "deadly"
+	case t.Hard > 0 && adjustedXP >= float64(t.Hard):
+		return "hard"
+	case t.Medium > 0 && adjustedXP >= float64(t.Medium):
+		return "medium"
+	case t.Easy > 0 && adjustedXP >= float64(t.Easy):
+		return "easy"
+	default:
+		return "trivial"
+	}
+}
+
+type initiativeOrderRequest struct {
+	Combatants []combatant `json:"combatants"`
+}
+
+type combatant struct {
+	Name string `json:"name"`
+	Dex  int    `json:"dex"`
+	Roll int    `json:"roll"`
+}
+
+type initiativeEntry struct {
+	Name  string `json:"name"`
+	Score int    `json:"score"`
+}
+
+type initiativeOrderResponse struct {
+	Order []initiativeEntry `json:"order"`
+}
+
+func initiativeOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req initiativeOrderRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	order := initiativeOrder(req.Combatants)
+
+	writeJSON(w, http.StatusOK, initiativeOrderResponse{Order: order})
+}
+
+func initiativeOrder(input []combatant) []initiativeEntry {
+	combatants := append([]combatant(nil), input...)
+	sort.SliceStable(combatants, func(i, j int) bool {
+		leftScore := combatants[i].Roll + combatants[i].Dex
+		rightScore := combatants[j].Roll + combatants[j].Dex
+		if leftScore != rightScore {
+			return leftScore > rightScore
+		}
+		if combatants[i].Dex != combatants[j].Dex {
+			return combatants[i].Dex > combatants[j].Dex
+		}
+		return combatants[i].Name < combatants[j].Name
+	})
+
+	order := make([]initiativeEntry, 0, len(combatants))
+	for _, combatant := range combatants {
+		order = append(order, initiativeEntry{
+			Name:  combatant.Name,
+			Score: combatant.Roll + combatant.Dex,
+		})
+	}
+
+	return order
+}
+
+type combatStore struct {
+	mu       sync.Mutex
+	sessions map[string]*combatSession
+}
+
+type combatSession struct {
+	ID         string
+	Round      int
+	TurnIndex  int
+	Order      []initiativeEntry
+	Conditions map[string][]conditionEntry
+}
+
+type conditionEntry struct {
+	Condition       string `json:"condition"`
+	RemainingRounds int    `json:"remaining_rounds"`
+}
+
+type createCombatSessionRequest struct {
+	ID         string      `json:"id"`
+	Combatants []combatant `json:"combatants"`
+}
+
+type combatSessionResponse struct {
+	ID        string            `json:"id"`
+	Round     int               `json:"round"`
+	TurnIndex int               `json:"turn_index"`
+	Active    initiativeEntry   `json:"active"`
+	Order     []initiativeEntry `json:"order,omitempty"`
+}
+
+type addConditionRequest struct {
+	Target         string `json:"target"`
+	Condition      string `json:"condition"`
+	DurationRounds int    `json:"duration_rounds"`
+}
+
+type conditionTargetResponse struct {
+	Target     string           `json:"target"`
+	Conditions []conditionEntry `json:"conditions"`
+}
+
+type advanceCombatResponse struct {
+	ID         string                      `json:"id"`
+	Round      int                         `json:"round"`
+	TurnIndex  int                         `json:"turn_index"`
+	Active     initiativeEntry             `json:"active"`
+	Conditions map[string][]conditionEntry `json:"conditions"`
+}
+
+func newCombatStore() *combatStore {
+	return &combatStore{sessions: make(map[string]*combatSession)}
+}
+
+func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req createCombatSessionRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.ID == "" || len(req.Combatants) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid session")
+		return
+	}
+
+	order := initiativeOrder(req.Combatants)
+	for _, entry := range order {
+		if entry.Name == "" {
+			writeError(w, http.StatusBadRequest, "invalid combatant")
+			return
+		}
+	}
+
+	combatSessions.mu.Lock()
+	defer combatSessions.mu.Unlock()
+
+	if _, exists := combatSessions.sessions[req.ID]; exists {
+		writeError(w, http.StatusBadRequest, "session already exists")
+		return
+	}
+
+	session := &combatSession{
+		ID:         req.ID,
+		Round:      1,
+		TurnIndex:  0,
+		Order:      order,
+		Conditions: make(map[string][]conditionEntry),
+	}
+	combatSessions.sessions[req.ID] = session
+
+	writeJSON(w, http.StatusOK, session.snapshot(true))
+}
+
+func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/")
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	switch parts[1] {
+	case "conditions":
+		addConditionHandler(w, r, parts[0])
+	case "advance":
+		advanceCombatHandler(w, r, parts[0])
+	default:
+		writeError(w, http.StatusNotFound, "not found")
+	}
+}
+
+func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req addConditionRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.Target == "" || req.DurationRounds <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid condition")
+		return
+	}
+
+	combatSessions.mu.Lock()
+	defer combatSessions.mu.Unlock()
+
+	session, ok := combatSessions.sessions[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, "unknown session")
+		return
+	}
+	if !session.hasCombatant(req.Target) {
+		writeError(w, http.StatusBadRequest, "unknown target")
+		return
+	}
+
+	session.Conditions[req.Target] = append(session.Conditions[req.Target], conditionEntry{
+		Condition:       req.Condition,
+		RemainingRounds: req.DurationRounds,
+	})
+
+	writeJSON(w, http.StatusOK, conditionTargetResponse{
+		Target:     req.Target,
+		Conditions: copyConditions(session.Conditions[req.Target]),
+	})
+}
+
+func advanceCombatHandler(w http.ResponseWriter, r *http.Request, id string) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	combatSessions.mu.Lock()
+	defer combatSessions.mu.Unlock()
+
+	session, ok := combatSessions.sessions[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, "unknown session")
+		return
+	}
+
+	session.TurnIndex++
+	if session.TurnIndex >= len(session.Order) {
+		session.TurnIndex = 0
+		session.Round++
+	}
+	session.decrementActiveConditions()
+
+	writeJSON(w, http.StatusOK, advanceCombatResponse{
+		ID:         session.ID,
+		Round:      session.Round,
+		TurnIndex:  session.TurnIndex,
+		Active:     session.active(),
+		Conditions: session.conditionsSnapshot(),
+	})
+}
+
+func (s *combatSession) snapshot(includeOrder bool) combatSessionResponse {
+	response := combatSessionResponse{
+		ID:        s.ID,
+		Round:     s.Round,
+		TurnIndex: s.TurnIndex,
+		Active:    s.active(),
+	}
+	if includeOrder {
+		response.Order = append([]initiativeEntry(nil), s.Order...)
+	}
+	return response
+}
+
+func (s *combatSession) active() initiativeEntry {
+	return s.Order[s.TurnIndex]
+}
+
+func (s *combatSession) hasCombatant(name string) bool {
+	for _, entry := range s.Order {
+		if entry.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *combatSession) decrementActiveConditions() {
+	activeName := s.active().Name
+	conditions := s.Conditions[activeName]
+	if len(conditions) == 0 {
+		return
+	}
+
+	kept := conditions[:0]
+	for _, condition := range conditions {
+		condition.RemainingRounds--
+		if condition.RemainingRounds > 0 {
+			kept = append(kept, condition)
+		}
+	}
+	if len(kept) == 0 {
+		delete(s.Conditions, activeName)
+		return
+	}
+	s.Conditions[activeName] = kept
+}
+
+func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+	conditions := make(map[string][]conditionEntry)
+	for target, entries := range s.Conditions {
+		if len(entries) > 0 {
+			conditions[target] = copyConditions(entries)
+		}
+	}
+	return conditions
+}
+
+func copyConditions(entries []conditionEntry) []conditionEntry {
+	return append([]conditionEntry(nil), entries...)
+}
+
+type abilityModifierRequest struct {
+	Score int `json:"score"`
+}
+
+type abilityModifierResponse struct {
+	Score    int `json:"score"`
+	Modifier int `json:"modifier"`
+}
+
+func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req abilityModifierRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if !validAbilityScore(req.Score) {
+		writeError(w, http.StatusBadRequest, "invalid score")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, abilityModifierResponse{
+		Score:    req.Score,
+		Modifier: abilityModifier(req.Score),
+	})
+}
+
+type proficiencyRequest struct {
+	Level int `json:"level"`
+}
+
+
+exec
+/bin/zsh -lc 'rg -n "combat|condition|conditions|advance" main.go shots/03_combat-state_maintenance/agent_stdout.txt shots/03_combat-state_maintenance/agent_last_message.txt' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+shots/03_combat-state_maintenance/agent_stdout.txt:1:Implemented stateful combat in [main.go](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go).
+shots/03_combat-state_maintenance/agent_stdout.txt:4:- `POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/agent_stdout.txt:5:- `POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/agent_stdout.txt:6:- `POST /v1/combat/sessions/{id}/advance`
+main.go:19:var combatSessions = newCombatStore()
+main.go:35:	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
+main.go:36:	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+main.go:283:	Combatants []combatant `json:"combatants"`
+main.go:286:type combatant struct {
+main.go:317:func initiativeOrder(input []combatant) []initiativeEntry {
+main.go:318:	combatants := append([]combatant(nil), input...)
+main.go:319:	sort.SliceStable(combatants, func(i, j int) bool {
+main.go:320:		leftScore := combatants[i].Roll + combatants[i].Dex
+main.go:321:		rightScore := combatants[j].Roll + combatants[j].Dex
+main.go:325:		if combatants[i].Dex != combatants[j].Dex {
+main.go:326:			return combatants[i].Dex > combatants[j].Dex
+main.go:328:		return combatants[i].Name < combatants[j].Name
+main.go:331:	order := make([]initiativeEntry, 0, len(combatants))
+main.go:332:	for _, combatant := range combatants {
+main.go:334:			Name:  combatant.Name,
+main.go:335:			Score: combatant.Roll + combatant.Dex,
+main.go:342:type combatStore struct {
+main.go:344:	sessions map[string]*combatSession
+main.go:347:type combatSession struct {
+main.go:352:	Conditions map[string][]conditionEntry
+main.go:355:type conditionEntry struct {
+main.go:356:	Condition       string `json:"condition"`
+main.go:362:	Combatants []combatant `json:"combatants"`
+main.go:365:type combatSessionResponse struct {
+main.go:375:	Condition      string `json:"condition"`
+main.go:379:type conditionTargetResponse struct {
+main.go:381:	Conditions []conditionEntry `json:"conditions"`
+main.go:384:type advanceCombatResponse struct {
+main.go:389:	Conditions map[string][]conditionEntry `json:"conditions"`
+main.go:392:func newCombatStore() *combatStore {
+main.go:393:	return &combatStore{sessions: make(map[string]*combatSession)}
+main.go:396:func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
+main.go:414:			writeError(w, http.StatusBadRequest, "invalid combatant")
+main.go:419:	combatSessions.mu.Lock()
+main.go:420:	defer combatSessions.mu.Unlock()
+main.go:422:	if _, exists := combatSessions.sessions[req.ID]; exists {
+main.go:427:	session := &combatSession{
+main.go:432:		Conditions: make(map[string][]conditionEntry),
+main.go:434:	combatSessions.sessions[req.ID] = session
+main.go:439:func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
+main.go:440:	rest := strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/")
+main.go:448:	case "conditions":
+main.go:450:	case "advance":
+main.go:451:		advanceCombatHandler(w, r, parts[0])
+main.go:468:		writeError(w, http.StatusBadRequest, "invalid condition")
+main.go:472:	combatSessions.mu.Lock()
+main.go:473:	defer combatSessions.mu.Unlock()
+main.go:475:	session, ok := combatSessions.sessions[id]
+main.go:485:	session.Conditions[req.Target] = append(session.Conditions[req.Target], conditionEntry{
+main.go:490:	writeJSON(w, http.StatusOK, conditionTargetResponse{
+main.go:496:func advanceCombatHandler(w http.ResponseWriter, r *http.Request, id string) {
+main.go:501:	combatSessions.mu.Lock()
+main.go:502:	defer combatSessions.mu.Unlock()
+main.go:504:	session, ok := combatSessions.sessions[id]
+main.go:517:	writeJSON(w, http.StatusOK, advanceCombatResponse{
+main.go:522:		Conditions: session.conditionsSnapshot(),
+main.go:526:func (s *combatSession) snapshot(includeOrder bool) combatSessionResponse {
+main.go:527:	response := combatSessionResponse{
+main.go:539:func (s *combatSession) active() initiativeEntry {
+main.go:543:func (s *combatSession) hasCombatant(name string) bool {
+main.go:552:func (s *combatSession) decrementActiveConditions() {
+main.go:554:	conditions := s.Conditions[activeName]
+main.go:555:	if len(conditions) == 0 {
+main.go:559:	kept := conditions[:0]
+main.go:560:	for _, condition := range conditions {
+main.go:561:		condition.RemainingRounds--
+main.go:562:		if condition.RemainingRounds > 0 {
+main.go:563:			kept = append(kept, condition)
+main.go:573:func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+main.go:574:	conditions := make(map[string][]conditionEntry)
+main.go:577:			conditions[target] = copyConditions(entries)
+main.go:580:	return conditions
+main.go:583:func copyConditions(entries []conditionEntry) []conditionEntry {
+main.go:584:	return append([]conditionEntry(nil), entries...)
+shots/03_combat-state_maintenance/agent_last_message.txt:1:Implemented stateful combat in [main.go](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go).
+shots/03_combat-state_maintenance/agent_last_message.txt:4:- `POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/agent_last_message.txt:5:- `POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/agent_last_message.txt:6:- `POST /v1/combat/sessions/{id}/advance`
+
+codex
+The failure is caused by deleting the condition target from the session map when the last condition expires. The evaluator still expects the target key with an empty condition list, so I’m going to preserve that key while still removing the expired condition entries.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index 6788c6335ee7f9e59e49f056d025aa31cb775514..6cf70106acbd11bcd15456cbdb167973ef3d55fe
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -564,7 +564,7 @@
+ 		}
+ 	}
+ 	if len(kept) == 0 {
+-		delete(s.Conditions, activeName)
++		s.Conditions[activeName] = []conditionEntry{}
+ 		return
+ 	}
+ 	s.Conditions[activeName] = kept
+@@ -573,14 +573,15 @@
+ func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+ 	conditions := make(map[string][]conditionEntry)
+ 	for target, entries := range s.Conditions {
+-		if len(entries) > 0 {
+-			conditions[target] = copyConditions(entries)
+-		}
++		conditions[target] = copyConditions(entries)
+ 	}
+ 	return conditions
+ }
+ 
+ func copyConditions(entries []conditionEntry) []conditionEntry {
++	if len(entries) == 0 {
++		return []conditionEntry{}
++	}
+ 	return append([]conditionEntry(nil), entries...)
+ }
+ 
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index 6788c6335ee7f9e59e49f056d025aa31cb775514..6cf70106acbd11bcd15456cbdb167973ef3d55fe
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -564,7 +564,7 @@
+ 		}
+ 	}
+ 	if len(kept) == 0 {
+-		delete(s.Conditions, activeName)
++		s.Conditions[activeName] = []conditionEntry{}
+ 		return
+ 	}
+ 	s.Conditions[activeName] = kept
+@@ -573,14 +573,15 @@
+ func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+ 	conditions := make(map[string][]conditionEntry)
+ 	for target, entries := range s.Conditions {
+-		if len(entries) > 0 {
+-			conditions[target] = copyConditions(entries)
+-		}
++		conditions[target] = copyConditions(entries)
+ 	}
+ 	return conditions
+ }
+ 
+ func copyConditions(entries []conditionEntry) []conditionEntry {
++	if len(entries) == 0 {
++		return []conditionEntry{}
++	}
+ 	return append([]conditionEntry(nil), entries...)
+ }
+ 
+
+codex
+The code change is in place. I’m formatting and compiling it now; I’ll avoid starting the HTTP server per the benchmark contract.
+exec
+/bin/zsh -lc 'gofmt -w main.go' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index 6788c6335ee7f9e59e49f056d025aa31cb775514..6cf70106acbd11bcd15456cbdb167973ef3d55fe
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -564,7 +564,7 @@
+ 		}
+ 	}
+ 	if len(kept) == 0 {
+-		delete(s.Conditions, activeName)
++		s.Conditions[activeName] = []conditionEntry{}
+ 		return
+ 	}
+ 	s.Conditions[activeName] = kept
+@@ -573,14 +573,15 @@
+ func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+ 	conditions := make(map[string][]conditionEntry)
+ 	for target, entries := range s.Conditions {
+-		if len(entries) > 0 {
+-			conditions[target] = copyConditions(entries)
+-		}
++		conditions[target] = copyConditions(entries)
+ 	}
+ 	return conditions
+ }
+ 
+ func copyConditions(entries []conditionEntry) []conditionEntry {
++	if len(entries) == 0 {
++		return []conditionEntry{}
++	}
+ 	return append([]conditionEntry(nil), entries...)
+ }
+ 
+
+ exited 1 in 220ms:
+FAIL	dndrest [setup failed]
+# dndrest
+open /Users/dorkitude/Library/Caches/go-build/4f/4f14b7be2d6fff08fcf9f55aed32954fd12a95bf0f0f51d3786a4486a4e0ff30-d: operation not permitted
+FAIL
+
+codex
+`go test` hit the sandbox because the default Go build cache is under the home directory. I’ll rerun with `GOCACHE` pointed at a writable temp path.
+exec
+/bin/zsh -lc 'git diff -- main.go run.sh go.mod' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'GOCACHE=/tmp/go-build-cache go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index 6788c6335ee7f9e59e49f056d025aa31cb775514..6cf70106acbd11bcd15456cbdb167973ef3d55fe
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -564,7 +564,7 @@
+ 		}
+ 	}
+ 	if len(kept) == 0 {
+-		delete(s.Conditions, activeName)
++		s.Conditions[activeName] = []conditionEntry{}
+ 		return
+ 	}
+ 	s.Conditions[activeName] = kept
+@@ -573,14 +573,15 @@
+ func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+ 	conditions := make(map[string][]conditionEntry)
+ 	for target, entries := range s.Conditions {
+-		if len(entries) > 0 {
+-			conditions[target] = copyConditions(entries)
+-		}
++		conditions[target] = copyConditions(entries)
+ 	}
+ 	return conditions
+ }
+ 
+ func copyConditions(entries []conditionEntry) []conditionEntry {
++	if len(entries) == 0 {
++		return []conditionEntry{}
++	}
+ 	return append([]conditionEntry(nil), entries...)
+ }
+ 
+
+ succeeded in 3437ms:
+?   	dndrest	[no test files]
+
+codex
+Compilation passes with the temp Go cache. I’m checking the final file state now because this benchmark directory appears to sit inside a larger git worktree with unusual relative status output.
+exec
+/bin/zsh -lc "sed -n '548,588p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+	}
+	return false
+}
+
+func (s *combatSession) decrementActiveConditions() {
+	activeName := s.active().Name
+	conditions := s.Conditions[activeName]
+	if len(conditions) == 0 {
+		return
+	}
+
+	kept := conditions[:0]
+	for _, condition := range conditions {
+		condition.RemainingRounds--
+		if condition.RemainingRounds > 0 {
+			kept = append(kept, condition)
+		}
+	}
+	if len(kept) == 0 {
+		s.Conditions[activeName] = []conditionEntry{}
+		return
+	}
+	s.Conditions[activeName] = kept
+}
+
+func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+	conditions := make(map[string][]conditionEntry)
+	for target, entries := range s.Conditions {
+		conditions[target] = copyConditions(entries)
+	}
+	return conditions
+}
+
+func copyConditions(entries []conditionEntry) []conditionEntry {
+	if len(entries) == 0 {
+		return []conditionEntry{}
+	}
+	return append([]conditionEntry(nil), entries...)
+}
+
+type abilityModifierRequest struct {
+
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  47 Jul  9 08:49 run.sh
+
+exec
+/bin/zsh -lc 'git status --short -- main.go run.sh go.mod' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+?? go.mod
+?? main.go
+?? run.sh
+
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index 6788c6335ee7f9e59e49f056d025aa31cb775514..6cf70106acbd11bcd15456cbdb167973ef3d55fe
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -564,7 +564,7 @@
+ 		}
+ 	}
+ 	if len(kept) == 0 {
+-		delete(s.Conditions, activeName)
++		s.Conditions[activeName] = []conditionEntry{}
+ 		return
+ 	}
+ 	s.Conditions[activeName] = kept
+@@ -573,14 +573,15 @@
+ func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+ 	conditions := make(map[string][]conditionEntry)
+ 	for target, entries := range s.Conditions {
+-		if len(entries) > 0 {
+-			conditions[target] = copyConditions(entries)
+-		}
++		conditions[target] = copyConditions(entries)
+ 	}
+ 	return conditions
+ }
+ 
+ func copyConditions(entries []conditionEntry) []conditionEntry {
++	if len(entries) == 0 {
++		return []conditionEntry{}
++	}
+ 	return append([]conditionEntry(nil), entries...)
+ }
+ 
+
+codex
+Fixed [main.go](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go:552) so expired conditions are removed from the target’s list while preserving the target key as an empty JSON array.
+
+`./run.sh` is present, executable, and still starts the server in the foreground with `go run .`.
+
+Verification:
+`GOCACHE=/tmp/go-build-cache go test ./...` passes.
+diff --git a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+index 6788c6335ee7f9e59e49f056d025aa31cb775514..6cf70106acbd11bcd15456cbdb167973ef3d55fe
+--- a/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T154921Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -564,7 +564,7 @@
+ 		}
+ 	}
+ 	if len(kept) == 0 {
+-		delete(s.Conditions, activeName)
++		s.Conditions[activeName] = []conditionEntry{}
+ 		return
+ 	}
+ 	s.Conditions[activeName] = kept
+@@ -573,14 +573,15 @@
+ func (s *combatSession) conditionsSnapshot() map[string][]conditionEntry {
+ 	conditions := make(map[string][]conditionEntry)
+ 	for target, entries := range s.Conditions {
+-		if len(entries) > 0 {
+-			conditions[target] = copyConditions(entries)
+-		}
++		conditions[target] = copyConditions(entries)
+ 	}
+ 	return conditions
+ }
+ 
+ func copyConditions(entries []conditionEntry) []conditionEntry {
++	if len(entries) == 0 {
++		return []conditionEntry{}
++	}
+ 	return append([]conditionEntry(nil), entries...)
+ }
+ 
+
+tokens used
+24,485

@@ -1,0 +1,24 @@
+Everything checks out, Chef! 🎲⚔️
+
+## Summary
+
+Added the **Stateful Combat** stage to the existing D&D REST API while preserving all 8 prior endpoints (health, dice/stats, checks/ability, encounters/adjusted-xp, initiative/order, characters/ability-modifier, characters/proficiency, characters/derived-stats — all verified still returning 200).
+
+### New endpoints in `src/server.ts`
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Creates in-memory session. Score = `roll + dex`; sorts by score↓, dex↓, name↑. Starts `round=1`, `turn_index=0`, `active`=order[0]. |
+| `POST /v1/combat/sessions/{id}/conditions` | Attaches a condition (positive int duration) to a named combatant. 404 if session unknown, 400 if target isn't a combatant / bad duration / bad condition. |
+| `POST /v1/combat/sessions/{id}/advance` | Advances `turn_index`, wrapping→`round++`. Decrements only the **new active** combatant's conditions at turn start; removes any that hit 0. Returns full `conditions` map. |
+
+### Verified against spec examples
+- Create response, add-condition response, and advance response all match the spec JSON **byte-for-byte**.
+- Full lifecycle: `blessed` (duration 2) on fighter lasted exactly 2 of fighter's turns (2→1 on fighter's first turn, 1→0 removed on the next), untouched on rogue/mage turns. ✓
+- Tie-breakers (score→dex→name) and single-combatant round-wrap both correct. ✓
+- Error matrix: 404 for unknown sessions, 400 for bad target/duration/condition/id/combatants/body. ✓
+
+### Details
+- In-memory state via a `Map<string, CombatSession>` (process lifetime only, as spec allows).
+- No frameworks added — pure Node 26 `http` + TypeScript 7.0.2; `tsc` compiles clean under `strict`.
+- `run.sh` unchanged: compiles with `tsc` then runs `node dist/server.js` in the foreground, listening on `127.0.0.1:$PORT`. ✨

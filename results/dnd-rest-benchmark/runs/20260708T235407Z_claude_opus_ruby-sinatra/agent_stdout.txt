@@ -1,0 +1,31 @@
+Done, Chef! 🎲✨
+
+## What I built
+
+A minimal Sinatra 4.2.1 app (Ruby 4.0.5, Rack 3.2.6, Puma 8.0.2) implementing all five D&D endpoints:
+
+- **`app.rb`** — modular `Sinatra::Base` app with all routes
+- **`config.ru`** — Rack entrypoint
+- **`run.sh`** — `exec bundle exec puma -b tcp://127.0.0.1:${PORT} config.ru` (foreground, binds `127.0.0.1` + `$PORT`)
+
+## Verified against the spec 🧪
+
+Every endpoint returns the exact expected shape:
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✅ |
+| `POST /v1/dice/stats` (`2d6+3`) | `min:5, max:15, average:10` ✅ |
+| dice edge cases | `1d6`→`3.5`, `3d8-2`→`min:1`, `0d6`→`400` ✅ |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` ✅ |
+| `POST /v1/encounters/adjusted-xp` | `base_xp:850, multiplier:2, adjusted:1700, "deadly"` ✅ |
+| `POST /v1/initiative/order` | correct score-desc / dex-desc / name-asc sort ✅ |
+
+## A few deterministic touches 🎯
+
+- **`average`/`multiplier`/xp fields** emit as integers when whole (`10`, `2`) but floats when fractional (`3.5`, `1.5`) via a `numeric()` helper.
+- **Strict validation** → HTTP 400 on bad dice grammar, non-integer fields, unknown CR/level, malformed JSON.
+- **Stable tie-breaking** in initiative uses a `sort_by.with_index` fallback so equal entries stay input-ordered.
+- I changed `run.sh` from the stubbed `ruby app.rb` (which wouldn't auto-start a modular Sinatra app) to a Puma+`config.ru` launch, which is the reliable way to serve this.
+
+The server is stopped and the test log removed — `run.sh` is ready to launch. 🚀

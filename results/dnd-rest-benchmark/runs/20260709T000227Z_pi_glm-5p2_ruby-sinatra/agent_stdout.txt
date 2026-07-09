@@ -1,0 +1,22 @@
+Done, Chef! 🎲✨ Everything's in place and verified against the spec.
+
+## Summary
+
+**`app.rb`** — Sinatra 4.2.1 app (Ruby 4.0.5) implementing all five endpoints:
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✓ |
+| `POST /v1/dice/stats` | `2d6+3` → `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` ✓ (400 on invalid expr) |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` ✓ |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,...}}` ✓ |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` ✓ |
+
+**Key details:**
+- **Root cause fixed:** Sinatra 4.2.1 under Rack 3 can't launch without the `rackup` gem (it was pinned at 2.3.1 but missing from the Gemfile). Added `gem 'rackup', '2.3.1'` and ran `bundle install` — server now boots under Puma 8.0.2.
+- **Dice grammar** parsed with a strict regex `<count>d<sides>[+/-<mod>]`; non-positive count/sides → 400. `average` = `count*(1+sides)/2 + modifier`, emitted as int when whole, else the exact `.5` float.
+- **Encounter multipliers** branch correctly (1→1, 2→1.5, 3-6→2, 7-10→2.5, 11-14→3, 15+→4); difficulty is the highest threshold reached, else `trivial`. Includes the full level 1-20 threshold table for robustness (level 3 required by spec).
+- **Initiative** sorts by `[-score, -dex, name]` → score desc, dex desc, name asc. Verified tie-breaking: bravo(dex5) → alpha → zara.
+- `run.sh` starts the server in the foreground on `127.0.0.1:$PORT` via `bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"`.
+
+All spec examples match byte-for-byte, and edge cases (fractional averages, 1.5/2.5 multipliers, trivial difficulty, negative modifiers, tie-breaks) check out. The server is **not** left running. 🐍
