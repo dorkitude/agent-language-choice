@@ -33,7 +33,6 @@ Request:
 {
   "id": "char-1",
   "name": "Nyx",
-  "player": "dm",
   "level": 3,
   "class": "rogue"
 }
@@ -52,7 +51,7 @@ Response:
 Request:
 
 ```json
-{"id": "evt-1", "kind": "note", "text": "The party reached Phandalin."}
+{"id": "evt-1", "kind": "note", "summary": "Nyx scouts the goblin trail."}
 ```
 
 Response:
@@ -78,4 +77,3 @@ Response:
   "log_count": 1
 }
 ```
-

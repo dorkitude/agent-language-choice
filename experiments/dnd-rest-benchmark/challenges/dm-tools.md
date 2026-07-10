@@ -15,8 +15,9 @@ Request:
 
 ```json
 {
-  "party_levels": [3, 3, 3, 3],
-  "monsters": [{"slug": "goblin", "count": 4}]
+  "campaign_id": "camp-1",
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monster_slugs": ["goblin", "goblin", "goblin"]
 }
 ```
 
@@ -24,18 +25,18 @@ Rules:
 
 - Look up monster CR from the compendium.
 - Reuse the adjusted-XP math from the core suite.
-- Return threshold warnings for the encounter.
+- Return a deterministic recommendation for the encounter.
 
 Response:
 
 ```json
 {
-  "base_xp": 200,
-  "monster_count": 4,
-  "multiplier": 2,
-  "adjusted_xp": 400,
+  "campaign_id": "camp-1",
+  "base_xp": 150,
+  "adjusted_xp": 300,
   "difficulty": "easy",
-  "warnings": []
+  "monster_count": 3,
+  "recommendation": "safe warm-up"
 }
 ```
 
@@ -46,7 +47,7 @@ Response:
 Request:
 
 ```json
-{"tier": 1, "seed": "camp-1-session-1"}
+{"campaign_id": "camp-1", "tier": 1, "seed": 42}
 ```
 
 For this benchmark, return deterministic tier-1 loot.
@@ -55,9 +56,9 @@ Response:
 
 ```json
 {
-  "tier": 1,
-  "coins": {"gp": 25, "sp": 40},
-  "items": ["healing-potion"]
+  "campaign_id": "camp-1",
+  "coins_gp": 75,
+  "items": [{"slug": "healing-potion", "quantity": 2}]
 }
 ```
 
@@ -76,7 +77,7 @@ Response:
 ```json
 {
   "campaign_id": "camp-1",
-  "summary": "Lost Mine: 1 logged event, 1 active character."
+  "summary": "Nyx scouts the goblin trail.",
+  "open_threads": ["Resolve goblin trail ambush"]
 }
 ```
-

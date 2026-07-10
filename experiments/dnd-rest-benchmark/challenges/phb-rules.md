@@ -32,19 +32,20 @@ Response:
 Request:
 
 ```json
-{"hp_current": 7, "hp_max": 24, "hit_dice_spent": 3, "hit_dice_max": 5}
+{"level": 5, "hp_current": 9, "hp_max": 35, "hit_dice_spent": 3, "exhaustion_level": 1}
 ```
 
 Rules:
 
 - Long rest restores current HP to max HP.
-- Long rest restores spent hit dice up to half the maximum, rounded down,
-  minimum 1.
+- Long rest restores spent hit dice up to half the character level, rounded
+  down, minimum 1.
+- Long rest reduces exhaustion by 1, to a minimum of 0.
 
 Response:
 
 ```json
-{"hp_current": 24, "hp_max": 24, "hit_dice_spent": 1, "hit_dice_max": 5}
+{"hp_current": 35, "hit_dice_spent": 1, "exhaustion_level": 0}
 ```
 
 ## Equipment Load
@@ -54,17 +55,16 @@ Response:
 Request:
 
 ```json
-{"strength": 16, "carried_lb": 180}
+{"strength": 12, "weight": 181}
 ```
 
 Rules:
 
 - Carrying capacity is `strength * 15`.
-- `encumbered` is true when carried pounds exceed capacity.
+- `encumbered` is true when carried weight exceeds capacity.
 
 Response:
 
 ```json
-{"carrying_capacity_lb": 240, "carried_lb": 180, "encumbered": false}
+{"capacity": 180, "weight": 181, "encumbered": true}
 ```
-

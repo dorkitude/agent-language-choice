@@ -26,7 +26,7 @@ Request:
 
 Rules:
 
-- `username` must be 3-32 characters, lowercase letters, digits, `_`, or `-`.
+- `username` must be 2-32 characters, lowercase letters, digits, `_`, or `-`.
 - `password` must be at least 8 characters.
 - `role` must be either `dm` or `player`.
 - A duplicate `username` returns HTTP 409.
@@ -58,4 +58,3 @@ Response:
 ```json
 {"username": "dm", "token": "session-dm"}
 ```
-
