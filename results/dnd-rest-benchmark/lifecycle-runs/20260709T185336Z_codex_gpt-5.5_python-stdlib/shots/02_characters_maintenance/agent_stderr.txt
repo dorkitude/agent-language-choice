@@ -1,0 +1,2099 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f483c-2b9b-7750-906c-7f7aec0336f7
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-stdlib
+        Language: python
+        Framework/runtime: stdlib
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 standard library only, such as http.server and json.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing server and test shape first, then add the character endpoints without changing prior routes. After that I’ll run whatever local checks are present, but I won’t start the server.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+shots/02_characters_maintenance/PROMPT.md
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+agent_last_message.txt
+setup.json
+server.py
+
+codex
+The worktree has unrelated changes outside this run directory, so I’m leaving those alone. I found a small Python stdlib server; next I’m reading the route implementation and launcher.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+python3 server.py
+
+exec
+/bin/zsh -lc "sed -n '1,260p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env python3
+import json
+import os
+import re
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+MONSTER_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+
+class BadRequest(Exception):
+    pass
+
+
+def require_int(value, name):
+    if type(value) is not int:
+        raise BadRequest(f"{name} must be an integer")
+    return value
+
+
+def dice_stats(payload):
+    expression = payload.get("expression")
+    if type(expression) is not str:
+        raise BadRequest("expression must be a string")
+
+    match = DICE_RE.fullmatch(expression)
+    if not match:
+        raise BadRequest("invalid dice expression")
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        raise BadRequest("dice count and sides must be positive")
+
+    modifier = int(match.group(4) or "0")
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    minimum = count + modifier
+    maximum = count * sides + modifier
+    average = count * (sides + 1) / 2 + modifier
+    if average.is_integer():
+        average = int(average)
+
+    return {
+        "dice_count": count,
+        "sides": sides,
+        "modifier": modifier,
+        "min": minimum,
+        "max": maximum,
+        "average": average,
+    }
+
+
+def ability_check(payload):
+    roll = require_int(payload.get("roll"), "roll")
+    modifier = require_int(payload.get("modifier"), "modifier")
+    dc = require_int(payload.get("dc"), "dc")
+    total = roll + modifier
+    return {"total": total, "success": total >= dc, "margin": total - dc}
+
+
+def monster_multiplier(count):
+    if count <= 0:
+        raise BadRequest("monster count must be positive")
+    if count == 1:
+        return 1
+    if count == 2:
+        return 1.5
+    if count <= 6:
+        return 2
+    if count <= 10:
+        return 2.5
+    if count <= 14:
+        return 3
+    return 4
+
+
+def encounter_xp(payload):
+    party = payload.get("party")
+    monsters = payload.get("monsters")
+    if type(party) is not list or type(monsters) is not list:
+        raise BadRequest("party and monsters must be arrays")
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    for member in party:
+        if type(member) is not dict:
+            raise BadRequest("party members must be objects")
+        level = require_int(member.get("level"), "level")
+        if level not in LEVEL_THRESHOLDS:
+            raise BadRequest("unsupported level")
+        for key, value in LEVEL_THRESHOLDS[level].items():
+            thresholds[key] += value
+
+    base_xp = 0
+    total_monsters = 0
+    for monster in monsters:
+        if type(monster) is not dict:
+            raise BadRequest("monsters must be objects")
+        cr = monster.get("cr")
+        count = require_int(monster.get("count"), "count")
+        if cr not in MONSTER_XP:
+            raise BadRequest("unsupported challenge rating")
+        if count <= 0:
+            raise BadRequest("monster count must be positive")
+        base_xp += MONSTER_XP[cr] * count
+        total_monsters += count
+
+    multiplier = monster_multiplier(total_monsters)
+    adjusted_xp = base_xp * multiplier
+    if isinstance(adjusted_xp, float) and adjusted_xp.is_integer():
+        adjusted_xp = int(adjusted_xp)
+
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted_xp >= thresholds[name]:
+            difficulty = name
+
+    return {
+        "base_xp": base_xp,
+        "monster_count": total_monsters,
+        "multiplier": multiplier,
+        "adjusted_xp": adjusted_xp,
+        "difficulty": difficulty,
+        "thresholds": thresholds,
+    }
+
+
+def initiative_order(payload):
+    combatants = payload.get("combatants")
+    if type(combatants) is not list:
+        raise BadRequest("combatants must be an array")
+
+    entries = []
+    for combatant in combatants:
+        if type(combatant) is not dict:
+            raise BadRequest("combatants must be objects")
+        name = combatant.get("name")
+        if type(name) is not str:
+            raise BadRequest("name must be a string")
+        dex = require_int(combatant.get("dex"), "dex")
+        roll = require_int(combatant.get("roll"), "roll")
+        score = roll + dex
+        entries.append({"name": name, "dex": dex, "score": score})
+
+    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+
+
+POST_ROUTES = {
+    "/v1/dice/stats": dice_stats,
+    "/v1/checks/ability": ability_check,
+    "/v1/encounters/adjusted-xp": encounter_xp,
+    "/v1/initiative/order": initiative_order,
+}
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "DndRest/1.0"
+
+    def log_message(self, format, *args):
+        return
+
+    def send_json(self, status, payload):
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_json(200, {"ok": True})
+        else:
+            self.send_json(404, {"error": "not found"})
+
+    def do_POST(self):
+        route = POST_ROUTES.get(self.path)
+        if route is None:
+            self.send_json(404, {"error": "not found"})
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if type(payload) is not dict:
+                raise BadRequest("request body must be an object")
+            response = route(payload)
+        except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            self.send_json(400, {"error": "bad request"})
+            return
+
+        self.send_json(200, response)
+
+
+def main():
+    port = int(os.environ.get("PORT", "8000"))
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
+
+exec
+/bin/zsh -lc "sed -n '1,220p' PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: python-stdlib
+        Language: python
+        Framework/runtime: stdlib
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 standard library only, such as http.server and json.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-core-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:62846",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+I’m going to add small shared helpers for score validation, modifier math, and proficiency so the standalone and derived endpoints use identical rules. The existing route table pattern is simple, so I’ll extend it directly.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+codex
+The endpoints are wired in. Since the benchmark contract says not to start the HTTP server before the final answer, I’m validating by compiling the module and calling the route functions directly instead of launching `run.sh`.
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  56 Jul  9 11:53 run.sh
+
+exec
+/bin/zsh -lc 'python3 -m py_compile server.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import server
+
+assert server.character_ability_modifier({'score': 9}) == {'score': 9, 'modifier': -1}
+assert server.character_ability_modifier({'score': 10}) == {'score': 10, 'modifier': 0}
+assert server.character_ability_modifier({'score': 30}) == {'score': 30, 'modifier': 10}
+assert server.character_proficiency({'level': 1}) == {'level': 1, 'proficiency_bonus': 2}
+assert server.character_proficiency({'level': 9}) == {'level': 9, 'proficiency_bonus': 4}
+assert server.character_proficiency({'level': 20}) == {'level': 20, 'proficiency_bonus': 6}
+assert server.character_derived_stats({
+    'level': 5,
+    'abilities': {'str': 16, 'dex': 14, 'con': 13, 'int': 8, 'wis': 12, 'cha': 10},
+    'armor': {'base': 12, 'shield': True, 'dex_cap': 2},
+}) == {
+    'level': 5,
+    'proficiency_bonus': 3,
+    'hp_max': 35,
+    'armor_class': 16,
+    'modifiers': {'str': 3, 'dex': 2, 'con': 1, 'int': -1, 'wis': 1, 'cha': 0},
+}
+for func, payload in (
+    (server.character_ability_modifier, {'score': 0}),
+    (server.character_ability_modifier, {'score': True}),
+    (server.character_proficiency, {'level': 21}),
+    (server.character_derived_stats, {'level': 1, 'abilities': {}, 'armor': {'base': 10, 'shield': False, 'dex_cap': 2}}),
+):
+    try:
+        func(payload)
+    except server.BadRequest:
+        pass
+    else:
+        raise AssertionError((func.__name__, payload))
+print('direct character checks passed')
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+direct character checks passed
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+codex
+Validation passed without starting the server, and `run.sh` is present and executable. I’m doing a quick diff check now to make sure the change is limited to the character feature.
+exec
+/bin/zsh -lc 'git diff -- server.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short -- server.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+?? run.sh
+?? server.py
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+codex
+This run directory is untracked from the parent repository, so `git diff` has nothing to compare against for these files. I’m removing the Python bytecode cache from validation so the deliverable stays minimal.
+2026-07-09T18:56:57.042545Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'rm -rf __pycache__ && find . -maxdepth 2 -type d -name __pycache__ -print'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -rf __pycache__ && find . -maxdepth 2 -type d -name __pycache__ -print'` rejected: blocked by policy\")" }
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+codex
+The sandbox policy blocked the broad removal command. I’ll inspect the cache contents and remove only the generated compile artifact if it exists.
+exec
+/bin/zsh -lc 'find __pycache__ -maxdepth 1 -type f -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+__pycache__/server.cpython-314.pyc
+
+exec
+/bin/zsh -lc 'find . -maxdepth 2 -type d -name __pycache__ -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+./__pycache__
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+codex
+Only `__pycache__/server.cpython-314.pyc` was generated by validation, so I’m deleting that exact file and then the empty directory.
+exec
+/bin/zsh -lc 'rm __pycache__/server.cpython-314.pyc' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+exec
+/bin/zsh -lc 'rmdir __pycache__' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+exec
+/bin/zsh -lc 'find . -maxdepth 2 -type d -name __pycache__ -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "nl -ba server.py | sed -n '1,240p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+     1	#!/usr/bin/env python3
+     2	import json
+     3	import os
+     4	import re
+     5	from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+     6	
+     7	
+     8	DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+     9	
+    10	MONSTER_XP = {
+    11	    "0": 10,
+    12	    "1/8": 25,
+    13	    "1/4": 50,
+    14	    "1/2": 100,
+    15	    "1": 200,
+    16	    "2": 450,
+    17	    "3": 700,
+    18	    "4": 1100,
+    19	    "5": 1800,
+    20	}
+    21	
+    22	LEVEL_THRESHOLDS = {
+    23	    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+    24	}
+    25	
+    26	ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
+    27	
+    28	
+    29	class BadRequest(Exception):
+    30	    pass
+    31	
+    32	
+    33	def require_int(value, name):
+    34	    if type(value) is not int:
+    35	        raise BadRequest(f"{name} must be an integer")
+    36	    return value
+    37	
+    38	
+    39	def require_range(value, name, minimum, maximum):
+    40	    value = require_int(value, name)
+    41	    if value < minimum or value > maximum:
+    42	        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
+    43	    return value
+    44	
+    45	
+    46	def ability_modifier_for_score(score):
+    47	    score = require_range(score, "score", 1, 30)
+    48	    return (score - 10) // 2
+    49	
+    50	
+    51	def proficiency_bonus_for_level(level):
+    52	    level = require_range(level, "level", 1, 20)
+    53	    return 2 + (level - 1) // 4
+    54	
+    55	
+    56	def dice_stats(payload):
+    57	    expression = payload.get("expression")
+    58	    if type(expression) is not str:
+    59	        raise BadRequest("expression must be a string")
+    60	
+    61	    match = DICE_RE.fullmatch(expression)
+    62	    if not match:
+    63	        raise BadRequest("invalid dice expression")
+    64	
+    65	    count = int(match.group(1))
+    66	    sides = int(match.group(2))
+    67	    if count <= 0 or sides <= 0:
+    68	        raise BadRequest("dice count and sides must be positive")
+    69	
+    70	    modifier = int(match.group(4) or "0")
+    71	    if match.group(3) == "-":
+    72	        modifier = -modifier
+    73	
+    74	    minimum = count + modifier
+    75	    maximum = count * sides + modifier
+    76	    average = count * (sides + 1) / 2 + modifier
+    77	    if average.is_integer():
+    78	        average = int(average)
+    79	
+    80	    return {
+    81	        "dice_count": count,
+    82	        "sides": sides,
+    83	        "modifier": modifier,
+    84	        "min": minimum,
+    85	        "max": maximum,
+    86	        "average": average,
+    87	    }
+    88	
+    89	
+    90	def ability_check(payload):
+    91	    roll = require_int(payload.get("roll"), "roll")
+    92	    modifier = require_int(payload.get("modifier"), "modifier")
+    93	    dc = require_int(payload.get("dc"), "dc")
+    94	    total = roll + modifier
+    95	    return {"total": total, "success": total >= dc, "margin": total - dc}
+    96	
+    97	
+    98	def monster_multiplier(count):
+    99	    if count <= 0:
+   100	        raise BadRequest("monster count must be positive")
+   101	    if count == 1:
+   102	        return 1
+   103	    if count == 2:
+   104	        return 1.5
+   105	    if count <= 6:
+   106	        return 2
+   107	    if count <= 10:
+   108	        return 2.5
+   109	    if count <= 14:
+   110	        return 3
+   111	    return 4
+   112	
+   113	
+   114	def encounter_xp(payload):
+   115	    party = payload.get("party")
+   116	    monsters = payload.get("monsters")
+   117	    if type(party) is not list or type(monsters) is not list:
+   118	        raise BadRequest("party and monsters must be arrays")
+   119	
+   120	    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+   121	    for member in party:
+   122	        if type(member) is not dict:
+   123	            raise BadRequest("party members must be objects")
+   124	        level = require_int(member.get("level"), "level")
+   125	        if level not in LEVEL_THRESHOLDS:
+   126	            raise BadRequest("unsupported level")
+   127	        for key, value in LEVEL_THRESHOLDS[level].items():
+   128	            thresholds[key] += value
+   129	
+   130	    base_xp = 0
+   131	    total_monsters = 0
+   132	    for monster in monsters:
+   133	        if type(monster) is not dict:
+   134	            raise BadRequest("monsters must be objects")
+   135	        cr = monster.get("cr")
+   136	        count = require_int(monster.get("count"), "count")
+   137	        if cr not in MONSTER_XP:
+   138	            raise BadRequest("unsupported challenge rating")
+   139	        if count <= 0:
+   140	            raise BadRequest("monster count must be positive")
+   141	        base_xp += MONSTER_XP[cr] * count
+   142	        total_monsters += count
+   143	
+   144	    multiplier = monster_multiplier(total_monsters)
+   145	    adjusted_xp = base_xp * multiplier
+   146	    if isinstance(adjusted_xp, float) and adjusted_xp.is_integer():
+   147	        adjusted_xp = int(adjusted_xp)
+   148	
+   149	    difficulty = "trivial"
+   150	    for name in ("easy", "medium", "hard", "deadly"):
+   151	        if adjusted_xp >= thresholds[name]:
+   152	            difficulty = name
+   153	
+   154	    return {
+   155	        "base_xp": base_xp,
+   156	        "monster_count": total_monsters,
+   157	        "multiplier": multiplier,
+   158	        "adjusted_xp": adjusted_xp,
+   159	        "difficulty": difficulty,
+   160	        "thresholds": thresholds,
+   161	    }
+   162	
+   163	
+   164	def initiative_order(payload):
+   165	    combatants = payload.get("combatants")
+   166	    if type(combatants) is not list:
+   167	        raise BadRequest("combatants must be an array")
+   168	
+   169	    entries = []
+   170	    for combatant in combatants:
+   171	        if type(combatant) is not dict:
+   172	            raise BadRequest("combatants must be objects")
+   173	        name = combatant.get("name")
+   174	        if type(name) is not str:
+   175	            raise BadRequest("name must be a string")
+   176	        dex = require_int(combatant.get("dex"), "dex")
+   177	        roll = require_int(combatant.get("roll"), "roll")
+   178	        score = roll + dex
+   179	        entries.append({"name": name, "dex": dex, "score": score})
+   180	
+   181	    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+   182	    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+   183	
+   184	
+   185	def character_ability_modifier(payload):
+   186	    score = require_range(payload.get("score"), "score", 1, 30)
+   187	    return {"score": score, "modifier": ability_modifier_for_score(score)}
+   188	
+   189	
+   190	def character_proficiency(payload):
+   191	    level = require_range(payload.get("level"), "level", 1, 20)
+   192	    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
+   193	
+   194	
+   195	def character_derived_stats(payload):
+   196	    level = require_range(payload.get("level"), "level", 1, 20)
+   197	    abilities = payload.get("abilities")
+   198	    armor = payload.get("armor")
+   199	    if type(abilities) is not dict:
+   200	        raise BadRequest("abilities must be an object")
+   201	    if type(armor) is not dict:
+   202	        raise BadRequest("armor must be an object")
+   203	
+   204	    modifiers = {}
+   205	    for name in ABILITY_NAMES:
+   206	        modifiers[name] = ability_modifier_for_score(abilities.get(name))
+   207	
+   208	    armor_base = require_int(armor.get("base"), "base")
+   209	    shield = armor.get("shield")
+   210	    if type(shield) is not bool:
+   211	        raise BadRequest("shield must be a boolean")
+   212	    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
+   213	
+   214	    shield_bonus = 2 if shield else 0
+   215	    return {
+   216	        "level": level,
+   217	        "proficiency_bonus": proficiency_bonus_for_level(level),
+   218	        "hp_max": level * (6 + modifiers["con"]),
+   219	        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
+   220	        "modifiers": modifiers,
+   221	    }
+   222	
+   223	
+   224	POST_ROUTES = {
+   225	    "/v1/dice/stats": dice_stats,
+   226	    "/v1/checks/ability": ability_check,
+   227	    "/v1/encounters/adjusted-xp": encounter_xp,
+   228	    "/v1/initiative/order": initiative_order,
+   229	    "/v1/characters/ability-modifier": character_ability_modifier,
+   230	    "/v1/characters/proficiency": character_proficiency,
+   231	    "/v1/characters/derived-stats": character_derived_stats,
+   232	}
+   233	
+   234	
+   235	class Handler(BaseHTTPRequestHandler):
+   236	    server_version = "DndRest/1.0"
+   237	
+   238	    def log_message(self, format, *args):
+   239	        return
+   240	
+
+exec
+/bin/zsh -lc "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import server
+
+assert server.POST_ROUTES['/v1/characters/ability-modifier']({'score': 9}) == {'score': 9, 'modifier': -1}
+assert server.POST_ROUTES['/v1/characters/proficiency']({'level': 9}) == {'level': 9, 'proficiency_bonus': 4}
+assert server.POST_ROUTES['/v1/characters/derived-stats']({
+    'level': 5,
+    'abilities': {'str': 16, 'dex': 14, 'con': 13, 'int': 8, 'wis': 12, 'cha': 10},
+    'armor': {'base': 12, 'shield': True, 'dex_cap': 2},
+}) == {
+    'level': 5,
+    'proficiency_bonus': 3,
+    'hp_max': 35,
+    'armor_class': 16,
+    'modifiers': {'str': 3, 'dex': 2, 'con': 1, 'int': -1, 'wis': 1, 'cha': 0},
+}
+print('route checks passed')
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+route checks passed
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+exec
+/bin/zsh -lc 'git status --short -- .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+codex
+Implemented the character rules in [server.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py:26):
+
+- Added `POST /v1/characters/ability-modifier`
+- Added `POST /v1/characters/proficiency`
+- Added `POST /v1/characters/derived-stats`
+- Preserved existing routes and `run.sh`; `run.sh` still starts `python3 server.py` in the foreground.
+
+Validation completed without starting the server:
+- `python3 -m py_compile server.py`
+- Direct route-function checks for the new character endpoints and invalid inputs
+
+I did not run `./run.sh`, per the benchmark instruction.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index 77794b43ae1df844659c16fee0da37f5fabdc18e..e04335babcb047e94ddc239591cdb1d80157c4a0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -23,6 +23,8 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
++
+ 
+ class BadRequest(Exception):
+     pass
+@@ -34,6 +36,23 @@
+     return value
+ 
+ 
++def require_range(value, name, minimum, maximum):
++    value = require_int(value, name)
++    if value < minimum or value > maximum:
++        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
++    return value
++
++
++def ability_modifier_for_score(score):
++    score = require_range(score, "score", 1, 30)
++    return (score - 10) // 2
++
++
++def proficiency_bonus_for_level(level):
++    level = require_range(level, "level", 1, 20)
++    return 2 + (level - 1) // 4
++
++
+ def dice_stats(payload):
+     expression = payload.get("expression")
+     if type(expression) is not str:
+@@ -163,11 +182,53 @@
+     return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+ 
+ 
++def character_ability_modifier(payload):
++    score = require_range(payload.get("score"), "score", 1, 30)
++    return {"score": score, "modifier": ability_modifier_for_score(score)}
++
++
++def character_proficiency(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
++
++
++def character_derived_stats(payload):
++    level = require_range(payload.get("level"), "level", 1, 20)
++    abilities = payload.get("abilities")
++    armor = payload.get("armor")
++    if type(abilities) is not dict:
++        raise BadRequest("abilities must be an object")
++    if type(armor) is not dict:
++        raise BadRequest("armor must be an object")
++
++    modifiers = {}
++    for name in ABILITY_NAMES:
++        modifiers[name] = ability_modifier_for_score(abilities.get(name))
++
++    armor_base = require_int(armor.get("base"), "base")
++    shield = armor.get("shield")
++    if type(shield) is not bool:
++        raise BadRequest("shield must be a boolean")
++    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
++
++    shield_bonus = 2 if shield else 0
++    return {
++        "level": level,
++        "proficiency_bonus": proficiency_bonus_for_level(level),
++        "hp_max": level * (6 + modifiers["con"]),
++        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
++        "modifiers": modifiers,
++    }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+     "/v1/encounters/adjusted-xp": encounter_xp,
+     "/v1/initiative/order": initiative_order,
++    "/v1/characters/ability-modifier": character_ability_modifier,
++    "/v1/characters/proficiency": character_proficiency,
++    "/v1/characters/derived-stats": character_derived_stats,
+ }
+ 
+ 
+
+tokens used
+29,752

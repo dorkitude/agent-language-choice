@@ -1,0 +1,3365 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4986-160a-7611-9a97-fe6b6b4c3ad7
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-slim
+        Language: php
+        Framework/runtime: slim
+        Lifecycle stage: core
+        Shot kind: creative
+
+        Create the first implementation from the seeded starter files.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8, Composer 2.10.2, Slim 4.15.2, and slim/psr7 1.8.0.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the starter layout and pinned dependencies first, then add the Slim implementation and a foreground `run.sh` without launching it.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ../20260709T201750Z_codex_gpt-5.5_python-django/
+?? ../20260709T202528Z_pi_kimi-k2p7-code_python-django/
+?? ../20260709T203725Z_pi_glm-5p2_python-django/
+?? ../20260709T205305Z_claude_opus_java-stdlib/
+?? ../20260709T205724Z_claude_sonnet_java-stdlib/
+?? ../20260709T205729Z_codex_gpt-5.5_java-stdlib/
+?? ../20260709T210607Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260709T211756Z_pi_glm-5p2_java-stdlib/
+?? ../20260709T214310Z_claude_opus_ruby-stdlib/
+?? ../20260709T214315Z_claude_sonnet_ruby-stdlib/
+?? ../20260709T214318Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260709T214954Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260709T220944Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260709T222154Z_claude_opus_ruby-sinatra/
+?? ../20260709T222210Z_claude_sonnet_ruby-sinatra/
+?? ../20260709T222228Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260709T223208Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260709T223852Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260709T231139Z_claude_opus_ruby-rails/
+?? ../20260709T231715Z_claude_sonnet_ruby-rails/
+?? ../20260709T232305Z_codex_gpt-5.5_ruby-rails/
+?? ../20260709T233214Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260709T234200Z_pi_glm-5p2_ruby-rails/
+?? ../20260710T000458Z_claude_opus_php-stdlib/
+?? ../20260710T000926Z_claude_sonnet_php-stdlib/
+?? ../20260710T001223Z_codex_gpt-5.5_php-stdlib/
+?? ../20260710T001735Z_pi_kimi-k2p7-code_php-stdlib/
+?? ../20260710T002201Z_pi_glm-5p2_php-stdlib/
+?? ../20260710T004345Z_claude_opus_php-slim/
+?? ../20260710T004927Z_claude_sonnet_php-slim/
+?? ./
+
+exec
+/bin/zsh -lc "pwd && rg --files -g '"'!*vendor*'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 101ms:
+codex
+The workspace has only the seeded Slim files in this run directory; the broader git status shows unrelated benchmark outputs outside this directory, so I’ll leave those alone. Next I’m reading the PHP entrypoint, Composer manifest, and runner.
+exec
+/bin/zsh -lc "sed -n '1,240p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+$app = AppFactory::create();
+
+$app->get('/health', function (Request $request, Response $response) {
+    $response->getBody()->write(json_encode(['ok' => true]));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+$app->run();
+?>
+
+exec
+/bin/zsh -lc "sed -n '1,220p' composer.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+{
+  "require": {
+    "slim/slim": "4.15.2",
+    "slim/psr7": "1.8.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc 'ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+total 48
+drwxr-xr-x@  8 dorkitude  staff   256 Jul  9 17:55 .
+drwxr-xr-x@ 65 dorkitude  staff  2080 Jul  9 17:55 ..
+-rw-r--r--@  1 dorkitude  staff  4211 Jul  9 17:55 PROMPT.md
+-rw-r--r--@  1 dorkitude  staff   635 Jul  9 17:55 VERSION-PINS.json
+-rw-r--r--@  1 dorkitude  staff   120 Jul  9 17:55 composer.json
+-rw-r--r--@  1 dorkitude  staff   441 Jul  9 17:55 index.php
+-rwxr-xr-x@  1 dorkitude  staff    73 Jul  9 17:55 run.sh
+drwxr-xr-x@  3 dorkitude  staff    96 Jul  9 17:55 shots
+
+codex
+I’m going to keep this as a single small Slim app: shared JSON helpers, strict validation per endpoint, and deterministic sorting/math. `run.sh` already starts the PHP built-in server on `127.0.0.1:$PORT`, so I only need a minor robustness tweak there if dependencies are absent.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..4a0713efb37b590b0682892131c9559e4e449ece
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload, JSON_PRESERVE_ZERO_FRACTION));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..4a0713efb37b590b0682892131c9559e4e449ece
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload, JSON_PRESERVE_ZERO_FRACTION));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+
+codex
+The endpoint code is in place. I’m checking syntax and whether the local dependency install exists so verification can use the exact pinned Slim packages without changing the manifest.
+exec
+/bin/zsh -lc 'test -d vendor && find vendor -maxdepth 2 -type d | head -40 || true' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+exec
+/bin/zsh -lc 'composer --version' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..4a0713efb37b590b0682892131c9559e4e449ece
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload, JSON_PRESERVE_ZERO_FRACTION));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+
+ succeeded in 282ms:
+No syntax errors detected in index.php
+
+ succeeded in 321ms:
+Composer version 2.10.2 2026-07-01 11:24:45
+PHP version 8.5.8 (/opt/homebrew/Cellar/php/8.5.8/bin/php)
+Run the "diagnose" command to get more detailed diagnostics output.
+
+codex
+`php -l` passes, and the requested PHP/Composer versions are present. There is no `vendor/` yet, so I’m installing from the pinned `composer.json`; this keeps Slim at `4.15.2` and `slim/psr7` at `1.8.0`.
+exec
+/bin/zsh -lc 'composer install --no-interaction --no-progress' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..4a0713efb37b590b0682892131c9559e4e449ece
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload, JSON_PRESERVE_ZERO_FRACTION));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+
+ exited 100 in 742ms:
+No composer.lock file present. Updating dependencies to latest instead of installing from lock file. See https://getcomposer.org/install for more information.
+Loading composer repositories with package information
+Cannot create cache directory /Users/dorkitude/Library/Caches/composer/repo/https---repo.packagist.org/, or directory is not writable. Proceeding without cache. See also cache-read-only config if your filesystem is read-only.
+The following exception probably indicates you are offline or have misconfigured DNS resolver(s)
+If you intend to run Composer without connecting to the internet, run the command again prefixed with COMPOSER_DISABLE_NETWORK=1 to make Composer run in offline mode.
+
+In CurlDownloader.php line 407:
+                                                                               
+  curl error 6 while downloading https://repo.packagist.org/packages.json: Co  
+  uld not resolve host: repo.packagist.org                                     
+                                                                               
+
+install [--prefer-source] [--prefer-dist] [--prefer-install PREFER-INSTALL] [--dry-run] [--download-only] [--dev] [--no-suggest] [--no-dev] [--no-security-blocking] [--no-blocking] [--no-autoloader] [--no-progress] [--no-install] [--audit] [--audit-format AUDIT-FORMAT] [-v|vv|vvv|--verbose] [-o|--optimize-autoloader] [-a|--classmap-authoritative] [--strict-psr-autoloader] [--apcu-autoloader] [--apcu-autoloader-prefix APCU-AUTOLOADER-PREFIX] [--ignore-platform-req IGNORE-PLATFORM-REQ] [--ignore-platform-reqs] [--] [<packages>...]
+
+
+codex
+Composer could not reach Packagist in this sandbox, so I can’t populate `vendor/` here. I’m updating `run.sh` to install pinned dependencies only when missing, then `exec` the foreground server; that makes the runner work in environments where dependencies are preinstalled or network/cache is available.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..4a0713efb37b590b0682892131c9559e4e449ece
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload, JSON_PRESERVE_ZERO_FRACTION));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..4a0713efb37b590b0682892131c9559e4e449ece
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload, JSON_PRESERVE_ZERO_FRACTION));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+codex
+One subtle JSON detail: PHP would emit `10.0` for an integral average if zero fractions are preserved. I’m tightening that so sample-shaped integer results serialize as `10` while fractional averages still serialize normally.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..1e6075b34bfd811b1472befffd56e0cbfb8b7155
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..1e6075b34bfd811b1472befffd56e0cbfb8b7155
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc 'bash -n run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git diff -- index.php run.sh composer.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+exec
+/bin/zsh -lc 'composer validate --no-check-publish --no-interaction' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..1e6075b34bfd811b1472befffd56e0cbfb8b7155
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 279ms:
+No syntax errors detected in index.php
+
+ succeeded in 364ms:
+./composer.json is valid, but with a few warnings
+See https://getcomposer.org/doc/04-schema.md for details on the schema
+# General warnings
+- No license specified, it is recommended to do so. For closed-source software you may use "proprietary" as license.
+- require.slim/slim : exact version constraints (4.15.2) should be avoided if the package follows semantic versioning
+- require.slim/psr7 : exact version constraints (1.8.0) should be avoided if the package follows semantic versioning
+
+codex
+Static checks pass: PHP syntax, shell syntax, and Composer manifest validation. Composer only reports expected metadata/version-constraint warnings from the seeded exact pins.
+exec
+/bin/zsh -lc "sed -n '1,260p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+$app = AppFactory::create();
+
+function jsonResponse(Response $response, array $payload, int $status = 200): Response
+{
+    $response->getBody()->write(json_encode($payload));
+    return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus($status);
+}
+
+function badRequest(Response $response): Response
+{
+    return jsonResponse($response, ['error' => 'bad request'], 400);
+}
+
+function requestJson(Request $request): ?array
+{
+    $raw = (string) $request->getBody();
+    $data = json_decode($raw, true);
+
+    return is_array($data) ? $data : null;
+}
+
+function isIntegerValue(mixed $value): bool
+{
+    return is_int($value);
+}
+
+$app->get('/health', function (Request $request, Response $response) {
+    return jsonResponse($response, ['ok' => true]);
+});
+
+$app->post('/v1/dice/stats', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
+        return badRequest($response);
+    }
+
+    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
+        return badRequest($response);
+    }
+
+    $count = (int) $matches[1];
+    $sides = (int) $matches[2];
+    if ($count <= 0 || $sides <= 0) {
+        return badRequest($response);
+    }
+
+    $modifier = 0;
+    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
+        $modifier = (int) $matches[4];
+        if ($matches[3] === '-') {
+            $modifier *= -1;
+        }
+    }
+
+    $min = $count + $modifier;
+    $max = ($count * $sides) + $modifier;
+    $average = ($min + $max) / 2;
+
+    return jsonResponse($response, [
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $min,
+        'max' => $max,
+        'average' => $average,
+    ]);
+});
+
+$app->post('/v1/checks/ability', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if (
+        $data === null
+        || !array_key_exists('roll', $data)
+        || !array_key_exists('modifier', $data)
+        || !array_key_exists('dc', $data)
+        || !isIntegerValue($data['roll'])
+        || !isIntegerValue($data['modifier'])
+        || !isIntegerValue($data['dc'])
+    ) {
+        return badRequest($response);
+    }
+
+    $total = $data['roll'] + $data['modifier'];
+    $margin = $total - $data['dc'];
+
+    return jsonResponse($response, [
+        'total' => $total,
+        'success' => $total >= $data['dc'],
+        'margin' => $margin,
+    ]);
+});
+
+$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if (
+        $data === null
+        || !isset($data['party'])
+        || !isset($data['monsters'])
+        || !is_array($data['party'])
+        || !is_array($data['monsters'])
+    ) {
+        return badRequest($response);
+    }
+
+    $xpByCr = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($data['party'] as $member) {
+        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
+            return badRequest($response);
+        }
+
+        $thresholds['easy'] += 75;
+        $thresholds['medium'] += 150;
+        $thresholds['hard'] += 225;
+        $thresholds['deadly'] += 400;
+    }
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($data['monsters'] as $monster) {
+        if (
+            !is_array($monster)
+            || !isset($monster['cr'])
+            || !is_string($monster['cr'])
+            || !array_key_exists($monster['cr'], $xpByCr)
+            || !isset($monster['count'])
+            || !isIntegerValue($monster['count'])
+            || $monster['count'] <= 0
+        ) {
+            return badRequest($response);
+        }
+
+        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
+        $monsterCount += $monster['count'];
+    }
+
+    if ($monsterCount === 1) {
+        $multiplier = 1;
+    } elseif ($monsterCount === 2) {
+        $multiplier = 1.5;
+    } elseif ($monsterCount <= 6) {
+        $multiplier = 2;
+    } elseif ($monsterCount <= 10) {
+        $multiplier = 2.5;
+    } elseif ($monsterCount <= 14) {
+        $multiplier = 3;
+    } else {
+        $multiplier = 4;
+    }
+
+    $adjustedXp = $baseXp * $multiplier;
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
+        if ($adjustedXp >= $thresholds[$level]) {
+            $difficulty = $level;
+        }
+    }
+
+    return jsonResponse($response, [
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+});
+
+$app->post('/v1/initiative/order', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
+        return badRequest($response);
+    }
+
+    $combatants = [];
+    foreach ($data['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'])
+            || !is_string($combatant['name'])
+            || !isset($combatant['dex'])
+            || !isset($combatant['roll'])
+            || !isIntegerValue($combatant['dex'])
+            || !isIntegerValue($combatant['roll'])
+        ) {
+            return badRequest($response);
+        }
+
+        $combatants[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    usort($combatants, function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+
+    $order = array_map(
+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+        $combatants
+    );
+
+    return jsonResponse($response, ['order' => $order]);
+});
+
+$app->run();
+
+exec
+/bin/zsh -lc "sed -n '1,80p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ ! -d vendor ]; then
+  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
+fi
+
+exec php -S 127.0.0.1:"$PORT" index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..1e6075b34bfd811b1472befffd56e0cbfb8b7155
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+codex
+Implemented the Slim REST API in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php) with all core endpoints:
+
+- `GET /health`
+- `POST /v1/dice/stats`
+- `POST /v1/checks/ability`
+- `POST /v1/encounters/adjusted-xp`
+- `POST /v1/initiative/order`
+
+Updated [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh) so it installs pinned Composer dependencies if `vendor/` is missing, then starts the server in the foreground on `127.0.0.1:$PORT`.
+
+Verification done:
+- `php -l index.php` passed.
+- `bash -n run.sh` passed.
+- `composer validate` passed with only expected warnings about exact pinned versions and missing license.
+
+I did not start the HTTP server, per the benchmark contract. Composer install could not complete in this sandbox because Packagist DNS/network access is blocked.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 6a40692606fb861928e358570edee30b058e15e6..1e6075b34bfd811b1472befffd56e0cbfb8b7155
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -7,10 +7,224 @@
+ 
+ $app = AppFactory::create();
+ 
++function jsonResponse(Response $response, array $payload, int $status = 200): Response
++{
++    $response->getBody()->write(json_encode($payload));
++    return $response
++        ->withHeader('Content-Type', 'application/json')
++        ->withStatus($status);
++}
++
++function badRequest(Response $response): Response
++{
++    return jsonResponse($response, ['error' => 'bad request'], 400);
++}
++
++function requestJson(Request $request): ?array
++{
++    $raw = (string) $request->getBody();
++    $data = json_decode($raw, true);
++
++    return is_array($data) ? $data : null;
++}
++
++function isIntegerValue(mixed $value): bool
++{
++    return is_int($value);
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+-    $response->getBody()->write(json_encode(['ok' => true]));
+-    return $response->withHeader('Content-Type', 'application/json');
++    return jsonResponse($response, ['ok' => true]);
++});
++
++$app->post('/v1/dice/stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
++        return badRequest($response);
++    }
++
++    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
++        return badRequest($response);
++    }
++
++    $count = (int) $matches[1];
++    $sides = (int) $matches[2];
++    if ($count <= 0 || $sides <= 0) {
++        return badRequest($response);
++    }
++
++    $modifier = 0;
++    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
++        $modifier = (int) $matches[4];
++        if ($matches[3] === '-') {
++            $modifier *= -1;
++        }
++    }
++
++    $min = $count + $modifier;
++    $max = ($count * $sides) + $modifier;
++    $average = ($min + $max) / 2;
++
++    return jsonResponse($response, [
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $min,
++        'max' => $max,
++        'average' => $average,
++    ]);
++});
++
++$app->post('/v1/checks/ability', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !array_key_exists('roll', $data)
++        || !array_key_exists('modifier', $data)
++        || !array_key_exists('dc', $data)
++        || !isIntegerValue($data['roll'])
++        || !isIntegerValue($data['modifier'])
++        || !isIntegerValue($data['dc'])
++    ) {
++        return badRequest($response);
++    }
++
++    $total = $data['roll'] + $data['modifier'];
++    $margin = $total - $data['dc'];
++
++    return jsonResponse($response, [
++        'total' => $total,
++        'success' => $total >= $data['dc'],
++        'margin' => $margin,
++    ]);
++});
++
++$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if (
++        $data === null
++        || !isset($data['party'])
++        || !isset($data['monsters'])
++        || !is_array($data['party'])
++        || !is_array($data['monsters'])
++    ) {
++        return badRequest($response);
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($data['party'] as $member) {
++        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
++            return badRequest($response);
++        }
++
++        $thresholds['easy'] += 75;
++        $thresholds['medium'] += 150;
++        $thresholds['hard'] += 225;
++        $thresholds['deadly'] += 400;
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($data['monsters'] as $monster) {
++        if (
++            !is_array($monster)
++            || !isset($monster['cr'])
++            || !is_string($monster['cr'])
++            || !array_key_exists($monster['cr'], $xpByCr)
++            || !isset($monster['count'])
++            || !isIntegerValue($monster['count'])
++            || $monster['count'] <= 0
++        ) {
++            return badRequest($response);
++        }
++
++        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
++        $monsterCount += $monster['count'];
++    }
++
++    if ($monsterCount === 1) {
++        $multiplier = 1;
++    } elseif ($monsterCount === 2) {
++        $multiplier = 1.5;
++    } elseif ($monsterCount <= 6) {
++        $multiplier = 2;
++    } elseif ($monsterCount <= 10) {
++        $multiplier = 2.5;
++    } elseif ($monsterCount <= 14) {
++        $multiplier = 3;
++    } else {
++        $multiplier = 4;
++    }
++
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
++        if ($adjustedXp >= $thresholds[$level]) {
++            $difficulty = $level;
++        }
++    }
++
++    return jsonResponse($response, [
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
+ });
+ 
++$app->post('/v1/initiative/order', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
++        return badRequest($response);
++    }
++
++    $combatants = [];
++    foreach ($data['combatants'] as $combatant) {
++        if (
++            !is_array($combatant)
++            || !isset($combatant['name'])
++            || !is_string($combatant['name'])
++            || !isset($combatant['dex'])
++            || !isset($combatant['roll'])
++            || !isIntegerValue($combatant['dex'])
++            || !isIntegerValue($combatant['roll'])
++        ) {
++            return badRequest($response);
++        }
++
++        $combatants[] = [
++            'name' => $combatant['name'],
++            'dex' => $combatant['dex'],
++            'score' => $combatant['roll'] + $combatant['dex'],
++        ];
++    }
++
++    usort($combatants, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    $order = array_map(
++        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
++        $combatants
++    );
++
++    return jsonResponse($response, ['order' => $order]);
++});
++
+ $app->run();
+-?>
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..e60900425bb2c7c8300b44129042d93b03a2bab3
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,8 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-php -S 127.0.0.1:"$PORT" index.php
++
++if [ ! -d vendor ]; then
++  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
++fi
++
++exec php -S 127.0.0.1:"$PORT" index.php
+
+tokens used
+33,510

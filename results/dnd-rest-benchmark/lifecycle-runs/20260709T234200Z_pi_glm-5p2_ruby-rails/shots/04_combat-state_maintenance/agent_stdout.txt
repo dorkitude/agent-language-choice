@@ -1,0 +1,27 @@
+Done, Chef! 🎲⚔️
+
+## Summary
+
+I inherited the minimal Rails 8.1.3 API app (Ruby 4.0.5) and added the **Stateful Combat** stage while preserving all prior-stage behavior.
+
+### What I added
+
+**New controller** — `app/controllers/v1/combat_sessions_controller.rb`
+- An in-memory `V1::CombatStore` (a `SESSIONS` Hash + `Mutex`, living for the process lifetime).
+- `POST /v1/combat/sessions` — creates a session from a client-supplied `id` + combatants. Score = `roll + dex`, sorted **score desc → dex desc → name asc**, starting `round=1`, `turn_index=0`. Response = `{id, round, turn_index, active, order}`.
+- `POST /v1/combat/sessions/:id/conditions` — validates `target` is a real combatant, `condition` is a string, `duration_rounds` is a positive integer; appends to that combatant. Returns `{target, conditions}`.
+- `POST /v1/combat/sessions/:id/advance` — bumps `turn_index`, increments `round` on wrap to 0, then decrements the **new active combatant's** conditions at the start of their turn and removes any that hit 0. Returns `{id, round, turn_index, active, conditions}`.
+
+**Routes** — added three `post` lines under the existing `:v1` namespace.
+
+### Error handling
+- Unknown session id → `404`.
+- Missing/empty `id`, missing/empty `combatants`, bad combatant fields, unknown `target`, non-string `condition`, non-positive/non-integer `duration_rounds` → `400`.
+
+### Verified end-to-end against a live server
+- The exact spec scenario: create → add `blessed` (2) → 5 advances, confirming `turn_index`/`round` progression, the round wrap (→ round 2), and `blessed` decrementing only on fighter's turns until it expires and drops out of the `conditions` map.
+- All validation cases return the right 400/404.
+- Multiple conditions on one target append correctly.
+- Prior-stage suites still green: `health`, `dice/stats`, `checks/ability`, `encounters/adjusted-xp`, `initiative/order`, and all three `characters/*` endpoints return 200.
+
+`run.sh` is unchanged (foreground `rackup -o 127.0.0.1 -p "$PORT"`), Gemfile/pins untouched. Server is **not** left running.

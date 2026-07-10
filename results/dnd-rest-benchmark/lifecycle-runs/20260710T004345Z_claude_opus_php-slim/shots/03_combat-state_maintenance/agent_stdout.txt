@@ -1,0 +1,18 @@
+Everything works correctly. The exit-1 was just zsh complaining the temp file was already gone (harmless glob). Let me confirm the results:
+
+- **Create**: correct ordering (rogue 17 → mage 16 → fighter 14), round 1, turn_index 0, active=rogue ✅
+- **Duplicate id** → 400 ✅
+- **Add condition** → returns target's conditions ✅
+- **Bad target / non-positive duration** → 400 ✅
+- **Advance**: turn_index increments; active combatant's conditions decrement at start of their turn (blessed 2→1 when fighter becomes active); wraps to turn_index 0 and bumps round; condition removed when it hits 0 ✅
+- **Unknown session** → 404 ✅
+- **Core + character endpoints** still intact ✅
+
+All set, Chef! 🎲⚔️
+
+The maintenance stage is complete. Summary of what I did:
+
+- Added three endpoints to `index.php`: `POST /v1/combat/sessions`, `POST /v1/combat/sessions/{id}/conditions`, and `POST /v1/combat/sessions/{id}/advance`.
+- **Root-cause note on state**: PHP's built-in server re-executes the script on every request, so in-process globals reset between calls (my first test caught this — the session vanished immediately). I backed the store with a temp JSON file keyed to the server PID (`getmypid()`), which is stable across requests for the single-process built-in server and distinct per restart — so state lasts the process lifetime and resets naturally, exactly as the spec allows.
+- Initiative sorting reuses the same score→dex→name tiebreak as the existing `/v1/initiative/order` endpoint.
+- `./run.sh` is unchanged, still starts the server in the foreground on `127.0.0.1:$PORT`. I did **not** leave a server running.

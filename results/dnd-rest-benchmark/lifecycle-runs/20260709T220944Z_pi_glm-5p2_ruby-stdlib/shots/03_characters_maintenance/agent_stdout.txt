@@ -1,0 +1,22 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I inherited the bugfix-state codebase (8/8 core tests passing) and added the **Maintenance Stage 1: Character Rules** endpoints while preserving all prior behavior.
+
+### What I added to `server.rb`
+
+Three new handlers plus two shared helpers, all wired into the existing `route` dispatcher:
+
+1. **`POST /v1/characters/ability-modifier`** — validates `score` is an integer in `1..30`, returns `modifier = (score - 10) / 2`. Ruby's integer division floors toward negative infinity, so score `9` → `-1` correctly. Returns `400` on out-of-range, missing, float, or string inputs.
+
+2. **`POST /v1/characters/proficiency`** — validates `level` is an integer in `1..20`, returns the tiered proficiency bonus (`2/3/4/5/6`).
+
+3. **`POST /v1/characters/derived-stats`** — validates `level`, all six abilities (`str/dex/con/int/wis/cha` each `1..30`), and `armor` (`base` integer, `dex_cap` integer). Computes every ability modifier, proficiency from level, `hp_max = level * (6 + con_mod)`, and `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` (shield = 2 when `armor.shield` is truthy).
+
+### Verification
+
+- ✅ All 6 regression endpoints still pass (health, dice 2d6+3, dice 1d20-1 avg `9.5`, dice invalid `400`, ability check, encounter, initiative).
+- ✅ Spec example for `derived-stats` returns exactly `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{...}}`.
+- ✅ All validation edges return `400` (out of range, missing, float, string, bad/missing armor, missing ability, invalid JSON via the existing `JSON::ParserError` rescue).
+- ✅ `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT`, stdlib only, no gems.

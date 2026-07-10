@@ -1,0 +1,2531 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f49b2-dd8e-76d1-ad55-79a52f132a39
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-symfony
+        Language: php
+        Framework/runtime: symfony-components
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8, Composer 2.10.2, Symfony HttpFoundation 8.1.1, and Symfony Routing 8.1.0. Implement routing with Symfony components.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:65403 passed=false tests=19/20
+PASS	health	0ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{}}
+
+
+Error: suite failed: 19/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the current Symfony-component PHP app and the combat state implementation first, then make the smallest change that preserves the existing endpoints.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ../20260709T201750Z_codex_gpt-5.5_python-django/
+?? ../20260709T202528Z_pi_kimi-k2p7-code_python-django/
+?? ../20260709T203725Z_pi_glm-5p2_python-django/
+?? ../20260709T205305Z_claude_opus_java-stdlib/
+?? ../20260709T205724Z_claude_sonnet_java-stdlib/
+?? ../20260709T205729Z_codex_gpt-5.5_java-stdlib/
+?? ../20260709T210607Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260709T211756Z_pi_glm-5p2_java-stdlib/
+?? ../20260709T214310Z_claude_opus_ruby-stdlib/
+?? ../20260709T214315Z_claude_sonnet_ruby-stdlib/
+?? ../20260709T214318Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260709T214954Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260709T220944Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260709T222154Z_claude_opus_ruby-sinatra/
+?? ../20260709T222210Z_claude_sonnet_ruby-sinatra/
+?? ../20260709T222228Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260709T223208Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260709T223852Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260709T231139Z_claude_opus_ruby-rails/
+?? ../20260709T231715Z_claude_sonnet_ruby-rails/
+?? ../20260709T232305Z_codex_gpt-5.5_ruby-rails/
+?? ../20260709T233214Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260709T234200Z_pi_glm-5p2_ruby-rails/
+?? ../20260710T000458Z_claude_opus_php-stdlib/
+?? ../20260710T000926Z_claude_sonnet_php-stdlib/
+?? ../20260710T001223Z_codex_gpt-5.5_php-stdlib/
+?? ../20260710T001735Z_pi_kimi-k2p7-code_php-stdlib/
+?? ../20260710T002201Z_pi_glm-5p2_php-stdlib/
+?? ../20260710T004345Z_claude_opus_php-slim/
+?? ../20260710T004927Z_claude_sonnet_php-slim/
+?? ../20260710T005550Z_codex_gpt-5.5_php-slim/
+?? ../20260710T010340Z_pi_kimi-k2p7-code_php-slim/
+?? ../20260710T010835Z_pi_glm-5p2_php-slim/
+?? ../20260710T012747Z_claude_opus_php-symfony/
+?? ../20260710T013427Z_claude_sonnet_php-symfony/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/PROMPT.md
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+dndeval-core-report.json
+composer.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+index.php
+setup.json
+composer.lock
+dndeval-combat-state-report.json
+
+codex
+The repository status includes changes outside this run directory, so I’m ignoring those. The local app looks compact; I’m reading `index.php`, `run.sh`, and Composer metadata now.
+exec
+/bin/zsh -lc "sed -n '1,220p' composer.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc "sed -n '1,260p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{
+  "require": {
+    "symfony/http-foundation": "8.1.1",
+    "symfony/routing": "8.1.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
+ succeeded in 0ms:
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Exception\MethodNotAllowedException;
+use Symfony\Component\Routing\Exception\ResourceNotFoundException;
+use Symfony\Component\Routing\Matcher\UrlMatcher;
+use Symfony\Component\Routing\RequestContext;
+use Symfony\Component\Routing\Route;
+use Symfony\Component\Routing\RouteCollection;
+
+function json_body(Request $request): ?array
+{
+    $decoded = json_decode($request->getContent(), true);
+
+    return is_array($decoded) ? $decoded : null;
+}
+
+function bad_request(): JsonResponse
+{
+    return new JsonResponse(['error' => 'bad request'], 400);
+}
+
+function is_int_value(mixed $value): bool
+{
+    return is_int($value);
+}
+
+function valid_ability_score(mixed $value): bool
+{
+    return is_int_value($value) && $value >= 1 && $value <= 30;
+}
+
+function ability_modifier_value(int $score): int
+{
+    return (int) floor(($score - 10) / 2);
+}
+
+function valid_level(mixed $value): bool
+{
+    return is_int_value($value) && $value >= 1 && $value <= 20;
+}
+
+function proficiency_bonus_value(int $level): int
+{
+    return 2 + intdiv($level - 1, 4);
+}
+
+function dice_stats(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if ($body === null || !isset($body['expression']) || !is_string($body['expression'])) {
+        return bad_request();
+    }
+
+    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $body['expression'], $matches)) {
+        return bad_request();
+    }
+
+    $count = (int) $matches[1];
+    $sides = (int) $matches[2];
+    if ($count <= 0 || $sides <= 0) {
+        return bad_request();
+    }
+
+    $modifier = 0;
+    if (isset($matches[4]) && $matches[4] !== '') {
+        $modifier = (int) $matches[4];
+        if ($matches[3] === '-') {
+            $modifier = -$modifier;
+        }
+    }
+
+    return new JsonResponse([
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $count + $modifier,
+        'max' => ($count * $sides) + $modifier,
+        'average' => ($count * ($sides + 1) / 2) + $modifier,
+    ]);
+}
+
+function ability_check(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if (
+        $body === null
+        || !array_key_exists('roll', $body)
+        || !array_key_exists('modifier', $body)
+        || !array_key_exists('dc', $body)
+        || !is_int_value($body['roll'])
+        || !is_int_value($body['modifier'])
+        || !is_int_value($body['dc'])
+    ) {
+        return bad_request();
+    }
+
+    $total = $body['roll'] + $body['modifier'];
+    $margin = $total - $body['dc'];
+
+    return new JsonResponse([
+        'total' => $total,
+        'success' => $total >= $body['dc'],
+        'margin' => $margin,
+    ]);
+}
+
+function adjusted_xp(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if (
+        $body === null
+        || !isset($body['party'])
+        || !isset($body['monsters'])
+        || !is_array($body['party'])
+        || !is_array($body['monsters'])
+    ) {
+        return bad_request();
+    }
+
+    $xpByCr = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+
+    $thresholdsByLevel = [
+        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
+    ];
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($body['party'] as $member) {
+        if (!is_array($member) || !isset($member['level']) || !is_int_value($member['level']) || !isset($thresholdsByLevel[$member['level']])) {
+            return bad_request();
+        }
+
+        foreach ($thresholds as $name => $_) {
+            $thresholds[$name] += $thresholdsByLevel[$member['level']][$name];
+        }
+    }
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($body['monsters'] as $monster) {
+        if (
+            !is_array($monster)
+            || !isset($monster['cr'])
+            || !isset($monster['count'])
+            || !is_string($monster['cr'])
+            || !is_int_value($monster['count'])
+            || $monster['count'] <= 0
+            || !isset($xpByCr[$monster['cr']])
+        ) {
+            return bad_request();
+        }
+
+        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
+        $monsterCount += $monster['count'];
+    }
+
+    $multiplier = match (true) {
+        $monsterCount <= 0 => 0,
+        $monsterCount === 1 => 1,
+        $monsterCount === 2 => 1.5,
+        $monsterCount <= 6 => 2,
+        $monsterCount <= 10 => 2.5,
+        $monsterCount <= 14 => 3,
+        default => 4,
+    };
+    $adjustedXp = $baseXp * $multiplier;
+
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
+        if ($adjustedXp >= $thresholds[$name]) {
+            $difficulty = $name;
+        }
+    }
+
+    return new JsonResponse([
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+}
+
+function initiative_order(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+        return bad_request();
+    }
+
+    $combatants = [];
+    foreach ($body['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'])
+            || !isset($combatant['dex'])
+            || !isset($combatant['roll'])
+            || !is_string($combatant['name'])
+            || !is_int_value($combatant['dex'])
+            || !is_int_value($combatant['roll'])
+        ) {
+            return bad_request();
+        }
+
+        $combatants[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    usort($combatants, static function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: ($a['name'] <=> $b['name']);
+    });
+
+    $order = array_map(
+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+        $combatants
+    );
+
+    return new JsonResponse(['order' => $order]);
+}
+
+function combat_store_path(): string
+{
+    $port = getenv('PORT') ?: 'default';
+
+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+}
+
+function load_combat_sessions(): array
+{
+    $path = combat_store_path();
+    if (!is_file($path)) {
+        return [];
+    }
+
+    $decoded = json_decode((string) file_get_contents($path), true);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+exec php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc 'rg -n "conditions|combat|advance|sessions" index.php shots/03_combat-state_maintenance -S' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+index.php:203:    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+index.php:207:    $combatants = [];
+index.php:208:    foreach ($body['combatants'] as $combatant) {
+index.php:210:            !is_array($combatant)
+index.php:211:            || !isset($combatant['name'])
+index.php:212:            || !isset($combatant['dex'])
+index.php:213:            || !isset($combatant['roll'])
+index.php:214:            || !is_string($combatant['name'])
+index.php:215:            || !is_int_value($combatant['dex'])
+index.php:216:            || !is_int_value($combatant['roll'])
+index.php:221:        $combatants[] = [
+index.php:222:            'name' => $combatant['name'],
+index.php:223:            'dex' => $combatant['dex'],
+index.php:224:            'score' => $combatant['roll'] + $combatant['dex'],
+index.php:228:    usort($combatants, static function (array $a, array $b): int {
+index.php:235:        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+index.php:236:        $combatants
+index.php:242:function combat_store_path(): string
+index.php:246:    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+index.php:249:function load_combat_sessions(): array
+index.php:251:    $path = combat_store_path();
+index.php:261:function save_combat_sessions(array $sessions): void
+index.php:263:    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+index.php:266:function sorted_combat_order(array $combatants): ?array
+index.php:269:    foreach ($combatants as $combatant) {
+index.php:271:            !is_array($combatant)
+index.php:272:            || !isset($combatant['name'])
+index.php:273:            || !isset($combatant['dex'])
+index.php:274:            || !isset($combatant['roll'])
+index.php:275:            || !is_string($combatant['name'])
+index.php:276:            || !is_int_value($combatant['dex'])
+index.php:277:            || !is_int_value($combatant['roll'])
+index.php:283:            'name' => $combatant['name'],
+index.php:284:            'dex' => $combatant['dex'],
+index.php:285:            'score' => $combatant['roll'] + $combatant['dex'],
+index.php:300:        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+index.php:305:function combat_session_response(array $session, bool $includeConditions = false): array
+index.php:314:    if ($includeConditions) {
+index.php:315:        $conditions = array_filter(
+index.php:316:            $session['conditions'],
+index.php:317:            static fn (array $conditions): bool => $conditions !== []
+index.php:319:        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+index.php:327:function combat_create_session(Request $request): JsonResponse
+index.php:334:        || !isset($body['combatants'])
+index.php:335:        || !is_array($body['combatants'])
+index.php:340:    $sessions = load_combat_sessions();
+index.php:341:    if (isset($sessions[$body['id']])) {
+index.php:345:    $order = sorted_combat_order($body['combatants']);
+index.php:350:    $conditions = [];
+index.php:351:    foreach ($order as $combatant) {
+index.php:352:        $conditions[$combatant['name']] = [];
+index.php:360:        'conditions' => $conditions,
+index.php:362:    $sessions[$body['id']] = $session;
+index.php:363:    save_combat_sessions($sessions);
+index.php:365:    return new JsonResponse(combat_session_response($session));
+index.php:368:function combat_add_condition(Request $request): JsonResponse
+index.php:386:    $sessions = load_combat_sessions();
+index.php:387:    if (!isset($sessions[$sessionId])) {
+index.php:391:    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+index.php:395:    $sessions[$sessionId]['conditions'][$body['target']][] = [
+index.php:399:    save_combat_sessions($sessions);
+index.php:403:        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+index.php:407:function combat_advance(Request $request): JsonResponse
+index.php:414:    $sessions = load_combat_sessions();
+index.php:415:    if (!isset($sessions[$sessionId])) {
+index.php:419:    $session = $sessions[$sessionId];
+index.php:427:    $remainingConditions = [];
+index.php:428:    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+index.php:431:            $remainingConditions[] = $condition;
+index.php:434:    $session['conditions'][$activeName] = $remainingConditions;
+index.php:436:    $sessions[$sessionId] = $session;
+index.php:437:    save_combat_sessions($sessions);
+index.php:439:    return new JsonResponse(combat_session_response($session, true));
+index.php:521:$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+index.php:522:$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+index.php:523:$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stdout.txt:1:Implemented the combat-state maintenance stage.
+shots/03_combat-state_maintenance/agent_stdout.txt:3:Changed [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:242) to add session creation, condition attachment, turn advancement, route-param handling, initiative ordering, and per-port persisted runtime state. Added the new routes at [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:521).
+shots/03_combat-state_maintenance/agent_stdout.txt:5:Updated [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/run.sh:3) to clear the per-port combat store before launching, then `exec` the PHP server in the foreground on `127.0.0.1:$PORT`.
+shots/03_combat-state_maintenance/PROMPT.md:7:        Lifecycle stage: combat-state
+shots/03_combat-state_maintenance/PROMPT.md:58:        # Maintenance Stage 2: Stateful Combat
+shots/03_combat-state_maintenance/PROMPT.md:69:## Create Combat Session
+shots/03_combat-state_maintenance/PROMPT.md:71:`POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/PROMPT.md:78:  "combatants": [
+shots/03_combat-state_maintenance/PROMPT.md:91:- New sessions start at `round = 1` and `turn_index = 0`.
+shots/03_combat-state_maintenance/PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+shots/03_combat-state_maintenance/PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/PROMPT.md:126:- `target` must name a combatant in the session.
+shots/03_combat-state_maintenance/PROMPT.md:129:- Conditions are attached to the named combatant.
+shots/03_combat-state_maintenance/PROMPT.md:136:  "conditions": [
+shots/03_combat-state_maintenance/PROMPT.md:142:## Advance Turn
+shots/03_combat-state_maintenance/PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+shots/03_combat-state_maintenance/PROMPT.md:148:- Advance `turn_index` to the next combatant.
+shots/03_combat-state_maintenance/PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+shots/03_combat-state_maintenance/PROMPT.md:152:  active combatant.
+shots/03_combat-state_maintenance/PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+shots/03_combat-state_maintenance/PROMPT.md:164:  "conditions": {
+shots/03_combat-state_maintenance/agent_last_message.txt:1:Implemented the combat-state maintenance stage.
+shots/03_combat-state_maintenance/agent_last_message.txt:3:Changed [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:242) to add session creation, condition attachment, turn advancement, route-param handling, initiative ordering, and per-port persisted runtime state. Added the new routes at [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:521).
+shots/03_combat-state_maintenance/agent_last_message.txt:5:Updated [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/run.sh:3) to clear the per-port combat store before launching, then `exec` the PHP server in the foreground on `127.0.0.1:$PORT`.
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:2:  "suite": "combat-state",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:100:      "id": "combat-create-session",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:101:      "name": "Create deterministic combat session",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:107:      "id": "combat-add-condition",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:108:      "name": "Add condition to combatant",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:114:      "id": "combat-advance-to-mage",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:115:      "name": "Advance to next turn",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:121:      "id": "combat-advance-to-fighter-decrements",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:128:      "id": "combat-advance-wrap-round",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:135:      "id": "combat-advance-condition-expires",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:142:      "id": "combat-advance-expired-removed",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:147:      "error": "conditions: missing JSON key \"fighter\"",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:148:      "response_body": "{\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"conditions\":{}}"
+shots/03_combat-state_maintenance/agent_stderr.txt:19:        Lifecycle stage: combat-state
+shots/03_combat-state_maintenance/agent_stderr.txt:70:        # Maintenance Stage 2: Stateful Combat
+shots/03_combat-state_maintenance/agent_stderr.txt:81:## Create Combat Session
+shots/03_combat-state_maintenance/agent_stderr.txt:83:`POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/agent_stderr.txt:90:  "combatants": [
+shots/03_combat-state_maintenance/agent_stderr.txt:103:- New sessions start at `round = 1` and `turn_index = 0`.
+shots/03_combat-state_maintenance/agent_stderr.txt:104:- `active` is the combatant at the current `turn_index`.
+shots/03_combat-state_maintenance/agent_stderr.txt:124:`POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/agent_stderr.txt:138:- `target` must name a combatant in the session.
+shots/03_combat-state_maintenance/agent_stderr.txt:141:- Conditions are attached to the named combatant.
+shots/03_combat-state_maintenance/agent_stderr.txt:148:  "conditions": [
+shots/03_combat-state_maintenance/agent_stderr.txt:154:## Advance Turn
+shots/03_combat-state_maintenance/agent_stderr.txt:156:`POST /v1/combat/sessions/{id}/advance`
+shots/03_combat-state_maintenance/agent_stderr.txt:160:- Advance `turn_index` to the next combatant.
+shots/03_combat-state_maintenance/agent_stderr.txt:163:- At the start of a combatant's turn, decrement each condition attached to that
+shots/03_combat-state_maintenance/agent_stderr.txt:164:  active combatant.
+shots/03_combat-state_maintenance/agent_stderr.txt:166:- Conditions on inactive combatants do not decrement.
+shots/03_combat-state_maintenance/agent_stderr.txt:176:  "conditions": {
+shots/03_combat-state_maintenance/agent_stderr.txt:188:I’ll inspect the existing Symfony-component app structure and current endpoints first, then add the combat state routes in the same style so prior behavior stays intact.
+shots/03_combat-state_maintenance/agent_stderr.txt:193: M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/agent_stderr.txt:198:?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt:199:?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_stderr.txt:200:?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/agent_stderr.txt:201:?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt:202:?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+shots/03_combat-state_maintenance/agent_stderr.txt:203:?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+shots/03_combat-state_maintenance/agent_stderr.txt:290:shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stderr.txt:506:    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:510:    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:511:    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:513:            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:514:            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:515:            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:516:            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:517:            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:518:            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:519:            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:524:        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:525:            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:526:            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:527:            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:531:    usort($combatants, static function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:538:        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:539:        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:853:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:857:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:860:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:862:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:872:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:874:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:877:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:880:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:882:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:883:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:884:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:885:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:886:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:887:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:888:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:894:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:895:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:896:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:911:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:916:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:925:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:926:+        $response['conditions'] = $session['conditions'];
+shots/03_combat-state_maintenance/agent_stderr.txt:934:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:941:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:942:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:947:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:948:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:952:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:957:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:958:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:959:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:967:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:969:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:970:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:972:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:975:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:993:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:994:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:998:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1002:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1006:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1010:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1014:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1021:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1022:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1026:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:1034:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1035:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1038:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:1041:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:1043:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1044:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1046:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:1056:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1057:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1058:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1079:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:1083:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:1086:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1088:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:1098:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:1100:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:1103:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:1106:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1108:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1109:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1110:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1111:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1112:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1113:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1114:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1120:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1121:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1122:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1137:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1142:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1151:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1152:+        $response['conditions'] = $session['conditions'];
+shots/03_combat-state_maintenance/agent_stderr.txt:1160:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1167:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1168:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1173:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1174:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1178:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:1183:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1184:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1185:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1193:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1195:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1196:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1198:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:1201:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1219:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1220:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1224:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1228:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1232:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1236:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1240:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1247:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1248:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1252:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:1260:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1261:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1264:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:1267:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:1269:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1270:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1272:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:1282:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1283:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1284:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1298:I’ve added the routes and state transitions. Before doing any HTTP run, I spotted one response-shape detail: the spec’s advance response only lists combatants with active conditions, so I’m tightening that output to omit empty condition arrays.
+shots/03_combat-state_maintenance/agent_stderr.txt:1310:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:1314:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:1317:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1319:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:1329:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:1331:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:1334:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:1337:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1339:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1340:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1341:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1342:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1343:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1344:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1345:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1351:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1352:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1353:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1368:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1373:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1382:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1383:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:1384:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1385:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:1394:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1401:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1402:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1407:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1408:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1412:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:1417:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1418:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1419:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1427:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1429:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1430:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1432:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:1435:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1453:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1454:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1458:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1462:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1466:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1470:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1474:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1481:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1482:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1486:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:1494:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1495:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1498:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:1501:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:1503:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1504:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1506:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:1516:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1517:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1518:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1539:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:1543:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:1546:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1548:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:1558:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:1560:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:1563:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:1566:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1568:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1569:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1570:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1571:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1572:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1573:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1574:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1580:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1581:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1582:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1597:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1602:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1611:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1612:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:1613:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1614:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:1623:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1630:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1631:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1636:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1637:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1641:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:1646:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1647:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1648:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1656:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1658:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1659:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1661:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:1664:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1682:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1683:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1687:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1691:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1695:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1699:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1703:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1710:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1711:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1715:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:1723:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1724:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1727:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:1730:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:1732:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1733:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1735:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:1745:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1746:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1747:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1775:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:1779:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:1782:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1784:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:1794:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:1796:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:1799:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:1802:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1804:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1805:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1806:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1807:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1808:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1809:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1810:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1816:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1817:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1818:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1833:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1838:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1847:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1848:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:1849:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1850:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:1859:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1866:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1867:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1872:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1873:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1877:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:1882:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1883:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1884:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1892:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1894:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1895:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1897:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:1900:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1918:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1919:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1923:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1927:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1931:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1935:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1939:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:1946:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:1947:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1951:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:1959:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1960:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1963:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:1966:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:1968:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:1969:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:1971:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:1981:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1982:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:1983:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2000:`php -l` passed. I’m making one small `run.sh` adjustment now: clearing this app’s per-port combat store before launching, so session state is tied to the server lifetime instead of leaking across separate benchmark runs on the same port.
+shots/03_combat-state_maintenance/agent_stderr.txt:2012:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:2016:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:2019:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2021:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:2031:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:2033:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:2036:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:2039:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2041:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2042:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2043:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2044:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2045:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2046:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2047:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2053:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2054:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2055:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2070:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2075:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2084:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2085:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:2086:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2087:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:2096:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2103:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2104:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2109:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2110:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2114:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:2119:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2120:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2121:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2129:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2131:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:2132:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2134:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:2137:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2155:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2156:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2160:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2164:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2168:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2172:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2176:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2183:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2184:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2188:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:2196:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2197:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2200:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:2203:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:2205:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:2206:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2208:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:2218:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2219:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2220:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2240:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:2251:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:2255:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:2258:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2260:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:2270:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:2272:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:2275:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:2278:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2280:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2281:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2282:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2283:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2284:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2285:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2286:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2292:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2293:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2294:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2309:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2314:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2323:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2324:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:2325:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2326:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:2335:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2342:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2343:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2348:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2349:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2353:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:2358:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2359:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2360:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2368:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2370:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:2371:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2373:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:2376:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2394:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2395:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2399:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2403:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2407:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2411:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2415:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2422:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2423:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2427:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:2435:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2436:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2439:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:2442:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:2444:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:2445:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2447:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:2457:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2458:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2459:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:2479:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:2689:    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2693:    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2694:    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2696:            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2697:            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2698:            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2699:            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2700:            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2701:            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2702:            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2707:        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2708:            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2709:            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2710:            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2714:    usort($combatants, static function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2721:        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2722:        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2728:function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:2732:    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:2735:function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2737:    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:2747:function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:2749:    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:2752:function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:2755:    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2757:            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2758:            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2759:            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2760:            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2761:            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2762:            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2763:            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2769:            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2770:            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2771:            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2786:        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2791:function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2800:    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2801:        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:2802:            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2803:            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:2812:function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2819:        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2820:        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2825:    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2826:    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2830:    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:2835:    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2836:    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2837:        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2845:        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2847:    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:2848:    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2850:    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:2853:function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2871:    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2872:    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2876:    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2880:    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2884:    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:2888:        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2892:function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:2899:    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:2900:    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2904:    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:2921:php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:2932:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:2936:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:2939:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2941:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:2951:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:2953:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:2956:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:2959:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2961:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2962:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2963:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2964:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2965:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2966:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2967:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2973:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2974:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2975:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2990:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2995:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3004:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3005:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:3006:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3007:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:3016:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3023:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3024:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3029:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3030:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3034:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:3039:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3040:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3041:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3049:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:3051:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3052:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3054:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:3057:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3075:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3076:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3080:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3084:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3088:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3092:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3096:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3103:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3104:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3108:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:3116:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3117:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3120:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:3123:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3125:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3126:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3128:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:3138:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3139:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3140:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3160:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:3171:    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3172:    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3175:            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:3178:    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3180:    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3181:    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3183:    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:3265:$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3266:$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3267:$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3299:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:3303:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:3306:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3308:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:3318:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:3320:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:3323:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:3326:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3328:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:3329:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3330:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3331:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3332:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3333:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3334:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3340:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3341:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3342:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3357:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3362:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3371:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3372:+        $response['conditions'] = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:3373:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3374:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:3383:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3390:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3391:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3396:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3397:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3401:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:3406:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3407:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3408:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3416:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:3418:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3419:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3421:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:3424:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3442:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3443:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3447:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3451:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3455:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3459:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3463:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3470:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3471:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3475:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:3483:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3484:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3487:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:3490:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3492:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3493:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3495:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:3505:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3506:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3507:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3527:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:3531:There’s one JSON encoding edge case worth fixing: PHP encodes an empty array as `[]`, but the advance response’s `conditions` member is an object. I’m making empty conditions encode as `{}` for consistency.
+shots/03_combat-state_maintenance/agent_stderr.txt:3543:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:3547:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:3550:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3552:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:3562:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:3564:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:3567:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:3570:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3572:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:3573:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3574:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3575:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3576:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3577:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3578:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3584:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3585:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3586:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3601:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3606:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3615:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3616:+        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:3617:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3618:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:3620:+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3628:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3635:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3636:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3641:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3642:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3646:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:3651:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3652:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3653:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3661:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:3663:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3664:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3666:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:3669:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3687:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3688:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3692:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3696:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3700:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3704:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3708:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3715:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3716:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3720:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:3728:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3729:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3732:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:3735:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3737:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3738:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3740:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:3750:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3751:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3752:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3772:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:3783:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:3787:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:3790:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3792:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:3802:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:3804:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:3807:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:3810:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3812:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:3813:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3814:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3815:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3816:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3817:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3818:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3824:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3825:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3826:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3841:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3846:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3855:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3856:+        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:3857:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3858:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:3860:+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3868:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3875:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3876:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3881:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3882:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3886:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:3891:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3892:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3893:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3901:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:3903:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3904:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3906:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:3909:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3927:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3928:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3932:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3936:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3940:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3944:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3948:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:3955:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:3956:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3960:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:3968:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3969:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3972:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:3975:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:3977:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:3978:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:3980:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:3990:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3991:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:3992:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4012:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:4038:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:4042:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:4045:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4047:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:4057:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:4059:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:4062:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:4065:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4067:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:4068:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4069:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4070:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4071:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4072:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4073:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4079:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4080:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4081:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4096:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4101:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4110:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4111:+        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:4112:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4113:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:4115:+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4123:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4130:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4131:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4136:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4137:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4141:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:4146:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4147:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4148:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4156:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:4158:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4159:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4161:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:4164:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4182:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4183:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4187:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4191:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:4195:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4199:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4203:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4210:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4211:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4215:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:4223:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4224:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4227:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:4230:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4232:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4233:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4235:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:4245:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4246:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4247:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4267:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:4278:   203	    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4282:   207	    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4283:   208	    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4285:   210	            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:4286:   211	            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4287:   212	            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4288:   213	            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4289:   214	            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4290:   215	            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4291:   216	            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4296:   221	        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:4297:   222	            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4298:   223	            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4299:   224	            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4303:   228	    usort($combatants, static function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:4310:   235	        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4311:   236	        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:4317:   242	function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:4321:   246	    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:4324:   249	function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4326:   251	    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:4336:   261	function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:4338:   263	    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:4341:   266	function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:4344:   269	    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4346:   271	            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:4347:   272	            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4348:   273	            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4349:   274	            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4350:   275	            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4351:   276	            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4352:   277	            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4358:   283	            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4359:   284	            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4360:   285	            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4375:   300	        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4380:   305	function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4389:   314	    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4390:   315	        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:4391:   316	            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4392:   317	            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:4394:   319	        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4402:   327	function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4409:   334	        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4410:   335	        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4415:   340	    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4416:   341	    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4420:   345	    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:4425:   350	    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4426:   351	    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4427:   352	        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4435:   360	        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:4437:   362	    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4438:   363	    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4440:   365	    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:4443:   368	function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4461:   386	    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4462:   387	    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4466:   391	    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4470:   395	    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:4474:   399	    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4478:   403	        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4482:   407	function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4489:   414	    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4490:   415	    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4494:   419	    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:4502:   427	    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4503:   428	    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4506:   431	            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:4509:   434	    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4511:   436	    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4512:   437	    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4514:   439	    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:4602:     3	php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:4613:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:4617:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:4620:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4622:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:4632:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:4634:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:4637:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:4640:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4642:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:4643:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4644:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4645:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4646:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4647:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4648:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4654:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4655:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4656:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4671:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4676:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4685:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4686:+        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:4687:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4688:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:4690:+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4698:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4705:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4706:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4711:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4712:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4716:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:4721:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4722:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4723:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4731:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:4733:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4734:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4736:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:4739:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4757:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4758:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4762:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4766:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:4770:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4774:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4778:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4785:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4786:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4790:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:4798:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4799:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4802:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:4805:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4807:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4808:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:4810:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:4820:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4821:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4822:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4842:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:4849:   521	$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4850:   522	$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4851:   523	$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:4878:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:4882:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:4885:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4887:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:4897:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:4899:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:4902:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:4905:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4907:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:4908:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4909:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4910:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4911:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4912:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4913:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4919:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4920:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4921:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4936:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:4941:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:4950:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4951:+        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:4952:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:4953:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:4955:+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:4963:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:4970:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4971:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:4976:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:4977:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4981:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:4986:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4987:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:4988:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:4996:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:4998:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:4999:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:5001:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:5004:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:5022:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:5023:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5027:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5031:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:5035:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:5039:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:5043:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:5050:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:5051:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5055:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:5063:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:5064:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5067:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:5070:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:5072:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:5073:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:5075:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:5085:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:5086:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:5087:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:5107:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+shots/03_combat-state_maintenance/agent_stderr.txt:5111:Implemented the combat-state maintenance stage.
+shots/03_combat-state_maintenance/agent_stderr.txt:5113:Changed [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:242) to add session creation, condition attachment, turn advancement, route-param handling, initiative ordering, and per-port persisted runtime state. Added the new routes at [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:521).
+shots/03_combat-state_maintenance/agent_stderr.txt:5115:Updated [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/run.sh:3) to clear the per-port combat store before launching, then `exec` the PHP server in the foreground on `127.0.0.1:$PORT`.
+shots/03_combat-state_maintenance/agent_stderr.txt:5130:+function combat_store_path(): string
+shots/03_combat-state_maintenance/agent_stderr.txt:5134:+    return sys_get_temp_dir() . '/dnd-combat-sessions-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $port) . '.json';
+shots/03_combat-state_maintenance/agent_stderr.txt:5137:+function load_combat_sessions(): array
+shots/03_combat-state_maintenance/agent_stderr.txt:5139:+    $path = combat_store_path();
+shots/03_combat-state_maintenance/agent_stderr.txt:5149:+function save_combat_sessions(array $sessions): void
+shots/03_combat-state_maintenance/agent_stderr.txt:5151:+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+shots/03_combat-state_maintenance/agent_stderr.txt:5154:+function sorted_combat_order(array $combatants): ?array
+shots/03_combat-state_maintenance/agent_stderr.txt:5157:+    foreach ($combatants as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5159:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:5160:+            || !isset($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5161:+            || !isset($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5162:+            || !isset($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5163:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5164:+            || !is_int_value($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5165:+            || !is_int_value($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5171:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:5172:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:5173:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:5188:+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:5193:+function combat_session_response(array $session, bool $includeConditions = false): array
+shots/03_combat-state_maintenance/agent_stderr.txt:5202:+    if ($includeConditions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5203:+        $conditions = array_filter(
+shots/03_combat-state_maintenance/agent_stderr.txt:5204:+            $session['conditions'],
+shots/03_combat-state_maintenance/agent_stderr.txt:5205:+            static fn (array $conditions): bool => $conditions !== []
+shots/03_combat-state_maintenance/agent_stderr.txt:5207:+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:5215:+function combat_create_session(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:5222:+        || !isset($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5223:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:5228:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:5229:+    if (isset($sessions[$body['id']])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5233:+    $order = sorted_combat_order($body['combatants']);
+shots/03_combat-state_maintenance/agent_stderr.txt:5238:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:5239:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5240:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:5248:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:5250:+    $sessions[$body['id']] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:5251:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:5253:+    return new JsonResponse(combat_session_response($session));
+shots/03_combat-state_maintenance/agent_stderr.txt:5256:+function combat_add_condition(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:5274:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:5275:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5279:+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5283:+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:5287:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:5291:+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+shots/03_combat-state_maintenance/agent_stderr.txt:5295:+function combat_advance(Request $request): JsonResponse
+shots/03_combat-state_maintenance/agent_stderr.txt:5302:+    $sessions = load_combat_sessions();
+shots/03_combat-state_maintenance/agent_stderr.txt:5303:+    if (!isset($sessions[$sessionId])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5307:+    $session = $sessions[$sessionId];
+shots/03_combat-state_maintenance/agent_stderr.txt:5315:+    $remainingConditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:5316:+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:5319:+            $remainingConditions[] = $condition;
+shots/03_combat-state_maintenance/agent_stderr.txt:5322:+    $session['conditions'][$activeName] = $remainingConditions;
+shots/03_combat-state_maintenance/agent_stderr.txt:5324:+    $sessions[$sessionId] = $session;
+shots/03_combat-state_maintenance/agent_stderr.txt:5325:+    save_combat_sessions($sessions);
+shots/03_combat-state_maintenance/agent_stderr.txt:5327:+    return new JsonResponse(combat_session_response($session, true));
+shots/03_combat-state_maintenance/agent_stderr.txt:5337:+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:5338:+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:5339:+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+shots/03_combat-state_maintenance/agent_stderr.txt:5359:+php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+
+codex
+The failure is in response shaping, not the turn math: expired conditions are removed from state, but the evaluator still expects the combatant key with an empty list. I’m checking the exact helper that serializes combat session responses before editing it.
+exec
+/bin/zsh -lc "sed -n '249,455p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+function load_combat_sessions(): array
+{
+    $path = combat_store_path();
+    if (!is_file($path)) {
+        return [];
+    }
+
+    $decoded = json_decode((string) file_get_contents($path), true);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
+function save_combat_sessions(array $sessions): void
+{
+    file_put_contents(combat_store_path(), json_encode($sessions, JSON_THROW_ON_ERROR));
+}
+
+function sorted_combat_order(array $combatants): ?array
+{
+    $order = [];
+    foreach ($combatants as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'])
+            || !isset($combatant['dex'])
+            || !isset($combatant['roll'])
+            || !is_string($combatant['name'])
+            || !is_int_value($combatant['dex'])
+            || !is_int_value($combatant['roll'])
+        ) {
+            return null;
+        }
+
+        $order[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    if ($order === []) {
+        return null;
+    }
+
+    usort($order, static function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: ($a['name'] <=> $b['name']);
+    });
+
+    return array_map(
+        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+        $order
+    );
+}
+
+function combat_session_response(array $session, bool $includeConditions = false): array
+{
+    $response = [
+        'id' => $session['id'],
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => $session['order'][$session['turn_index']],
+    ];
+
+    if ($includeConditions) {
+        $conditions = array_filter(
+            $session['conditions'],
+            static fn (array $conditions): bool => $conditions !== []
+        );
+        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+    } else {
+        $response['order'] = $session['order'];
+    }
+
+    return $response;
+}
+
+function combat_create_session(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if (
+        $body === null
+        || !isset($body['id'])
+        || !is_string($body['id'])
+        || !isset($body['combatants'])
+        || !is_array($body['combatants'])
+    ) {
+        return bad_request();
+    }
+
+    $sessions = load_combat_sessions();
+    if (isset($sessions[$body['id']])) {
+        return bad_request();
+    }
+
+    $order = sorted_combat_order($body['combatants']);
+    if ($order === null) {
+        return bad_request();
+    }
+
+    $conditions = [];
+    foreach ($order as $combatant) {
+        $conditions[$combatant['name']] = [];
+    }
+
+    $session = [
+        'id' => $body['id'],
+        'round' => 1,
+        'turn_index' => 0,
+        'order' => $order,
+        'conditions' => $conditions,
+    ];
+    $sessions[$body['id']] = $session;
+    save_combat_sessions($sessions);
+
+    return new JsonResponse(combat_session_response($session));
+}
+
+function combat_add_condition(Request $request): JsonResponse
+{
+    $sessionId = $request->attributes->get('id');
+    $body = json_body($request);
+    if (
+        !is_string($sessionId)
+        || $body === null
+        || !isset($body['target'])
+        || !isset($body['condition'])
+        || !isset($body['duration_rounds'])
+        || !is_string($body['target'])
+        || !is_string($body['condition'])
+        || !is_int_value($body['duration_rounds'])
+        || $body['duration_rounds'] <= 0
+    ) {
+        return bad_request();
+    }
+
+    $sessions = load_combat_sessions();
+    if (!isset($sessions[$sessionId])) {
+        return new JsonResponse(['error' => 'not found'], 404);
+    }
+
+    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+        return bad_request();
+    }
+
+    $sessions[$sessionId]['conditions'][$body['target']][] = [
+        'condition' => $body['condition'],
+        'remaining_rounds' => $body['duration_rounds'],
+    ];
+    save_combat_sessions($sessions);
+
+    return new JsonResponse([
+        'target' => $body['target'],
+        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+    ]);
+}
+
+function combat_advance(Request $request): JsonResponse
+{
+    $sessionId = $request->attributes->get('id');
+    if (!is_string($sessionId)) {
+        return bad_request();
+    }
+
+    $sessions = load_combat_sessions();
+    if (!isset($sessions[$sessionId])) {
+        return new JsonResponse(['error' => 'not found'], 404);
+    }
+
+    $session = $sessions[$sessionId];
+    $session['turn_index']++;
+    if ($session['turn_index'] >= count($session['order'])) {
+        $session['turn_index'] = 0;
+        $session['round']++;
+    }
+
+    $activeName = $session['order'][$session['turn_index']]['name'];
+    $remainingConditions = [];
+    foreach ($session['conditions'][$activeName] ?? [] as $condition) {
+        $condition['remaining_rounds']--;
+        if ($condition['remaining_rounds'] > 0) {
+            $remainingConditions[] = $condition;
+        }
+    }
+    $session['conditions'][$activeName] = $remainingConditions;
+
+    $sessions[$sessionId] = $session;
+    save_combat_sessions($sessions);
+
+    return new JsonResponse(combat_session_response($session, true));
+}
+
+function character_ability_modifier(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if ($body === null || !array_key_exists('score', $body) || !valid_ability_score($body['score'])) {
+        return bad_request();
+    }
+
+    return new JsonResponse([
+        'score' => $body['score'],
+        'modifier' => ability_modifier_value($body['score']),
+    ]);
+}
+
+function character_proficiency(Request $request): JsonResponse
+
+exec
+/bin/zsh -lc "sed -n '455,560p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+function character_proficiency(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    if ($body === null || !array_key_exists('level', $body) || !valid_level($body['level'])) {
+        return bad_request();
+    }
+
+    return new JsonResponse([
+        'level' => $body['level'],
+        'proficiency_bonus' => proficiency_bonus_value($body['level']),
+    ]);
+}
+
+function character_derived_stats(Request $request): JsonResponse
+{
+    $body = json_body($request);
+    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+
+    if (
+        $body === null
+        || !array_key_exists('level', $body)
+        || !valid_level($body['level'])
+        || !array_key_exists('abilities', $body)
+        || !is_array($body['abilities'])
+        || !array_key_exists('armor', $body)
+        || !is_array($body['armor'])
+        || !array_key_exists('base', $body['armor'])
+        || !array_key_exists('shield', $body['armor'])
+        || !array_key_exists('dex_cap', $body['armor'])
+        || !is_int_value($body['armor']['base'])
+        || !is_bool($body['armor']['shield'])
+        || !is_int_value($body['armor']['dex_cap'])
+    ) {
+        return bad_request();
+    }
+
+    $modifiers = [];
+    foreach ($abilityNames as $abilityName) {
+        if (!array_key_exists($abilityName, $body['abilities']) || !valid_ability_score($body['abilities'][$abilityName])) {
+            return bad_request();
+        }
+
+        $modifiers[$abilityName] = ability_modifier_value($body['abilities'][$abilityName]);
+    }
+
+    $level = $body['level'];
+    $shieldBonus = $body['armor']['shield'] ? 2 : 0;
+
+    return new JsonResponse([
+        'level' => $level,
+        'proficiency_bonus' => proficiency_bonus_value($level),
+        'hp_max' => $level * (6 + $modifiers['con']),
+        'armor_class' => $body['armor']['base'] + min($modifiers['dex'], $body['armor']['dex_cap']) + $shieldBonus,
+        'modifiers' => $modifiers,
+    ]);
+}
+
+$routes = new RouteCollection();
+$routes->add('health', new Route('/health', ['_controller' => static fn (Request $request): JsonResponse => new JsonResponse(['ok' => true])], [], [], '', [], ['GET']));
+$routes->add('dice_stats', new Route('/v1/dice/stats', ['_controller' => 'dice_stats'], [], [], '', [], ['POST']));
+$routes->add('ability_check', new Route('/v1/checks/ability', ['_controller' => 'ability_check'], [], [], '', [], ['POST']));
+$routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['_controller' => 'adjusted_xp'], [], [], '', [], ['POST']));
+$routes->add('initiative_order', new Route('/v1/initiative/order', ['_controller' => 'initiative_order'], [], [], '', [], ['POST']));
+$routes->add('character_ability_modifier', new Route('/v1/characters/ability-modifier', ['_controller' => 'character_ability_modifier'], [], [], '', [], ['POST']));
+$routes->add('character_proficiency', new Route('/v1/characters/proficiency', ['_controller' => 'character_proficiency'], [], [], '', [], ['POST']));
+$routes->add('character_derived_stats', new Route('/v1/characters/derived-stats', ['_controller' => 'character_derived_stats'], [], [], '', [], ['POST']));
+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['_controller' => 'combat_create_session'], [], [], '', [], ['POST']));
+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['_controller' => 'combat_add_condition'], [], [], '', [], ['POST']));
+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['_controller' => 'combat_advance'], [], [], '', [], ['POST']));
+
+$request = Request::createFromGlobals();
+$context = (new RequestContext())->fromRequest($request);
+$matcher = new UrlMatcher($routes, $context);
+
+try {
+    $parameters = $matcher->match($request->getPathInfo());
+    $controller = $parameters['_controller'];
+    $request->attributes->add($parameters);
+    $response = $controller($request);
+} catch (ResourceNotFoundException) {
+    $response = new JsonResponse(['error' => 'not found'], 404);
+} catch (MethodNotAllowedException) {
+    $response = new JsonResponse(['error' => 'method not allowed'], 405);
+}
+
+$response->send();
+
+exec
+/bin/zsh -lc "sed -n '135,155p' dndeval-combat-state-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": false,
+      "status": 200,
+      "duration_ms": 0,
+      "error": "conditions: missing JSON key \"fighter\"",
+      "response_body": "{\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"conditions\":{}}"
+    }
+  ]
+}
+
+codex
+I’m going to keep expired conditions removed from the condition list, but remember which combatants have ever received a condition so the advance response can return `"fighter": []` after expiration. That matches the failing assertion without broadening every response to include empty entries for unrelated combatants.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+index 093c6324a1d46e53ef47212a8fb8f1ccc163c15e..7a21f449bbe2b9d70c161cedc2685791cb5179f1
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+@@ -316,6 +316,11 @@
+             $session['conditions'],
+             static fn (array $conditions): bool => $conditions !== []
+         );
++        foreach (($session['condition_targets'] ?? []) as $target => $_) {
++            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
++                $conditions[$target] = [];
++            }
++        }
+         $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+     } else {
+         $response['order'] = $session['order'];
+@@ -358,6 +363,7 @@
+         'turn_index' => 0,
+         'order' => $order,
+         'conditions' => $conditions,
++        'condition_targets' => [],
+     ];
+     $sessions[$body['id']] = $session;
+     save_combat_sessions($sessions);
+@@ -396,6 +402,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+     save_combat_sessions($sessions);
+ 
+     return new JsonResponse([
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+index 093c6324a1d46e53ef47212a8fb8f1ccc163c15e..7a21f449bbe2b9d70c161cedc2685791cb5179f1
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+@@ -316,6 +316,11 @@
+             $session['conditions'],
+             static fn (array $conditions): bool => $conditions !== []
+         );
++        foreach (($session['condition_targets'] ?? []) as $target => $_) {
++            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
++                $conditions[$target] = [];
++            }
++        }
+         $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+     } else {
+         $response['order'] = $session['order'];
+@@ -358,6 +363,7 @@
+         'turn_index' => 0,
+         'order' => $order,
+         'conditions' => $conditions,
++        'condition_targets' => [],
+     ];
+     $sessions[$body['id']] = $session;
+     save_combat_sessions($sessions);
+@@ -396,6 +402,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+     save_combat_sessions($sessions);
+ 
+     return new JsonResponse([
+
+codex
+The code change is in place. I’m running syntax checks and reviewing the diff now; I won’t start the HTTP server because the benchmark contract explicitly says not to.
+exec
+/bin/zsh -lc "test -x run.sh && printf 'run.sh executable\\n' || printf 'run.sh not executable\\n'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc 'git diff -- index.php run.sh composer.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+ succeeded in 0ms:
+run.sh executable
+
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+index 093c6324a1d46e53ef47212a8fb8f1ccc163c15e..7a21f449bbe2b9d70c161cedc2685791cb5179f1
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+@@ -316,6 +316,11 @@
+             $session['conditions'],
+             static fn (array $conditions): bool => $conditions !== []
+         );
++        foreach (($session['condition_targets'] ?? []) as $target => $_) {
++            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
++                $conditions[$target] = [];
++            }
++        }
+         $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+     } else {
+         $response['order'] = $session['order'];
+@@ -358,6 +363,7 @@
+         'turn_index' => 0,
+         'order' => $order,
+         'conditions' => $conditions,
++        'condition_targets' => [],
+     ];
+     $sessions[$body['id']] = $session;
+     save_combat_sessions($sessions);
+@@ -396,6 +402,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+     save_combat_sessions($sessions);
+ 
+     return new JsonResponse([
+
+ succeeded in 310ms:
+No syntax errors detected in index.php
+
+codex
+`php -l` passes and `run.sh` is executable. Since the app is a single front controller, I’m doing a direct CLI check of the response helper with an expired condition case rather than launching the server.
+exec
+/bin/zsh -lc "php -r '"'$_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/health"; $_SERVER["SERVER_NAME"]="127.0.0.1"; $_SERVER["SERVER_PORT"]="0"; ob_start(); require "index.php"; ob_end_clean(); $session=["id"=>"enc-1","round"=>2,"turn_index"=>2,"order"=>[["name"=>"rogue","score"=>17],["name"=>"mage","score"=>16],["name"=>"fighter","score"=>14]],"conditions"=>["rogue"=>[],"mage"=>[],"fighter"=>[]],"condition_targets"=>["fighter"=>true]]; echo json_encode(combat_session_response($session, true), JSON_THROW_ON_ERROR), PHP_EOL;'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{"fighter":[]}}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+index 093c6324a1d46e53ef47212a8fb8f1ccc163c15e..7a21f449bbe2b9d70c161cedc2685791cb5179f1
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+@@ -316,6 +316,11 @@
+             $session['conditions'],
+             static fn (array $conditions): bool => $conditions !== []
+         );
++        foreach (($session['condition_targets'] ?? []) as $target => $_) {
++            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
++                $conditions[$target] = [];
++            }
++        }
+         $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+     } else {
+         $response['order'] = $session['order'];
+@@ -358,6 +363,7 @@
+         'turn_index' => 0,
+         'order' => $order,
+         'conditions' => $conditions,
++        'condition_targets' => [],
+     ];
+     $sessions[$body['id']] = $session;
+     save_combat_sessions($sessions);
+@@ -396,6 +402,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+     save_combat_sessions($sessions);
+ 
+     return new JsonResponse([
+
+exec
+/bin/zsh -lc 'nl -ba run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc "nl -ba index.php | sed -n '300,410p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+     1	#!/usr/bin/env bash
+     2	set -euo pipefail
+     3	php -r '$port = getenv("PORT") ?: "default"; $path = sys_get_temp_dir() . "/dnd-combat-sessions-" . preg_replace("/[^A-Za-z0-9_.-]/", "_", $port) . ".json"; if (is_file($path)) { unlink($path); }'
+     4	exec php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 0ms:
+   300	        static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+   301	        $order
+   302	    );
+   303	}
+   304	
+   305	function combat_session_response(array $session, bool $includeConditions = false): array
+   306	{
+   307	    $response = [
+   308	        'id' => $session['id'],
+   309	        'round' => $session['round'],
+   310	        'turn_index' => $session['turn_index'],
+   311	        'active' => $session['order'][$session['turn_index']],
+   312	    ];
+   313	
+   314	    if ($includeConditions) {
+   315	        $conditions = array_filter(
+   316	            $session['conditions'],
+   317	            static fn (array $conditions): bool => $conditions !== []
+   318	        );
+   319	        foreach (($session['condition_targets'] ?? []) as $target => $_) {
+   320	            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
+   321	                $conditions[$target] = [];
+   322	            }
+   323	        }
+   324	        $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+   325	    } else {
+   326	        $response['order'] = $session['order'];
+   327	    }
+   328	
+   329	    return $response;
+   330	}
+   331	
+   332	function combat_create_session(Request $request): JsonResponse
+   333	{
+   334	    $body = json_body($request);
+   335	    if (
+   336	        $body === null
+   337	        || !isset($body['id'])
+   338	        || !is_string($body['id'])
+   339	        || !isset($body['combatants'])
+   340	        || !is_array($body['combatants'])
+   341	    ) {
+   342	        return bad_request();
+   343	    }
+   344	
+   345	    $sessions = load_combat_sessions();
+   346	    if (isset($sessions[$body['id']])) {
+   347	        return bad_request();
+   348	    }
+   349	
+   350	    $order = sorted_combat_order($body['combatants']);
+   351	    if ($order === null) {
+   352	        return bad_request();
+   353	    }
+   354	
+   355	    $conditions = [];
+   356	    foreach ($order as $combatant) {
+   357	        $conditions[$combatant['name']] = [];
+   358	    }
+   359	
+   360	    $session = [
+   361	        'id' => $body['id'],
+   362	        'round' => 1,
+   363	        'turn_index' => 0,
+   364	        'order' => $order,
+   365	        'conditions' => $conditions,
+   366	        'condition_targets' => [],
+   367	    ];
+   368	    $sessions[$body['id']] = $session;
+   369	    save_combat_sessions($sessions);
+   370	
+   371	    return new JsonResponse(combat_session_response($session));
+   372	}
+   373	
+   374	function combat_add_condition(Request $request): JsonResponse
+   375	{
+   376	    $sessionId = $request->attributes->get('id');
+   377	    $body = json_body($request);
+   378	    if (
+   379	        !is_string($sessionId)
+   380	        || $body === null
+   381	        || !isset($body['target'])
+   382	        || !isset($body['condition'])
+   383	        || !isset($body['duration_rounds'])
+   384	        || !is_string($body['target'])
+   385	        || !is_string($body['condition'])
+   386	        || !is_int_value($body['duration_rounds'])
+   387	        || $body['duration_rounds'] <= 0
+   388	    ) {
+   389	        return bad_request();
+   390	    }
+   391	
+   392	    $sessions = load_combat_sessions();
+   393	    if (!isset($sessions[$sessionId])) {
+   394	        return new JsonResponse(['error' => 'not found'], 404);
+   395	    }
+   396	
+   397	    if (!array_key_exists($body['target'], $sessions[$sessionId]['conditions'])) {
+   398	        return bad_request();
+   399	    }
+   400	
+   401	    $sessions[$sessionId]['conditions'][$body['target']][] = [
+   402	        'condition' => $body['condition'],
+   403	        'remaining_rounds' => $body['duration_rounds'],
+   404	    ];
+   405	    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+   406	    save_combat_sessions($sessions);
+   407	
+   408	    return new JsonResponse([
+   409	        'target' => $body['target'],
+   410	        'conditions' => $sessions[$sessionId]['conditions'][$body['target']],
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+index 093c6324a1d46e53ef47212a8fb8f1ccc163c15e..7a21f449bbe2b9d70c161cedc2685791cb5179f1
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+@@ -316,6 +316,11 @@
+             $session['conditions'],
+             static fn (array $conditions): bool => $conditions !== []
+         );
++        foreach (($session['condition_targets'] ?? []) as $target => $_) {
++            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
++                $conditions[$target] = [];
++            }
++        }
+         $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+     } else {
+         $response['order'] = $session['order'];
+@@ -358,6 +363,7 @@
+         'turn_index' => 0,
+         'order' => $order,
+         'conditions' => $conditions,
++        'condition_targets' => [],
+     ];
+     $sessions[$body['id']] = $session;
+     save_combat_sessions($sessions);
+@@ -396,6 +402,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+     save_combat_sessions($sessions);
+ 
+     return new JsonResponse([
+
+codex
+Fixed the combat-state response bug in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php:305).
+
+The app now tracks combatants that have received conditions and keeps their key in advance responses after the condition expires, returning `"fighter": []` instead of dropping the key entirely.
+
+Verification:
+- `php -l index.php` passes.
+- Direct CLI helper check returns the failing shape: `conditions: {"fighter":[]}`.
+- [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/run.sh:1) is present, executable, and still starts the foreground server on `127.0.0.1:$PORT`.
+
+I did not start the server, per the benchmark contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+index 093c6324a1d46e53ef47212a8fb8f1ccc163c15e..7a21f449bbe2b9d70c161cedc2685791cb5179f1
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T013824Z_codex_gpt-5.5_php-symfony/index.php
+@@ -316,6 +316,11 @@
+             $session['conditions'],
+             static fn (array $conditions): bool => $conditions !== []
+         );
++        foreach (($session['condition_targets'] ?? []) as $target => $_) {
++            if (array_key_exists($target, $session['conditions']) && !array_key_exists($target, $conditions)) {
++                $conditions[$target] = [];
++            }
++        }
+         $response['conditions'] = $conditions === [] ? new stdClass() : $conditions;
+     } else {
+         $response['order'] = $session['order'];
+@@ -358,6 +363,7 @@
+         'turn_index' => 0,
+         'order' => $order,
+         'conditions' => $conditions,
++        'condition_targets' => [],
+     ];
+     $sessions[$body['id']] = $session;
+     save_combat_sessions($sessions);
+@@ -396,6 +402,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    $sessions[$sessionId]['condition_targets'][$body['target']] = true;
+     save_combat_sessions($sessions);
+ 
+     return new JsonResponse([
+
+tokens used
+33,225

@@ -1,0 +1,18 @@
+Done, Chef! 🛡️✨
+
+**Root cause found:** PHP’s built-in development server reloads the script for every request, so the in-memory `$sessions` array was empty by the time the evaluator hit `…/conditions` or `…/advance`. That produced the 404 “session not found” responses.
+
+**Fix applied in `index.php`:**
+- Added file-backed session persistence via `.combat_sessions.json` (`loadSessions` / `saveSessions`).
+- Loaded sessions from file at startup and saved after every mutating route (`create`, `add condition`, `advance`).
+- Cast the advance response’s `conditions` map to `(object)` so an empty map serializes as `{}` instead of `[]`.
+
+**Fix applied in `run.sh`:**
+- Added `rm -f .combat_sessions.json` so each fresh server starts with clean state.
+
+**Verified:**
+- `php -l index.php` passes.
+- All previously passing endpoints still return 200.
+- Full combat flow works across separate requests: create session → add condition → advance → wrap round → condition decrements → condition expires and is removed.
+
+`./run.sh` is ready and I’m not starting the server before finishing. 🎲

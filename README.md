@@ -24,8 +24,13 @@ The first REST/API benchmark suite is in
 [`experiments/dnd-rest-benchmark/`](experiments/dnd-rest-benchmark/). It uses a
 central Go evaluator for D&D engine API challenges.
 
+The staged D&D lifecycle roadmap, prompt contract, and future backlog are in
+[`docs/roadmap/`](docs/roadmap/). Results and early interpretation are in
+[`docs/findings/`](docs/findings/).
+
 ## Folders
 
 - `experiments/` — experiment designs and code
 - `results/` — experiment outputs
 - `records/` — correspondence, submissions, and other records
+- `docs/` — indexed roadmap, prompt, and findings notes

@@ -1,0 +1,28 @@
+Done, Chef! 🎲⚔️ Here's the implementation summary:
+
+## What I built
+
+A D&D REST engine running **inside the Vite 8.1.3 dev server** via a custom plugin's `configureServer` middleware hook — no separate Node server.
+
+**Files:**
+- **`vite.config.ts`** — defines `dndRestPlugin` that mounts `apiMiddleware` on `server.middlewares` (runs *before* Vite's internal middlewares, so API routes win over asset serving). Keeps the pinned `@vitejs/plugin-react` + react stack.
+- **`src/api.ts`** — connect-style middleware + the four endpoint handlers.
+- **`run.sh`** — `exec`s the locally-pinned `vite` binary, foreground, on `127.0.0.1:$PORT`.
+- `index.html` / `src/main.ts` / `package.json` — preserved from the starter.
+
+## Endpoints (all verified against the spec)
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` ✓ |
+| `POST /v1/checks/ability` `{9,5,15}` | `{"total":14,"success":false,"margin":-1}` ✓ |
+| `POST /v1/encounters/adjusted-xp` (sample) | exact match: `base_xp:850, multiplier:2, adjusted_xp:1700, difficulty:"deadly", thresholds{...1600}` ✓ |
+| `POST /v1/initiative/order` (sample) | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` ✓ |
+
+## Key logic decisions
+- **Dice grammar**: strict regex `^(\d+)d(\d+)(?:([+-])(\d+))?$`, reject non-positive `count`/`sides` → 400. `average = (min+max)/2` (exact expected value, e.g. `1d20` → `10.5`).
+- **Encounter XP**: CR→XP table, monster-count multipliers (1, 1.5, 2, 2.5, 3, 4), level-3 thresholds summed across the party, difficulty = highest threshold reached (`trivial`…`deadly`).
+- **Initiative**: sort by score desc → dex desc → name asc.
+- Unknown `/v1/*` → 404; malformed JSON → 400; unknown CR/level → 400.
+- Non-API paths fall through to Vite (verified `/` and `/src/main.ts` still serve normally), so prior-stage behavior is preserved. No server left running. 🧹

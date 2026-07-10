@@ -1,0 +1,25 @@
+All set, Chef! 🛡️✨
+
+The root cause was in `dndsite/views.py`: `_combat_response` filtered out any combatant whose condition list was empty, so after the bless expired on `fighter`, the `"fighter"` key disappeared entirely from the response.
+
+I changed it to include every combatant’s key even when their condition list is empty:
+
+```python
+conditions = {
+    name: [
+        {"condition": cond["condition"], "remaining_rounds": cond["remaining_rounds"]}
+        for cond in conds
+    ]
+    for name, conds in session["conditions"].items()
+}
+```
+
+I verified the exact failing scenario locally with Django’s test client:
+
+- After the final advance, `fighter` is active in round 2, turn 2, and the response now contains:
+
+```json
+"conditions": {"rogue": [], "mage": [], "fighter": []}
+```
+
+All prior endpoints still behave the same, and `run.sh` is unchanged and ready to go. 🎲

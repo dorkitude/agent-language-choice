@@ -1,0 +1,29 @@
+Everything is in place and verified, Chef! 🎲✨ Here's the summary:
+
+## D&D REST Engine — Ruby on Rails (core, creative shot)
+
+**Stack (pinned, no downgrades):** Ruby 4.0.5 · Rails 8.1.3 · Rack 3.2.6 · rackup 2.3.1 · Puma 8.0.2 (rackup auto-selects Puma as the handler).
+
+**Structure** — a minimal API-only Rails app, bootstrapped from the seeded `config.ru` (unchanged) → `app.rb` → `config/application.rb`:
+
+```
+app.rb                         # requires config/application, calls initialize!
+config/application.rb          # Rails::Application, api_only, eager_load=false, hosts cleared, quiet logger
+config/routes.rb               # GET /health + v1 namespace (4 POST routes)
+app/controllers/
+  application_controller.rb    # < ActionController::API
+  health_controller.rb
+  v1/{dice,checks,encounters,initiative}_controller.rb
+run.sh                         # RAILS_ENV=production ; bundle exec rackup -o 127.0.0.1 -p $PORT
+```
+
+**Endpoint behavior (all spec examples reproduced byte-for-byte):**
+- `GET /health` → `{"ok":true}`
+- `POST /v1/dice/stats` — regex-parsed `<count>d<sides>[±mod]`, count/sides must be positive (else 400), `min=count+mod`, `max=count*sides+mod`, `average` computed with exact integer math (whole → int, half → float, e.g. `1d6`→`3.5`, `2d6+3`→`10`)
+- `POST /v1/checks/ability` — `total=roll+modifier`, `success=total>=dc`, `margin=total-dc`
+- `POST /v1/encounters/adjusted-xp` — CR→XP table, count-based multipliers (1, 1.5, 2, 2.5, 3, 4), summed level-3 party thresholds, difficulty = highest threshold reached; `adjusted_xp` normalized to int when whole (e.g. `52.5` stays a float)
+- `POST /v1/initiative/order` — `score=roll+dex`, sorted by score desc → dex desc → name asc
+
+**Verified:** invalid dice expressions (`0d6`, `2d0`, `2d6+`, `-2d6`, `d6`, `2d6+3x`, missing key) all return 400; fractional `adjusted_xp` and the full tie-break ordering render correctly; `Content-Type: application/json` on all responses; server boots in production mode and was reliably torn down (no lingering processes from this run).
+
+`./run.sh` is ready — it starts Puma in the foreground on `127.0.0.1:$PORT`. 🐉

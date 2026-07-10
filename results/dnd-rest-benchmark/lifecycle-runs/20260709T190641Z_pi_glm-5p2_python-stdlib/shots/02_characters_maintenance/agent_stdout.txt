@@ -1,0 +1,28 @@
+Everything's in place, Chef 🎲
+
+## Summary
+
+I added the **Character Rules** stage to the existing D&D REST API (Python 3.14 stdlib only — `http.server` + `json`), preserving all 8 core-suite endpoints.
+
+### New endpoints (all `POST`, JSON in/out, `400` on invalid input)
+
+| Route | Handler | Spec |
+|---|---|---|
+| `/v1/characters/ability-modifier` | `ability_modifier` | `score` int 1–30 → `modifier = (score-10)//2` (Python `//` floors negative halves correctly: `9 → -1`) |
+| `/v1/characters/proficiency` | `proficiency` | `level` int 1–20 → `2 + (level-1)//4` gives the 2/3/4/5/6 bands |
+| `/v1/characters/derived-stats` | `derived_stats` | Combines both: 6 ability modifiers, proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` |
+
+### Key design choices
+- **Strict integer validation**: a `_is_int` helper accepts real JSON ints and explicitly rejects `bool` (Python's `bool` subclasses `int`). Out-of-range, missing, string, and float scores/levels all return `400`.
+- **Floor correctness**: integer floor division `//` naturally floors negative halves, so `7 → -2` and `1 → -5`.
+- **Shared formulas**: `ability_modifier_of` / `proficiency_bonus_of` are reused by both the standalone endpoints and `derived-stats`, guaranteeing identical results.
+- **Derived-stats validation**: all six ability keys (`str/dex/con/int/wis/cha`) must be present and valid; `armor.base` and `armor.dex_cap` must be ints; `armor.shield` is treated by truthiness (missing/`false` → `0`, `true` → `2`) for robustness.
+- **Modifier dict order** matches the spec example (`str, dex, con, int, wis, cha`).
+
+### Verified
+- The spec's `derived-stats` example returns exactly `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{...}}`.
+- Boundary cases: `score=1→-5`, `score=30→10`, `level=1→2`, `level=20→6`.
+- Invalid cases (`score=0/31`, string score, missing score, `level=0`, missing ability) all return `400`.
+- Core suite still passes: `/health`, `/v1/dice/stats`, `/v1/initiative/order` unchanged.
+
+`./run.sh` starts the server in the foreground on `127.0.0.1:$PORT` — ready to evaluate. 🐍

@@ -1,0 +1,29 @@
+All 13 tests pass. 🎲✨
+
+## Summary
+
+The 5 failing tests were all **404s** — the new character endpoints simply didn't exist. I added them while preserving all prior-stage behavior.
+
+### Changes
+
+**New file: `app/controllers/v1/characters_controller.rb`** — `V1::CharactersController` with three actions:
+
+| Endpoint | Validation | Logic |
+|---|---|---|
+| `POST /v1/characters/ability-modifier` | `score` Integer 1–30 → else 400 | `modifier = (score - 10) / 2` |
+| `POST /v1/characters/proficiency` | `level` Integer 1–20 → else 400 | case statement matching the spec tiers (2/3/4/5/6) |
+| `POST /v1/characters/derived-stats` | `level` 1–20, each ability 1–30 → else 400 | modifiers via same formula, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` |
+
+**Key correctness details:**
+- Ruby's integer division floors toward −∞, so `(9-10)/2 == -1` correctly handles negative halves — no float/floor gymnastics needed.
+- `shield_bonus` is `2` only when `armor.shield == true`.
+- `min(dex_modifier, dex_cap)` verified capping (dex 18 → mod 4 capped at 2).
+
+**Root cause of a mid-fix 500:** `armor.to_h` raised `ActionController::UnfilteredParameters` because nested JSON params aren't `permit`-ed in this minimal API app. Fixed by accessing `armor[:base]` / `armor[:dex_cap]` / `armor[:shield]` directly (indifferent access works on `ActionController::Parameters`) with nil guards.
+
+**`config/routes.rb`** — added the three `characters/...` POST routes inside the `:v1` namespace.
+
+**`run.sh`** is unchanged: starts `bundle exec rackup` in the foreground on `127.0.0.1:$PORT`. The logger stays at `IO::NULL` for clean harness stdout.
+
+### Verification
+All 5 previously-failing tests now return the expected status (200/200/400/200/200) with correct bodies, and all 8 previously-passing core tests still pass — 13/13. 🦸

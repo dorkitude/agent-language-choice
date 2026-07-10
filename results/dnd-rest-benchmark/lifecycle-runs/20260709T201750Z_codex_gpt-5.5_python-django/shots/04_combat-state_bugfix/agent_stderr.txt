@@ -1,0 +1,1313 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f488d-76bb-72d2-8b6b-22fa58b35ca0
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-django
+        Language: python
+        Framework/runtime: django
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Django 6.0.7. Implement the REST API as Django URL routes/views inside the seeded minimal project.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:50898 passed=false tests=19/20
+PASS	health	0ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+  response: {"id": "enc-1", "round": 2, "turn_index": 2, "active": {"name": "fighter", "score": 14}, "conditions": {}}
+
+
+Error: suite failed: 19/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Django project and the combat state serialization, then make the smallest fix that preserves the existing API behavior.
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+run.sh
+server_stderr.txt
+agent_last_message.txt
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+setup.json
+dndeval-combat-state-report.json
+requirements.txt
+manage.py
+lifecycle-result.json
+agent_stderr.txt
+dndeval-core-report.json
+VERSION-PINS.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+dndsite/urls.py
+dndsite/settings.py
+dndsite/__init__.py
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+shots/04_combat-state_bugfix/PROMPT.md
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ./
+
+codex
+The repo status includes unrelated changes outside this run directory, so I’m ignoring those. The local project is compact; I’m reading the URL/view file and runner now.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc "sed -n '1,260p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 manage.py runserver 127.0.0.1:"$PORT" --noreload
+
+ succeeded in 0ms:
+import json
+import re
+
+from django.http import JsonResponse
+from django.urls import path
+
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+COMBAT_SESSIONS = {}
+
+
+def json_error(status=400):
+    return JsonResponse({"error": "bad request"}, status=status)
+
+
+def json_number(value):
+    return int(value) if value == int(value) else value
+
+
+def body_json(request):
+    if request.method != "POST":
+        return None
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def bounded_int(value, minimum, maximum):
+    value = json_int(value)
+    if value < minimum or value > maximum:
+        raise ValueError
+    return value
+
+
+def json_int(value):
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError
+    return value
+
+
+def ability_modifier_for(score):
+    return (bounded_int(score, 1, 30) - 10) // 2
+
+
+def proficiency_bonus_for(level):
+    level = bounded_int(level, 1, 20)
+    return 2 + (level - 1) // 4
+
+
+def health(request):
+    return JsonResponse({"ok": True})
+
+
+def dice_stats(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    expression = payload.get("expression")
+    if not isinstance(expression, str):
+        return json_error()
+
+    match = DICE_RE.fullmatch(expression)
+    if not match:
+        return json_error()
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        return json_error()
+
+    modifier = int(match.group(4) or "0")
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    return JsonResponse(
+        {
+            "dice_count": count,
+            "sides": sides,
+            "modifier": modifier,
+            "min": count + modifier,
+            "max": count * sides + modifier,
+            "average": json_number(count * (sides + 1) / 2 + modifier),
+        }
+    )
+
+
+def ability_check(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    try:
+        roll = int(payload["roll"])
+        modifier = int(payload["modifier"])
+        dc = int(payload["dc"])
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    total = roll + modifier
+    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
+
+
+def monster_multiplier(monster_count):
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def adjusted_xp(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    party = payload.get("party")
+    monsters = payload.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        return json_error()
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    try:
+        for member in party:
+            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
+            for key in thresholds:
+                thresholds[key] += member_thresholds[key]
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            count = int(monster["count"])
+            if count < 0:
+                return json_error()
+            base_xp += CR_XP[str(monster["cr"])] * count
+            monster_count += count
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
+    adjusted = base_xp * multiplier
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted >= thresholds[name]:
+            difficulty = name
+
+    return JsonResponse(
+        {
+            "base_xp": base_xp,
+            "monster_count": monster_count,
+            "multiplier": multiplier,
+            "adjusted_xp": adjusted,
+            "difficulty": difficulty,
+            "thresholds": thresholds,
+        }
+    )
+
+
+def initiative_order(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    combatants = payload.get("combatants")
+    if not isinstance(combatants, list):
+        return json_error()
+
+    order = []
+    try:
+        for combatant in combatants:
+            name = str(combatant["name"])
+            dex = int(combatant["dex"])
+            roll = int(combatant["roll"])
+            order.append({"name": name, "dex": dex, "score": roll + dex})
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return JsonResponse(
+        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+    )
+
+
+def combatant_order(combatants):
+    order = []
+    for combatant in combatants:
+        name = combatant["name"]
+        if not isinstance(name, str):
+            raise ValueError
+        dex = json_int(combatant["dex"])
+        roll = json_int(combatant["roll"])
+        order.append({"name": name, "dex": dex, "score": roll + dex})
+
+    if not order:
+        raise ValueError
+
+    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return order
+
+
+def public_order(order):
+    return [{"name": item["name"], "score": item["score"]} for item in order]
+
+
+def public_session(session):
+    order = session["order"]
+    active = order[session["turn_index"]]
+    return {
+        "id": session["id"],
+        "round": session["round"],
+        "turn_index": session["turn_index"],
+        "active": {"name": active["name"], "score": active["score"]},
+        "order": public_order(order),
+    }
+
+
+def public_conditions(session):
+    conditions = {}
+    for name, entries in session["conditions"].items():
+        if entries:
+            conditions[name] = [
+                {
+                    "condition": entry["condition"],
+                    "remaining_rounds": entry["remaining_rounds"],
+                }
+                for entry in entries
+            ]
+    return conditions
+
+
+def create_combat_session(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-combat-state-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+{
+  "suite": "combat-state",
+  "base_url": "http://127.0.0.1:50898",
+  "passed": false,
+  "passed_count": 19,
+  "total_count": 20,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": false,
+      "status": 200,
+      "duration_ms": 0,
+      "error": "conditions: missing JSON key \"fighter\"",
+      "response_body": "{\"id\": \"enc-1\", \"round\": 2, \"turn_index\": 2, \"active\": {\"name\": \"fighter\", \"score\": 14}, \"conditions\": {}}"
+    }
+  ]
+}
+
+codex
+The failure is in response formatting, not turn logic: the evaluator expects a combatant key to remain present with an empty list after that combatant’s last condition expires. I’m checking the rest of the combat handlers before editing that serializer.
+exec
+/bin/zsh -lc "sed -n '260,560p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+
+    session_id = payload.get("id")
+    combatants = payload.get("combatants")
+    if not isinstance(session_id, str) or not isinstance(combatants, list):
+        return json_error()
+    if session_id in COMBAT_SESSIONS:
+        return json_error()
+
+    try:
+        order = combatant_order(combatants)
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    session = {
+        "id": session_id,
+        "round": 1,
+        "turn_index": 0,
+        "order": order,
+        "conditions": {combatant["name"]: [] for combatant in order},
+    }
+    COMBAT_SESSIONS[session_id] = session
+    return JsonResponse(public_session(session))
+
+
+def add_condition(request, session_id):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    session = COMBAT_SESSIONS.get(session_id)
+    if session is None:
+        return json_error(status=404)
+
+    target = payload.get("target")
+    condition = payload.get("condition")
+    try:
+        duration_rounds = json_int(payload["duration_rounds"])
+    except (KeyError, ValueError):
+        return json_error()
+
+    if (
+        not isinstance(target, str)
+        or target not in session["conditions"]
+        or not isinstance(condition, str)
+        or duration_rounds <= 0
+    ):
+        return json_error()
+
+    session["conditions"][target].append(
+        {"condition": condition, "remaining_rounds": duration_rounds}
+    )
+    return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+
+
+def advance_combat_session(request, session_id):
+    if body_json(request) is None:
+        return json_error()
+
+    session = COMBAT_SESSIONS.get(session_id)
+    if session is None:
+        return json_error(status=404)
+
+    session["turn_index"] += 1
+    if session["turn_index"] >= len(session["order"]):
+        session["turn_index"] = 0
+        session["round"] += 1
+
+    active = session["order"][session["turn_index"]]
+    active_conditions = session["conditions"][active["name"]]
+    remaining = []
+    for condition in active_conditions:
+        condition["remaining_rounds"] -= 1
+        if condition["remaining_rounds"] > 0:
+            remaining.append(condition)
+    session["conditions"][active["name"]] = remaining
+
+    return JsonResponse(
+        {
+            "id": session["id"],
+            "round": session["round"],
+            "turn_index": session["turn_index"],
+            "active": {"name": active["name"], "score": active["score"]},
+            "conditions": public_conditions(session),
+        }
+    )
+
+
+def ability_modifier(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    try:
+        score = bounded_int(payload["score"], 1, 30)
+    except (KeyError, ValueError):
+        return json_error()
+
+    return JsonResponse({"score": score, "modifier": ability_modifier_for(score)})
+
+
+def proficiency(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    try:
+        level = bounded_int(payload["level"], 1, 20)
+    except (KeyError, ValueError):
+        return json_error()
+
+    return JsonResponse(
+        {"level": level, "proficiency_bonus": proficiency_bonus_for(level)}
+    )
+
+
+def derived_stats(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    abilities = payload.get("abilities")
+    armor = payload.get("armor")
+    if not isinstance(abilities, dict) or not isinstance(armor, dict):
+        return json_error()
+
+    try:
+        level = bounded_int(payload["level"], 1, 20)
+        modifiers = {key: ability_modifier_for(abilities[key]) for key in ABILITY_KEYS}
+        armor_base = json_int(armor["base"])
+        dex_cap = json_int(armor["dex_cap"])
+        shield = armor["shield"]
+        if not isinstance(shield, bool):
+            return json_error()
+    except (KeyError, ValueError):
+        return json_error()
+
+    proficiency_bonus = proficiency_bonus_for(level)
+    hp_max = level * (6 + modifiers["con"])
+    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+    return JsonResponse(
+        {
+            "level": level,
+            "proficiency_bonus": proficiency_bonus,
+            "hp_max": hp_max,
+            "armor_class": armor_class,
+            "modifiers": modifiers,
+        }
+    )
+
+
+urlpatterns = [
+    path("health", health),
+    path("v1/dice/stats", dice_stats),
+    path("v1/checks/ability", ability_check),
+    path("v1/encounters/adjusted-xp", adjusted_xp),
+    path("v1/initiative/order", initiative_order),
+    path("v1/characters/ability-modifier", ability_modifier),
+    path("v1/characters/proficiency", proficiency),
+    path("v1/characters/derived-stats", derived_stats),
+    path("v1/combat/sessions", create_combat_session),
+    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
+    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+]
+
+codex
+I’m going to add explicit tracking for combatants that have ever received conditions. That keeps earlier responses lean while returning `"fighter": []` after expiration, which matches the failed assertion.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+codex
+The code change is in place. I’m running non-server validation now, staying within the instruction not to launch the HTTP server.
+exec
+/bin/zsh -lc 'python3 manage.py check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/manage.py", line 11, in <module>
+    main()
+    ~~~~^^
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/manage.py", line 7, in main
+    from django.core.management import execute_from_command_line
+ModuleNotFoundError: No module named 'django'
+
+exec
+/bin/zsh -lc 'python3 -m py_compile dndsite/urls.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+codex
+`py_compile` passed. The first Django check missed the project’s local dependency path, so I’m rerunning it with the same `PYTHONPATH` setup used by `run.sh`.
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 manage.py check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+ succeeded in 147ms:
+System check identified no issues (0 silenced).
+
+codex
+Django’s system check passes with the runner’s environment. I’m doing a quick diff review to make sure the fix is scoped only to combat condition serialization.
+exec
+/bin/zsh -lc 'git diff -- dndsite/urls.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  142 Jul  9 13:17 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+codex
+Because this run directory is untracked from the parent repo’s perspective, `git diff` has no tracked baseline to show. I confirmed `run.sh` is present and executable; I’m checking the edited lines directly once more.
+exec
+/bin/zsh -lc "nl -ba dndsite/urls.py | sed -n '205,330p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+   205	        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+   206	    )
+   207	
+   208	
+   209	def combatant_order(combatants):
+   210	    order = []
+   211	    for combatant in combatants:
+   212	        name = combatant["name"]
+   213	        if not isinstance(name, str):
+   214	            raise ValueError
+   215	        dex = json_int(combatant["dex"])
+   216	        roll = json_int(combatant["roll"])
+   217	        order.append({"name": name, "dex": dex, "score": roll + dex})
+   218	
+   219	    if not order:
+   220	        raise ValueError
+   221	
+   222	    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+   223	    return order
+   224	
+   225	
+   226	def public_order(order):
+   227	    return [{"name": item["name"], "score": item["score"]} for item in order]
+   228	
+   229	
+   230	def public_session(session):
+   231	    order = session["order"]
+   232	    active = order[session["turn_index"]]
+   233	    return {
+   234	        "id": session["id"],
+   235	        "round": session["round"],
+   236	        "turn_index": session["turn_index"],
+   237	        "active": {"name": active["name"], "score": active["score"]},
+   238	        "order": public_order(order),
+   239	    }
+   240	
+   241	
+   242	def public_conditions(session):
+   243	    conditions = {}
+   244	    for name, entries in session["conditions"].items():
+   245	        if entries or name in session["condition_targets"]:
+   246	            conditions[name] = [
+   247	                {
+   248	                    "condition": entry["condition"],
+   249	                    "remaining_rounds": entry["remaining_rounds"],
+   250	                }
+   251	                for entry in entries
+   252	            ]
+   253	    return conditions
+   254	
+   255	
+   256	def create_combat_session(request):
+   257	    payload = body_json(request)
+   258	    if payload is None:
+   259	        return json_error()
+   260	
+   261	    session_id = payload.get("id")
+   262	    combatants = payload.get("combatants")
+   263	    if not isinstance(session_id, str) or not isinstance(combatants, list):
+   264	        return json_error()
+   265	    if session_id in COMBAT_SESSIONS:
+   266	        return json_error()
+   267	
+   268	    try:
+   269	        order = combatant_order(combatants)
+   270	    except (KeyError, TypeError, ValueError):
+   271	        return json_error()
+   272	
+   273	    session = {
+   274	        "id": session_id,
+   275	        "round": 1,
+   276	        "turn_index": 0,
+   277	        "order": order,
+   278	        "conditions": {combatant["name"]: [] for combatant in order},
+   279	        "condition_targets": set(),
+   280	    }
+   281	    COMBAT_SESSIONS[session_id] = session
+   282	    return JsonResponse(public_session(session))
+   283	
+   284	
+   285	def add_condition(request, session_id):
+   286	    payload = body_json(request)
+   287	    if payload is None:
+   288	        return json_error()
+   289	
+   290	    session = COMBAT_SESSIONS.get(session_id)
+   291	    if session is None:
+   292	        return json_error(status=404)
+   293	
+   294	    target = payload.get("target")
+   295	    condition = payload.get("condition")
+   296	    try:
+   297	        duration_rounds = json_int(payload["duration_rounds"])
+   298	    except (KeyError, ValueError):
+   299	        return json_error()
+   300	
+   301	    if (
+   302	        not isinstance(target, str)
+   303	        or target not in session["conditions"]
+   304	        or not isinstance(condition, str)
+   305	        or duration_rounds <= 0
+   306	    ):
+   307	        return json_error()
+   308	
+   309	    session["conditions"][target].append(
+   310	        {"condition": condition, "remaining_rounds": duration_rounds}
+   311	    )
+   312	    session["condition_targets"].add(target)
+   313	    return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+   314	
+   315	
+   316	def advance_combat_session(request, session_id):
+   317	    if body_json(request) is None:
+   318	        return json_error()
+   319	
+   320	    session = COMBAT_SESSIONS.get(session_id)
+   321	    if session is None:
+   322	        return json_error(status=404)
+   323	
+   324	    session["turn_index"] += 1
+   325	    if session["turn_index"] >= len(session["order"]):
+   326	        session["turn_index"] = 0
+   327	        session["round"] += 1
+   328	
+   329	    active = session["order"][session["turn_index"]]
+   330	    active_conditions = session["conditions"][active["name"]]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+codex
+Fixed the combat condition response behavior in [dndsite/urls.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py:242).
+
+The API now tracks combatants that have ever received a condition, so after a condition expires the response includes that combatant with an empty list, e.g. `"fighter": []`, instead of dropping the key entirely.
+
+Validation run:
+- `python3 -m py_compile dndsite/urls.py`
+- `PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 manage.py check`
+
+`run.sh` is present, executable, and still starts Django in the foreground on `127.0.0.1:$PORT`. I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index adb7f2d593f5f7232dc94b6e588f6ffc901c31b3..9acc599511edbf35f8fd1fc1c90dc5a21b0b1a33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -242,7 +242,7 @@
+ def public_conditions(session):
+     conditions = {}
+     for name, entries in session["conditions"].items():
+-        if entries:
++        if entries or name in session["condition_targets"]:
+             conditions[name] = [
+                 {
+                     "condition": entry["condition"],
+@@ -276,6 +276,7 @@
+         "turn_index": 0,
+         "order": order,
+         "conditions": {combatant["name"]: [] for combatant in order},
++        "condition_targets": set(),
+     }
+     COMBAT_SESSIONS[session_id] = session
+     return JsonResponse(public_session(session))
+@@ -308,6 +309,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    session["condition_targets"].add(target)
+     return JsonResponse({"target": target, "conditions": session["conditions"][target]})
+ 
+ 
+
+tokens used
+25,582

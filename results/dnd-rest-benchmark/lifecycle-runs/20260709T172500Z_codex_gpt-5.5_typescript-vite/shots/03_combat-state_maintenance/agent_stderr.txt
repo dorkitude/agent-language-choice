@@ -1,0 +1,2962 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f47ee-3315-79c0-b936-42cb8a44328a
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-vite
+        Language: typescript
+        Framework/runtime: vite
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Vite 8.1.3 with TypeScript. Implement the REST API through Vite dev-server middleware or a Vite plugin; do not replace it with a plain Node-only server.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Vite app and current API middleware first, then patch the smallest surface needed for the combat state endpoints while preserving existing behavior.
+exec
+/bin/zsh -lc 'ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+total 368
+drwxr-xr-x@ 22 dorkitude  staff    704 Jul  9 10:30 .
+drwxr-xr-x@ 15 dorkitude  staff    480 Jul  9 10:25 ..
+-rw-r--r--@  1 dorkitude  staff   4185 Jul  9 10:30 PROMPT.md
+-rw-r--r--@  1 dorkitude  staff    635 Jul  9 10:25 VERSION-PINS.json
+-rw-r--r--@  1 dorkitude  staff    653 Jul  9 10:30 agent_last_message.txt
+-rw-r--r--@  1 dorkitude  staff  63023 Jul  9 10:30 agent_stderr.txt
+-rw-r--r--@  1 dorkitude  staff    654 Jul  9 10:30 agent_stdout.txt
+-rw-r--r--@  1 dorkitude  staff   2270 Jul  9 10:30 dndeval-characters-report.json
+-rw-r--r--@  1 dorkitude  staff   1422 Jul  9 10:28 dndeval-core-report.json
+-rw-r--r--@  1 dorkitude  staff     72 Jul  9 10:25 index.html
+-rw-r--r--@  1 dorkitude  staff  10488 Jul  9 10:30 lifecycle-result.json
+drwxr-xr-x@ 29 dorkitude  staff    928 Jul  9 10:30 node_modules
+-rw-r--r--@  1 dorkitude  staff  41635 Jul  9 10:30 package-lock.json
+-rw-r--r--@  1 dorkitude  staff    304 Jul  9 10:25 package.json
+-rwxr-xr-x@  1 dorkitude  staff    100 Jul  9 10:28 run.sh
+-rw-r--r--@  1 dorkitude  staff      0 Jul  9 10:30 server_stderr.txt
+-rw-r--r--@  1 dorkitude  staff    157 Jul  9 10:30 server_stdout.txt
+-rw-r--r--@  1 dorkitude  staff    614 Jul  9 10:30 setup.json
+drwxr-xr-x@  5 dorkitude  staff    160 Jul  9 10:30 shots
+drwxr-xr-x@  3 dorkitude  staff     96 Jul  9 10:25 src
+-rw-r--r--@  1 dorkitude  staff    306 Jul  9 10:26 tsconfig.json
+-rw-r--r--@  1 dorkitude  staff   9168 Jul  9 10:29 vite.config.ts
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+src/main.ts
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+vite.config.ts
+tsconfig.json
+package.json
+package-lock.json
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+index.html
+setup.json
+
+codex
+The project is compact and the API likely lives in `vite.config.ts`; I’m reading that plus the run script and package metadata to understand the existing contracts before editing.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+exec
+/bin/zsh -lc 'cat package.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+exec
+/bin/zsh -lc "sed -n '1,260p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bash ./run.sh"
+  },
+  "dependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "26.1.1",
+    "vite": "8.1.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {}
+}
+
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT"
+
+ succeeded in 0ms:
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import react from '@vitejs/plugin-react';
+import { defineConfig, type Plugin } from 'vite';
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+const monsterXp: Record<string, number> = {
+  '0': 10,
+  '1/8': 25,
+  '1/4': 50,
+  '1/2': 100,
+  '1': 200,
+  '2': 450,
+  '3': 700,
+  '4': 1100,
+  '5': 1800,
+};
+
+const levelThresholds: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+function sendJson(res: ServerResponse, status: number, body: JsonValue): void {
+  const payload = JSON.stringify(body);
+  res.statusCode = status;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('content-length', Buffer.byteLength(payload));
+  res.end(payload);
+}
+
+function badRequest(res: ServerResponse): void {
+  sendJson(res, 400, { error: 'bad_request' });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+function isAbilityScore(value: unknown): value is number {
+  return isInteger(value) && value >= 1 && value <= 30;
+}
+
+function isCharacterLevel(value: unknown): value is number {
+  return isInteger(value) && value >= 1 && value <= 20;
+}
+
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (raw.length === 0) {
+    throw new Error('empty body');
+  }
+  return JSON.parse(raw);
+}
+
+function diceStats(body: unknown): JsonValue | null {
+  if (!isRecord(body) || typeof body.expression !== 'string') {
+    return null;
+  }
+
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+  if (!match) {
+    return null;
+  }
+
+  const diceCount = Number(match[1]);
+  const sides = Number(match[2]);
+  const modifierMagnitude = match[4] === undefined ? 0 : Number(match[4]);
+  const modifier = match[3] === '-' ? -modifierMagnitude : modifierMagnitude;
+
+  if (!Number.isSafeInteger(diceCount) || !Number.isSafeInteger(sides) || diceCount <= 0 || sides <= 0) {
+    return null;
+  }
+
+  const min = diceCount + modifier;
+  const max = diceCount * sides + modifier;
+  return {
+    dice_count: diceCount,
+    sides,
+    modifier,
+    min,
+    max,
+    average: (min + max) / 2,
+  };
+}
+
+function abilityCheck(body: unknown): JsonValue | null {
+  if (!isRecord(body) || !isInteger(body.roll) || !isInteger(body.modifier) || !isInteger(body.dc)) {
+    return null;
+  }
+
+  const total = body.roll + body.modifier;
+  return {
+    total,
+    success: total >= body.dc,
+    margin: total - body.dc,
+  };
+}
+
+function abilityModifierFor(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function proficiencyBonusFor(level: number): number {
+  return Math.floor((level - 1) / 4) + 2;
+}
+
+function abilityModifier(body: unknown): JsonValue | null {
+  if (!isRecord(body) || !isAbilityScore(body.score)) {
+    return null;
+  }
+
+  return {
+    score: body.score,
+    modifier: abilityModifierFor(body.score),
+  };
+}
+
+function proficiencyBonus(body: unknown): JsonValue | null {
+  if (!isRecord(body) || !isCharacterLevel(body.level)) {
+    return null;
+  }
+
+  return {
+    level: body.level,
+    proficiency_bonus: proficiencyBonusFor(body.level),
+  };
+}
+
+function derivedStats(body: unknown): JsonValue | null {
+  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
+    return null;
+  }
+
+  const abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+  for (const abilityName of abilityNames) {
+    if (!isAbilityScore(body.abilities[abilityName])) {
+      return null;
+    }
+  }
+  const abilities = body.abilities as Record<(typeof abilityNames)[number], number>;
+
+  if (!isInteger(body.armor.base) || typeof body.armor.shield !== 'boolean' || !isInteger(body.armor.dex_cap)) {
+    return null;
+  }
+
+  const modifiers = {
+    str: abilityModifierFor(abilities.str),
+    dex: abilityModifierFor(abilities.dex),
+    con: abilityModifierFor(abilities.con),
+    int: abilityModifierFor(abilities.int),
+    wis: abilityModifierFor(abilities.wis),
+    cha: abilityModifierFor(abilities.cha),
+  };
+  const shieldBonus = body.armor.shield ? 2 : 0;
+
+  return {
+    level: body.level,
+    proficiency_bonus: proficiencyBonusFor(body.level),
+    hp_max: body.level * (6 + modifiers.con),
+    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
+    modifiers,
+  };
+}
+
+function monsterMultiplier(count: number): number | null {
+  if (count <= 0) return null;
+  if (count === 1) return 1;
+  if (count === 2) return 1.5;
+  if (count <= 6) return 2;
+  if (count <= 10) return 2.5;
+  if (count <= 14) return 3;
+  return 4;
+}
+
+function encounterAdjustedXp(body: unknown): JsonValue | null {
+  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+    return null;
+  }
+
+  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+  for (const member of body.party) {
+    if (!isRecord(member) || !isInteger(member.level) || levelThresholds[member.level] === undefined) {
+      return null;
+    }
+    const memberThresholds = levelThresholds[member.level];
+    thresholds.easy += memberThresholds.easy;
+    thresholds.medium += memberThresholds.medium;
+    thresholds.hard += memberThresholds.hard;
+    thresholds.deadly += memberThresholds.deadly;
+  }
+
+  let baseXp = 0;
+  let monsterCount = 0;
+  for (const monster of body.monsters) {
+    if (!isRecord(monster) || typeof monster.cr !== 'string' || !isInteger(monster.count) || monster.count <= 0) {
+      return null;
+    }
+    const xp = monsterXp[monster.cr];
+    if (xp === undefined) {
+      return null;
+    }
+    baseXp += xp * monster.count;
+    monsterCount += monster.count;
+  }
+
+  const multiplier = monsterMultiplier(monsterCount);
+  if (multiplier === null) {
+    return null;
+  }
+
+  const adjustedXp = baseXp * multiplier;
+  let difficulty = 'trivial';
+  if (adjustedXp >= thresholds.easy) difficulty = 'easy';
+  if (adjustedXp >= thresholds.medium) difficulty = 'medium';
+  if (adjustedXp >= thresholds.hard) difficulty = 'hard';
+  if (adjustedXp >= thresholds.deadly) difficulty = 'deadly';
+
+  return {
+    base_xp: baseXp,
+    monster_count: monsterCount,
+    multiplier,
+    adjusted_xp: adjustedXp,
+    difficulty,
+    thresholds,
+  };
+}
+
+function initiativeOrder(body: unknown): JsonValue | null {
+  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+    return null;
+  }
+
+  const combatants = body.combatants.map((combatant) => {
+    if (!isRecord(combatant) || typeof combatant.name !== 'string' || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+      return null;
+    }
+    return {
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    };
+  });
+
+  if (combatants.some((combatant) => combatant === null)) {
+    return null;
+  }
+
+  const order = combatants
+    .toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name))
+    .map((combatant) => ({ name: combatant!.name, score: combatant!.score }));
+
+  return { order };
+
+exec
+/bin/zsh -lc 'cat dndeval-characters-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:59723",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+I found the existing cumulative endpoints and helper style. Next I’m reading the rest of the middleware dispatch so the new routes fit into the same request parsing and response behavior.
+exec
+/bin/zsh -lc "sed -n '260,560p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+  return { order };
+}
+
+function dndApiPlugin(): Plugin {
+  return {
+    name: 'dnd-rest-api',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url === undefined || req.method === undefined) {
+          next();
+          return;
+        }
+
+        const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+        if (req.method === 'GET' && pathname === '/health') {
+          sendJson(res, 200, { ok: true });
+          return;
+        }
+
+        const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+          '/v1/dice/stats': diceStats,
+          '/v1/checks/ability': abilityCheck,
+          '/v1/characters/ability-modifier': abilityModifier,
+          '/v1/characters/proficiency': proficiencyBonus,
+          '/v1/characters/derived-stats': derivedStats,
+          '/v1/encounters/adjusted-xp': encounterAdjustedXp,
+          '/v1/initiative/order': initiativeOrder,
+        };
+
+        const handler = handlers[pathname];
+        if (handler === undefined) {
+          next();
+          return;
+        }
+
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { error: 'method_not_allowed' });
+          return;
+        }
+
+        try {
+          const body = await readJson(req);
+          const response = handler(body);
+          if (response === null) {
+            badRequest(res);
+            return;
+          }
+          sendJson(res, 200, response);
+        } catch {
+          badRequest(res);
+        }
+      });
+    },
+  };
+}
+
+export default defineConfig({
+  plugins: [react(), dndApiPlugin()],
+  server: {
+    host: '127.0.0.1',
+    port: Number(process.env.PORT ?? 5173),
+    strictPort: true,
+  },
+});
+
+exec
+/bin/zsh -lc 'cat tsconfig.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "vite.config.ts"
+  ]
+}
+
+codex
+I’m going to add in-memory combat session storage near the initiative helpers, then extend the middleware with three dynamic `POST` routes. Validation will stay conservative: malformed bodies get `400`, unknown sessions or targets get the specified non-2xx statuses.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+codex
+The combat routes are patched in. I’m running TypeScript checks now; if that passes, I’ll do a lightweight route-level verification without leaving a server running.
+exec
+/bin/zsh -lc './node_modules/.bin/tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+ succeeded in 361ms:
+codex
+TypeScript passes. I’m doing one final source read around the inserted block to catch ordering or response-shape mistakes before I close out.
+exec
+/bin/zsh -lc "nl -ba vite.config.ts | sed -n '1,380p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+     1	import type { IncomingMessage, ServerResponse } from 'node:http';
+     2	import react from '@vitejs/plugin-react';
+     3	import { defineConfig, type Plugin } from 'vite';
+     4	
+     5	type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+     6	
+     7	type InitiativeEntry = {
+     8	  name: string;
+     9	  dex: number;
+    10	  score: number;
+    11	};
+    12	
+    13	type CombatCondition = {
+    14	  condition: string;
+    15	  remaining_rounds: number;
+    16	};
+    17	
+    18	type CombatSession = {
+    19	  id: string;
+    20	  round: number;
+    21	  turn_index: number;
+    22	  order: InitiativeEntry[];
+    23	  conditions: Map<string, CombatCondition[]>;
+    24	};
+    25	
+    26	const monsterXp: Record<string, number> = {
+    27	  '0': 10,
+    28	  '1/8': 25,
+    29	  '1/4': 50,
+    30	  '1/2': 100,
+    31	  '1': 200,
+    32	  '2': 450,
+    33	  '3': 700,
+    34	  '4': 1100,
+    35	  '5': 1800,
+    36	};
+    37	
+    38	const levelThresholds: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+    39	  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+    40	};
+    41	
+    42	function sendJson(res: ServerResponse, status: number, body: JsonValue): void {
+    43	  const payload = JSON.stringify(body);
+    44	  res.statusCode = status;
+    45	  res.setHeader('content-type', 'application/json; charset=utf-8');
+    46	  res.setHeader('content-length', Buffer.byteLength(payload));
+    47	  res.end(payload);
+    48	}
+    49	
+    50	function badRequest(res: ServerResponse): void {
+    51	  sendJson(res, 400, { error: 'bad_request' });
+    52	}
+    53	
+    54	function notFound(res: ServerResponse): void {
+    55	  sendJson(res, 404, { error: 'not_found' });
+    56	}
+    57	
+    58	function isRecord(value: unknown): value is Record<string, unknown> {
+    59	  return typeof value === 'object' && value !== null && !Array.isArray(value);
+    60	}
+    61	
+    62	function isInteger(value: unknown): value is number {
+    63	  return Number.isInteger(value);
+    64	}
+    65	
+    66	function isAbilityScore(value: unknown): value is number {
+    67	  return isInteger(value) && value >= 1 && value <= 30;
+    68	}
+    69	
+    70	function isCharacterLevel(value: unknown): value is number {
+    71	  return isInteger(value) && value >= 1 && value <= 20;
+    72	}
+    73	
+    74	async function readJson(req: IncomingMessage): Promise<unknown> {
+    75	  const chunks: Buffer[] = [];
+    76	  for await (const chunk of req) {
+    77	    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    78	  }
+    79	  const raw = Buffer.concat(chunks).toString('utf8');
+    80	  if (raw.length === 0) {
+    81	    throw new Error('empty body');
+    82	  }
+    83	  return JSON.parse(raw);
+    84	}
+    85	
+    86	function diceStats(body: unknown): JsonValue | null {
+    87	  if (!isRecord(body) || typeof body.expression !== 'string') {
+    88	    return null;
+    89	  }
+    90	
+    91	  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+    92	  if (!match) {
+    93	    return null;
+    94	  }
+    95	
+    96	  const diceCount = Number(match[1]);
+    97	  const sides = Number(match[2]);
+    98	  const modifierMagnitude = match[4] === undefined ? 0 : Number(match[4]);
+    99	  const modifier = match[3] === '-' ? -modifierMagnitude : modifierMagnitude;
+   100	
+   101	  if (!Number.isSafeInteger(diceCount) || !Number.isSafeInteger(sides) || diceCount <= 0 || sides <= 0) {
+   102	    return null;
+   103	  }
+   104	
+   105	  const min = diceCount + modifier;
+   106	  const max = diceCount * sides + modifier;
+   107	  return {
+   108	    dice_count: diceCount,
+   109	    sides,
+   110	    modifier,
+   111	    min,
+   112	    max,
+   113	    average: (min + max) / 2,
+   114	  };
+   115	}
+   116	
+   117	function abilityCheck(body: unknown): JsonValue | null {
+   118	  if (!isRecord(body) || !isInteger(body.roll) || !isInteger(body.modifier) || !isInteger(body.dc)) {
+   119	    return null;
+   120	  }
+   121	
+   122	  const total = body.roll + body.modifier;
+   123	  return {
+   124	    total,
+   125	    success: total >= body.dc,
+   126	    margin: total - body.dc,
+   127	  };
+   128	}
+   129	
+   130	function abilityModifierFor(score: number): number {
+   131	  return Math.floor((score - 10) / 2);
+   132	}
+   133	
+   134	function proficiencyBonusFor(level: number): number {
+   135	  return Math.floor((level - 1) / 4) + 2;
+   136	}
+   137	
+   138	function abilityModifier(body: unknown): JsonValue | null {
+   139	  if (!isRecord(body) || !isAbilityScore(body.score)) {
+   140	    return null;
+   141	  }
+   142	
+   143	  return {
+   144	    score: body.score,
+   145	    modifier: abilityModifierFor(body.score),
+   146	  };
+   147	}
+   148	
+   149	function proficiencyBonus(body: unknown): JsonValue | null {
+   150	  if (!isRecord(body) || !isCharacterLevel(body.level)) {
+   151	    return null;
+   152	  }
+   153	
+   154	  return {
+   155	    level: body.level,
+   156	    proficiency_bonus: proficiencyBonusFor(body.level),
+   157	  };
+   158	}
+   159	
+   160	function derivedStats(body: unknown): JsonValue | null {
+   161	  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
+   162	    return null;
+   163	  }
+   164	
+   165	  const abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+   166	  for (const abilityName of abilityNames) {
+   167	    if (!isAbilityScore(body.abilities[abilityName])) {
+   168	      return null;
+   169	    }
+   170	  }
+   171	  const abilities = body.abilities as Record<(typeof abilityNames)[number], number>;
+   172	
+   173	  if (!isInteger(body.armor.base) || typeof body.armor.shield !== 'boolean' || !isInteger(body.armor.dex_cap)) {
+   174	    return null;
+   175	  }
+   176	
+   177	  const modifiers = {
+   178	    str: abilityModifierFor(abilities.str),
+   179	    dex: abilityModifierFor(abilities.dex),
+   180	    con: abilityModifierFor(abilities.con),
+   181	    int: abilityModifierFor(abilities.int),
+   182	    wis: abilityModifierFor(abilities.wis),
+   183	    cha: abilityModifierFor(abilities.cha),
+   184	  };
+   185	  const shieldBonus = body.armor.shield ? 2 : 0;
+   186	
+   187	  return {
+   188	    level: body.level,
+   189	    proficiency_bonus: proficiencyBonusFor(body.level),
+   190	    hp_max: body.level * (6 + modifiers.con),
+   191	    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
+   192	    modifiers,
+   193	  };
+   194	}
+   195	
+   196	function monsterMultiplier(count: number): number | null {
+   197	  if (count <= 0) return null;
+   198	  if (count === 1) return 1;
+   199	  if (count === 2) return 1.5;
+   200	  if (count <= 6) return 2;
+   201	  if (count <= 10) return 2.5;
+   202	  if (count <= 14) return 3;
+   203	  return 4;
+   204	}
+   205	
+   206	function encounterAdjustedXp(body: unknown): JsonValue | null {
+   207	  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+   208	    return null;
+   209	  }
+   210	
+   211	  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+   212	  for (const member of body.party) {
+   213	    if (!isRecord(member) || !isInteger(member.level) || levelThresholds[member.level] === undefined) {
+   214	      return null;
+   215	    }
+   216	    const memberThresholds = levelThresholds[member.level];
+   217	    thresholds.easy += memberThresholds.easy;
+   218	    thresholds.medium += memberThresholds.medium;
+   219	    thresholds.hard += memberThresholds.hard;
+   220	    thresholds.deadly += memberThresholds.deadly;
+   221	  }
+   222	
+   223	  let baseXp = 0;
+   224	  let monsterCount = 0;
+   225	  for (const monster of body.monsters) {
+   226	    if (!isRecord(monster) || typeof monster.cr !== 'string' || !isInteger(monster.count) || monster.count <= 0) {
+   227	      return null;
+   228	    }
+   229	    const xp = monsterXp[monster.cr];
+   230	    if (xp === undefined) {
+   231	      return null;
+   232	    }
+   233	    baseXp += xp * monster.count;
+   234	    monsterCount += monster.count;
+   235	  }
+   236	
+   237	  const multiplier = monsterMultiplier(monsterCount);
+   238	  if (multiplier === null) {
+   239	    return null;
+   240	  }
+   241	
+   242	  const adjustedXp = baseXp * multiplier;
+   243	  let difficulty = 'trivial';
+   244	  if (adjustedXp >= thresholds.easy) difficulty = 'easy';
+   245	  if (adjustedXp >= thresholds.medium) difficulty = 'medium';
+   246	  if (adjustedXp >= thresholds.hard) difficulty = 'hard';
+   247	  if (adjustedXp >= thresholds.deadly) difficulty = 'deadly';
+   248	
+   249	  return {
+   250	    base_xp: baseXp,
+   251	    monster_count: monsterCount,
+   252	    multiplier,
+   253	    adjusted_xp: adjustedXp,
+   254	    difficulty,
+   255	    thresholds,
+   256	  };
+   257	}
+   258	
+   259	function initiativeOrder(body: unknown): JsonValue | null {
+   260	  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+   261	    return null;
+   262	  }
+   263	
+   264	  const combatants = body.combatants.map((combatant) => {
+   265	    if (!isRecord(combatant) || typeof combatant.name !== 'string' || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+   266	      return null;
+   267	    }
+   268	    return {
+   269	      name: combatant.name,
+   270	      dex: combatant.dex,
+   271	      score: combatant.roll + combatant.dex,
+   272	    };
+   273	  });
+   274	
+   275	  if (combatants.some((combatant) => combatant === null)) {
+   276	    return null;
+   277	  }
+   278	
+   279	  const order = combatants
+   280	    .toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name))
+   281	    .map((combatant) => ({ name: combatant!.name, score: combatant!.score }));
+   282	
+   283	  return { order };
+   284	}
+   285	
+   286	const combatSessions = new Map<string, CombatSession>();
+   287	
+   288	function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
+   289	  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
+   290	}
+   291	
+   292	function combatSessionResponse(session: CombatSession): JsonValue {
+   293	  const active = session.order[session.turn_index];
+   294	  return {
+   295	    id: session.id,
+   296	    round: session.round,
+   297	    turn_index: session.turn_index,
+   298	    active: { name: active.name, score: active.score },
+   299	    order: toPublicOrder(session.order),
+   300	  };
+   301	}
+   302	
+   303	function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
+   304	  const conditions: { [key: string]: JsonValue } = {};
+   305	  for (const [target, targetConditions] of session.conditions) {
+   306	    if (targetConditions.length > 0) {
+   307	      conditions[target] = targetConditions.map((condition) => ({
+   308	        condition: condition.condition,
+   309	        remaining_rounds: condition.remaining_rounds,
+   310	      }));
+   311	    }
+   312	  }
+   313	  return conditions;
+   314	}
+   315	
+   316	function createCombatSession(body: unknown): JsonValue | null {
+   317	  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
+   318	    return null;
+   319	  }
+   320	  if (combatSessions.has(body.id) || body.combatants.length === 0) {
+   321	    return null;
+   322	  }
+   323	
+   324	  const combatants = body.combatants.map((combatant) => {
+   325	    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+   326	      return null;
+   327	    }
+   328	    return {
+   329	      name: combatant.name,
+   330	      dex: combatant.dex,
+   331	      score: combatant.roll + combatant.dex,
+   332	    };
+   333	  });
+   334	
+   335	  if (combatants.some((combatant) => combatant === null)) {
+   336	    return null;
+   337	  }
+   338	
+   339	  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
+   340	  const conditions = new Map<string, CombatCondition[]>();
+   341	  for (const combatant of order) {
+   342	    conditions.set(combatant.name, []);
+   343	  }
+   344	
+   345	  const session: CombatSession = {
+   346	    id: body.id,
+   347	    round: 1,
+   348	    turn_index: 0,
+   349	    order,
+   350	    conditions,
+   351	  };
+   352	  combatSessions.set(session.id, session);
+   353	
+   354	  return combatSessionResponse(session);
+   355	}
+   356	
+   357	function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
+   358	  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
+   359	    return null;
+   360	  }
+   361	
+   362	  const targetConditions = session.conditions.get(body.target);
+   363	  if (targetConditions === undefined) {
+   364	    return null;
+   365	  }
+   366	
+   367	  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
+   368	  return {
+   369	    target: body.target,
+   370	    conditions: targetConditions.map((condition) => ({
+   371	      condition: condition.condition,
+   372	      remaining_rounds: condition.remaining_rounds,
+   373	    })),
+   374	  };
+   375	}
+   376	
+   377	function advanceCombatTurn(session: CombatSession): JsonValue {
+   378	  session.turn_index += 1;
+   379	  if (session.turn_index >= session.order.length) {
+   380	    session.turn_index = 0;
+
+exec
+/bin/zsh -lc 'git diff -- vite.config.ts run.sh package.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+exec
+/bin/zsh -lc "nl -ba vite.config.ts | sed -n '377,520p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+   377	function advanceCombatTurn(session: CombatSession): JsonValue {
+   378	  session.turn_index += 1;
+   379	  if (session.turn_index >= session.order.length) {
+   380	    session.turn_index = 0;
+   381	    session.round += 1;
+   382	  }
+   383	
+   384	  const active = session.order[session.turn_index];
+   385	  const activeConditions = session.conditions.get(active.name) ?? [];
+   386	  const remainingConditions = activeConditions
+   387	    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
+   388	    .filter((condition) => condition.remaining_rounds > 0);
+   389	  session.conditions.set(active.name, remainingConditions);
+   390	
+   391	  return {
+   392	    id: session.id,
+   393	    round: session.round,
+   394	    turn_index: session.turn_index,
+   395	    active: { name: active.name, score: active.score },
+   396	    conditions: publicConditions(session),
+   397	  };
+   398	}
+   399	
+   400	function dndApiPlugin(): Plugin {
+   401	  return {
+   402	    name: 'dnd-rest-api',
+   403	    configureServer(server) {
+   404	      server.middlewares.use(async (req, res, next) => {
+   405	        if (req.url === undefined || req.method === undefined) {
+   406	          next();
+   407	          return;
+   408	        }
+   409	
+   410	        const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+   411	        if (req.method === 'GET' && pathname === '/health') {
+   412	          sendJson(res, 200, { ok: true });
+   413	          return;
+   414	        }
+   415	
+   416	        if (pathname === '/v1/combat/sessions') {
+   417	          if (req.method !== 'POST') {
+   418	            sendJson(res, 405, { error: 'method_not_allowed' });
+   419	            return;
+   420	          }
+   421	
+   422	          try {
+   423	            const body = await readJson(req);
+   424	            const response = createCombatSession(body);
+   425	            if (response === null) {
+   426	              badRequest(res);
+   427	              return;
+   428	            }
+   429	            sendJson(res, 200, response);
+   430	          } catch {
+   431	            badRequest(res);
+   432	          }
+   433	          return;
+   434	        }
+   435	
+   436	        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
+   437	        if (combatConditionMatch !== null) {
+   438	          if (req.method !== 'POST') {
+   439	            sendJson(res, 405, { error: 'method_not_allowed' });
+   440	            return;
+   441	          }
+   442	
+   443	          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
+   444	          if (session === undefined) {
+   445	            notFound(res);
+   446	            return;
+   447	          }
+   448	
+   449	          try {
+   450	            const body = await readJson(req);
+   451	            const response = addCombatCondition(session, body);
+   452	            if (response === null) {
+   453	              badRequest(res);
+   454	              return;
+   455	            }
+   456	            sendJson(res, 200, response);
+   457	          } catch {
+   458	            badRequest(res);
+   459	          }
+   460	          return;
+   461	        }
+   462	
+   463	        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
+   464	        if (combatAdvanceMatch !== null) {
+   465	          if (req.method !== 'POST') {
+   466	            sendJson(res, 405, { error: 'method_not_allowed' });
+   467	            return;
+   468	          }
+   469	
+   470	          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
+   471	          if (session === undefined) {
+   472	            notFound(res);
+   473	            return;
+   474	          }
+   475	
+   476	          sendJson(res, 200, advanceCombatTurn(session));
+   477	          return;
+   478	        }
+   479	
+   480	        const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+   481	          '/v1/dice/stats': diceStats,
+   482	          '/v1/checks/ability': abilityCheck,
+   483	          '/v1/characters/ability-modifier': abilityModifier,
+   484	          '/v1/characters/proficiency': proficiencyBonus,
+   485	          '/v1/characters/derived-stats': derivedStats,
+   486	          '/v1/encounters/adjusted-xp': encounterAdjustedXp,
+   487	          '/v1/initiative/order': initiativeOrder,
+   488	        };
+   489	
+   490	        const handler = handlers[pathname];
+   491	        if (handler === undefined) {
+   492	          next();
+   493	          return;
+   494	        }
+   495	
+   496	        if (req.method !== 'POST') {
+   497	          sendJson(res, 405, { error: 'method_not_allowed' });
+   498	          return;
+   499	        }
+   500	
+   501	        try {
+   502	          const body = await readJson(req);
+   503	          const response = handler(body);
+   504	          if (response === null) {
+   505	            badRequest(res);
+   506	            return;
+   507	          }
+   508	          sendJson(res, 200, response);
+   509	        } catch {
+   510	          badRequest(res);
+   511	        }
+   512	      });
+   513	    },
+   514	  };
+   515	}
+   516	
+   517	export default defineConfig({
+   518	  plugins: [react(), dndApiPlugin()],
+   519	  server: {
+   520	    host: '127.0.0.1',
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+codex
+Implemented the combat-state stage in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts:286).
+
+Added:
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+
+State is in-memory, initiative sorting follows the requested tie-breakers, turn advancement decrements only the newly active combatant’s conditions, and unknown session IDs return `404`.
+
+Verification:
+- `./node_modules/.bin/tsc --noEmit` passes.
+- `run.sh` already starts Vite in the foreground on `127.0.0.1` using `$PORT`.
+- I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 1b793cbf83dab8addb8048116b9041ddeedf2941..f2d9159e46bb78d0c231cf07e9ae3d7a7d3f5e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T172500Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -4,6 +4,25 @@
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
++type InitiativeEntry = {
++  name: string;
++  dex: number;
++  score: number;
++};
++
++type CombatCondition = {
++  condition: string;
++  remaining_rounds: number;
++};
++
++type CombatSession = {
++  id: string;
++  round: number;
++  turn_index: number;
++  order: InitiativeEntry[];
++  conditions: Map<string, CombatCondition[]>;
++};
++
+ const monsterXp: Record<string, number> = {
+   '0': 10,
+   '1/8': 25,
+@@ -32,6 +51,10 @@
+   sendJson(res, 400, { error: 'bad_request' });
+ }
+ 
++function notFound(res: ServerResponse): void {
++  sendJson(res, 404, { error: 'not_found' });
++}
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value);
+ }
+@@ -260,6 +283,120 @@
+   return { order };
+ }
+ 
++const combatSessions = new Map<string, CombatSession>();
++
++function toPublicOrder(order: InitiativeEntry[]): JsonValue[] {
++  return order.map((combatant) => ({ name: combatant.name, score: combatant.score }));
++}
++
++function combatSessionResponse(session: CombatSession): JsonValue {
++  const active = session.order[session.turn_index];
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    order: toPublicOrder(session.order),
++  };
++}
++
++function publicConditions(session: CombatSession): { [key: string]: JsonValue } {
++  const conditions: { [key: string]: JsonValue } = {};
++  for (const [target, targetConditions] of session.conditions) {
++    if (targetConditions.length > 0) {
++      conditions[target] = targetConditions.map((condition) => ({
++        condition: condition.condition,
++        remaining_rounds: condition.remaining_rounds,
++      }));
++    }
++  }
++  return conditions;
++}
++
++function createCombatSession(body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.id !== 'string' || body.id.length === 0 || !Array.isArray(body.combatants)) {
++    return null;
++  }
++  if (combatSessions.has(body.id) || body.combatants.length === 0) {
++    return null;
++  }
++
++  const combatants = body.combatants.map((combatant) => {
++    if (!isRecord(combatant) || typeof combatant.name !== 'string' || combatant.name.length === 0 || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
++      return null;
++    }
++    return {
++      name: combatant.name,
++      dex: combatant.dex,
++      score: combatant.roll + combatant.dex,
++    };
++  });
++
++  if (combatants.some((combatant) => combatant === null)) {
++    return null;
++  }
++
++  const order = combatants.toSorted((a, b) => b!.score - a!.score || b!.dex - a!.dex || a!.name.localeCompare(b!.name)) as InitiativeEntry[];
++  const conditions = new Map<string, CombatCondition[]>();
++  for (const combatant of order) {
++    conditions.set(combatant.name, []);
++  }
++
++  const session: CombatSession = {
++    id: body.id,
++    round: 1,
++    turn_index: 0,
++    order,
++    conditions,
++  };
++  combatSessions.set(session.id, session);
++
++  return combatSessionResponse(session);
++}
++
++function addCombatCondition(session: CombatSession, body: unknown): JsonValue | null {
++  if (!isRecord(body) || typeof body.target !== 'string' || typeof body.condition !== 'string' || !isInteger(body.duration_rounds) || body.duration_rounds <= 0) {
++    return null;
++  }
++
++  const targetConditions = session.conditions.get(body.target);
++  if (targetConditions === undefined) {
++    return null;
++  }
++
++  targetConditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
++  return {
++    target: body.target,
++    conditions: targetConditions.map((condition) => ({
++      condition: condition.condition,
++      remaining_rounds: condition.remaining_rounds,
++    })),
++  };
++}
++
++function advanceCombatTurn(session: CombatSession): JsonValue {
++  session.turn_index += 1;
++  if (session.turn_index >= session.order.length) {
++    session.turn_index = 0;
++    session.round += 1;
++  }
++
++  const active = session.order[session.turn_index];
++  const activeConditions = session.conditions.get(active.name) ?? [];
++  const remainingConditions = activeConditions
++    .map((condition) => ({ condition: condition.condition, remaining_rounds: condition.remaining_rounds - 1 }))
++    .filter((condition) => condition.remaining_rounds > 0);
++  session.conditions.set(active.name, remainingConditions);
++
++  return {
++    id: session.id,
++    round: session.round,
++    turn_index: session.turn_index,
++    active: { name: active.name, score: active.score },
++    conditions: publicConditions(session),
++  };
++}
++
+ function dndApiPlugin(): Plugin {
+   return {
+     name: 'dnd-rest-api',
+@@ -276,6 +413,70 @@
+           return;
+         }
+ 
++        if (pathname === '/v1/combat/sessions') {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = createCombatSession(body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatConditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(pathname);
++        if (combatConditionMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatConditionMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          try {
++            const body = await readJson(req);
++            const response = addCombatCondition(session, body);
++            if (response === null) {
++              badRequest(res);
++              return;
++            }
++            sendJson(res, 200, response);
++          } catch {
++            badRequest(res);
++          }
++          return;
++        }
++
++        const combatAdvanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(pathname);
++        if (combatAdvanceMatch !== null) {
++          if (req.method !== 'POST') {
++            sendJson(res, 405, { error: 'method_not_allowed' });
++            return;
++          }
++
++          const session = combatSessions.get(decodeURIComponent(combatAdvanceMatch[1]));
++          if (session === undefined) {
++            notFound(res);
++            return;
++          }
++
++          sendJson(res, 200, advanceCombatTurn(session));
++          return;
++        }
++
+         const handlers: Record<string, (body: unknown) => JsonValue | null> = {
+           '/v1/dice/stats': diceStats,
+           '/v1/checks/ability': abilityCheck,
+
+tokens used
+24,623

@@ -1,0 +1,9 @@
+The fix is complete. 🐉✨
+
+**Root cause:** In the shared-state combat sequence, the last test (`combat-advance-expired-removed`) advances to fighter's *second* turn, where `blessed` decrements 1→0 and is removed. The evaluator expects `conditions.fighter` to remain present as an empty list `[]` — a combatant that *once had* a condition keeps its key even after all conditions expire, whereas combatants that never had one (rogue, mage) stay absent. The old `_conditions_map` dropped any combatant with an empty list, deleting the `fighter` key entirely.
+
+**Fix (minimal, deterministic):**
+- `combat_add_condition` now stamps `combatant["had_condition"] = True`.
+- `_conditions_map` includes a combatant if it currently has conditions **or** ever had one — so `fighter` renders as `[]` after expiry while rogue/mage stay out.
+
+This changes output only for the final test's edge case (an expired-to-empty combatant); every prior test's map is untouched because fighter always had non-empty conditions there, so no previously-passing behavior regresses. `run.sh` is unchanged and still starts Flask in the foreground on `127.0.0.1:$PORT`. Ready to go, Chef! 🎲

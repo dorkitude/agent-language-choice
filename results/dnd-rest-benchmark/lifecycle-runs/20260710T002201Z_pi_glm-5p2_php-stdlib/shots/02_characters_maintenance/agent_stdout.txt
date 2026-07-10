@@ -1,0 +1,20 @@
+Done, Chef! 🎲✨ Here's the summary of what I added to the existing D&D REST API.
+
+## Changes
+
+**`index.php`** — added two helper functions and three new POST routes, with no changes to existing endpoints:
+
+- **`ability_modifier(int $score): int`** — `(int) floor(($score - 10) / 2)`. PHP's `floor()` rounds toward −∞, so score 9 → `floor(-0.5)` → **−1** ✓
+- **`proficiency_bonus(int $level): int`** — explicit `match(true)` tier table (1-4→2, 5-8→3, 9-12→4, 13-16→5, 17-20→6)
+- **`POST /v1/characters/ability-modifier`** — validates `score` is an int in 1–30 (rejects floats/strings/missing/out-of-range with `400`)
+- **`POST /v1/characters/proficiency`** — validates `level` is an int in 1–20 (else `400`)
+- **`POST /v1/characters/derived-stats`** — validates `level` (1–20), all six abilities (1–30 each), and `armor` (`base`/`dex_cap` ints), then computes `hp_max = level * (6 + con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` (shield = 2 when `armor.shield === true`)
+
+## Verification
+
+- Spec example for derived-stats returns exactly `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}` ✓
+- Edge cases checked: score 1→−5, score 30→10, all proficiency tiers, dex-cap clamping, shield on/off, and all invalid inputs return `400`
+- **Regression:** all 8 core endpoints (health, dice stats, ability checks, encounter XP, initiative order, 404) still behave identically ✓
+- `php -l index.php` clean; `run.sh` unchanged and starts the server in the foreground on `127.0.0.1:$PORT`
+
+No Composer packages added — pure PHP 8.5.8 stdlib. 🛡️

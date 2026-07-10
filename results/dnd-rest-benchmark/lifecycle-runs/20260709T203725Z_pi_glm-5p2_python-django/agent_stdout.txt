@@ -1,0 +1,28 @@
+Done, Chef! 🎉
+
+## Summary
+
+**Root cause:** In `combat_advance` (dndsite/views.py), when a combatant's conditions all expired (remaining_rounds hit 0), the code *popped* the combatant's key from the `conditions` map entirely:
+
+```python
+if conds:
+    session["conditions"][active_name] = conds
+else:
+    session["conditions"].pop(active_name, None)   # ← removed the key
+```
+
+So after the fighter's `blessed` condition (duration 2) ticked down on its second turn, the response became `conditions: {}` — but the `combat-advance-expired-removed` test asserts the `fighter` key is still present (with an empty list), confirming the condition was *removed from the list* while the target remains.
+
+**Fix:** Keep the combatant's entry with an empty list when their conditions expire, but only if they previously had conditions (so combatants like mage/rogue who never had conditions don't get spurious empty entries):
+
+```python
+had_conditions = active_name in session["conditions"]
+conds = session["conditions"].get(active_name, [])
+for c in conds:
+    c["remaining_rounds"] -= 1
+conds = [c for c in conds if c["remaining_rounds"] > 0]
+if had_conditions:
+    session["conditions"][active_name] = conds
+```
+
+This preserves all prior-stage behavior — verified by the full cumulative suite going from 19/20 → **20/20 PASS** 🐉⚔️. `./run.sh` is unchanged and ready.

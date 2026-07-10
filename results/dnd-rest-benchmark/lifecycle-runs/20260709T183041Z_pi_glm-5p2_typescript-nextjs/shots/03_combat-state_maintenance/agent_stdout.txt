@@ -1,0 +1,23 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I inherited the existing Next.js 16.2.10 D&D REST API and added the **Stateful Combat** stage on top of it, preserving all prior core + character endpoints.
+
+### New files
+- **`app/v1/combat/state.ts`** — in-memory session store. Uses a `Map` attached to `globalThis` so all route bundles share one singleton for the lifetime of the `next start` process.
+- **`app/v1/combat/sessions/route.ts`** — `POST /v1/combat/sessions`: validates `id` + combatants, computes `score = roll + dex`, sorts by score desc → dex desc → name asc, starts at `round=1, turn_index=0`, returns `active` + `order`.
+- **`app/v1/combat/sessions/[id]/conditions/route.ts`** — `POST .../{id}/conditions`: 404 on unknown session, 400 on unknown target / bad condition / non-positive-integer `duration_rounds`; appends to the named combatant's conditions and returns the full list.
+- **`app/v1/combat/sessions/[id]/advance/route.ts`** — `POST .../{id}/advance`: 404 on unknown session; advances `turn_index`, wraps to 0 and increments `round`; at the start of the newly-active combatant's turn decrements *only that combatant's* conditions and removes any that hit 0.
+
+### Key correctness details
+- Next.js 16 `params` is a `Promise`, so handlers `await params` before use.
+- `export const dynamic = 'force-dynamic'` on all combat routes (POST + in-memory state).
+- Condition decrement fires **only** for the active combatant — verified against the spec's example (advancing to `mage` leaves `fighter`'s `blessed` at 2).
+- Round increments on the end→0 wrap.
+- Invalid input → 400; unknown session → 404.
+
+### Verification
+- `next build` succeeds; all three new routes register as dynamic (`ƒ`), prior routes untouched.
+- End-to-end smoke test reproduced the spec's example responses byte-for-byte and confirmed 404/400 error paths (server since stopped).
+- `run.sh` unchanged and executable: rebuilds then `exec next start -H 127.0.0.1 -p "$PORT"` in the foreground. No server left running. 🚀

@@ -1,0 +1,24 @@
+Everything checks out, Chef 🎲✨
+
+## Summary
+
+I added the **Stage 1: Character Rules** endpoints to `app.py` while preserving all 8 core-stage routes untouched.
+
+### New endpoints (all under `/v1/characters/`)
+
+1. **`POST /ability-modifier`** — validates `score` is an int in `1..30` (rejecting bools/strings), returns `{"score", "modifier"}` where `modifier = (score - 10) // 2`. Python's `//` floors toward −∞, so score `9` → `−1` exactly as the spec requires.
+
+2. **`POST /proficiency`** — validates `level` is an int in `1..20`, returns `{"level", "proficiency_bonus"}` computed as `2 + (level - 1) // 4`, which cleanly maps the four-level tiers (1‑4→2, 5‑8→3, … 17‑20→6).
+
+3. **`POST /derived-stats`** — validates `level`, the six abilities (each `1..30`), and the `armor` object (`base`/`dex_cap` ints, `shield` bool). Reuses the same `ability_modifier` and `proficiency_bonus` helpers, then computes:
+   - `hp_max = level * (6 + con_modifier)`
+   - `armor_class = base + min(dex_modifier, dex_cap) + (2 if shield else 0)`
+
+### Verification
+
+Smoke-tested every endpoint with the Flask test client:
+- **Core regression:** all 8 existing tests still return correct results (`health`, `dice/stats`, `checks/ability`, `encounters/adjusted-xp`, `initiative/order`).
+- **Spec examples reproduced exactly:** score 9 → `−1`; level 9 → `4`; the full derived-stats example → `proficiency_bonus 3, hp_max 35, armor_class 16`, and all six modifiers `{str:3, dex:2, con:1, int:−1, wis:1, cha:0}`.
+- **Validation:** out-of-range scores/levels, bool/string scores, and missing abilities all return `400`.
+
+`run.sh` is unchanged and starts the server in the foreground on `127.0.0.1:$PORT` — ready to go. 🚀

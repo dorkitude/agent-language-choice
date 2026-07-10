@@ -1,0 +1,17 @@
+Done! 🐉 Combat state stage is complete and `./run.sh` is ready.
+
+## What I added
+
+Three new endpoints in `index.php`, layered onto the existing Symfony Routing dispatch without touching any prior handler:
+
+- **`POST /v1/combat/sessions`** — creates a session, computes `score = roll + dex`, sorts by score↓ / dex↓ / name↑, starts at `round=1`, `turn_index=0`. Rejects duplicate `id` and malformed input with `400`.
+- **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition to a named combatant. `404` for unknown session, `400` for unknown target / non-positive duration.
+- **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index`, bumps `round` on wrap, and decrements only the **newly-active** combatant's conditions (removing any that hit `0`).
+
+## Key design decision 🔑
+
+`php -S` re-executes the script per request, so PHP globals don't survive between calls. I persisted session state to a temp file keyed by **`getmypid()`** — the built-in server is a single long-lived process, so the PID is constant across requests within one run and unique per run. That gives exactly the spec's requirement: **state lasts the server-process lifetime**, and a fresh eval run starts with clean state (no cross-run contamination).
+
+## Verified end-to-end
+
+Create → matches the spec's example byte-for-byte. Condition decrement traced through 5 advances: `blessed` ticks `2→1` only on fighter's turns and gets removed at `0`, while inactive combatants' conditions hold steady. Error paths (`400` dup/bad-duration/bad-target, `404` unknown session) all correct, and `/health` + core routes still respond. `run.sh` is unchanged — foreground `php -S 127.0.0.1:$PORT`.

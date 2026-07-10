@@ -1,0 +1,2903 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f48d8-7a70-78e0-b2bb-8bdaa5fc997c
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Ruby stdlib server and tests/scripts first so the combat additions fit the current API shape without changing earlier behavior.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ../20260709T201750Z_codex_gpt-5.5_python-django/
+?? ../20260709T202528Z_pi_kimi-k2p7-code_python-django/
+?? ../20260709T203725Z_pi_glm-5p2_python-django/
+?? ../20260709T205305Z_claude_opus_java-stdlib/
+?? ../20260709T205724Z_claude_sonnet_java-stdlib/
+?? ../20260709T205729Z_codex_gpt-5.5_java-stdlib/
+?? ../20260709T210607Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260709T211756Z_pi_glm-5p2_java-stdlib/
+?? ../20260709T214310Z_claude_opus_ruby-stdlib/
+?? ../20260709T214315Z_claude_sonnet_ruby-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+agent_last_message.txt
+setup.json
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+run.sh
+server_stdout.txt
+lifecycle-result.json
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+server.rb
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+
+codex
+The current worktree has unrelated changes outside this run directory; I’ll leave those alone and work only in this workspace. Next I’m reading the server and run script to locate the routing style.
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-core-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:53393",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "socket"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+def integer?(value)
+  value.is_a?(Integer)
+end
+
+def boolean?(value)
+  value == true || value == false
+end
+
+def require_integer_in_range(value, range, name)
+  raise ArgumentError, "invalid #{name}" unless integer?(value) && range.cover?(value)
+
+  value
+end
+
+def multiplier_for(count)
+  case count
+  when 0 then 1
+  when 1 then 1
+  when 2 then 1.5
+  when 3..6 then 2
+  when 7..10 then 2.5
+  when 11..14 then 3
+  else 4
+  end
+end
+
+def format_number(value)
+  value.is_a?(Float) && value == value.to_i ? value.to_i : value
+end
+
+def difficulty_for(adjusted_xp, thresholds)
+  %w[deadly hard medium easy].each do |name|
+    return name if adjusted_xp >= thresholds.fetch(name)
+  end
+  "trivial"
+end
+
+def dice_stats(data)
+  expression = data["expression"]
+  match = /\A([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?\z/.match(expression.to_s)
+  raise ArgumentError, "invalid dice expression" unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError, "invalid dice expression" unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  min = count + modifier
+  max = (count * sides) + modifier
+  average = (min + max) / 2.0
+
+  {
+    "dice_count" => count,
+    "sides" => sides,
+    "modifier" => modifier,
+    "min" => min,
+    "max" => max,
+    "average" => format_number(average)
+  }
+end
+
+def ability_check(data)
+  roll = data["roll"]
+  modifier = data["modifier"]
+  dc = data["dc"]
+  raise ArgumentError, "invalid ability check" unless [roll, modifier, dc].all? { |value| integer?(value) }
+
+  total = roll + modifier
+  {
+    "total" => total,
+    "success" => total >= dc,
+    "margin" => total - dc
+  }
+end
+
+def ability_modifier_for(score)
+  ((score - 10) / 2.0).floor
+end
+
+def ability_modifier(data)
+  score = require_integer_in_range(data["score"], 1..30, "ability score")
+  { "score" => score, "modifier" => ability_modifier_for(score) }
+end
+
+def proficiency_bonus_for(level)
+  2 + ((level - 1) / 4)
+end
+
+def proficiency(data)
+  level = require_integer_in_range(data["level"], 1..20, "level")
+  { "level" => level, "proficiency_bonus" => proficiency_bonus_for(level) }
+end
+
+def derived_stats(data)
+  level = require_integer_in_range(data["level"], 1..20, "level")
+  abilities = data["abilities"]
+  armor = data["armor"]
+  raise ArgumentError, "invalid abilities" unless abilities.is_a?(Hash)
+  raise ArgumentError, "invalid armor" unless armor.is_a?(Hash)
+
+  modifiers = {}
+  %w[str dex con int wis cha].each do |ability|
+    score = require_integer_in_range(abilities[ability], 1..30, "ability score")
+    modifiers[ability] = ability_modifier_for(score)
+  end
+
+  armor_base = armor["base"]
+  dex_cap = armor["dex_cap"]
+  shield = armor["shield"]
+  raise ArgumentError, "invalid armor" unless integer?(armor_base) && integer?(dex_cap) && boolean?(shield)
+
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus_for(level),
+    "hp_max" => level * (6 + modifiers.fetch("con")),
+    "armor_class" => armor_base + [modifiers.fetch("dex"), dex_cap].min + (shield ? 2 : 0),
+    "modifiers" => modifiers
+  }
+end
+
+def adjusted_xp(data)
+  party = data["party"]
+  monsters = data["monsters"]
+  raise ArgumentError, "invalid encounter" unless party.is_a?(Array) && monsters.is_a?(Array)
+
+  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
+  party.each do |member|
+    level = member.is_a?(Hash) ? member["level"] : nil
+    member_thresholds = LEVEL_THRESHOLDS[level]
+    raise ArgumentError, "unsupported party level" unless member_thresholds
+
+    thresholds.each_key { |name| thresholds[name] += member_thresholds.fetch(name) }
+  end
+
+  base_xp = 0
+  monster_count = 0
+  monsters.each do |monster|
+    raise ArgumentError, "invalid monster" unless monster.is_a?(Hash)
+
+    cr = monster["cr"].to_s
+    count = monster["count"]
+    xp = CR_XP[cr]
+    raise ArgumentError, "unsupported challenge rating" unless xp && integer?(count) && count.positive?
+
+    base_xp += xp * count
+    monster_count += count
+  end
+
+  multiplier = multiplier_for(monster_count)
+  adjusted = base_xp * multiplier
+  adjusted = format_number(adjusted)
+
+  {
+    "base_xp" => base_xp,
+    "monster_count" => monster_count,
+    "multiplier" => format_number(multiplier),
+    "adjusted_xp" => adjusted,
+    "difficulty" => difficulty_for(adjusted, thresholds),
+    "thresholds" => thresholds
+  }
+end
+
+def initiative_order(data)
+  combatants = data["combatants"]
+  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+
+  order = combatants.map do |combatant|
+    raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError, "invalid combatant" unless name.is_a?(String) && integer?(dex) && integer?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  {
+    "order" => order
+      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+  }
+end
+
+def route(method, path, body)
+  return [200, { "ok" => true }] if method == "GET" && path == "/health"
+
+  data = body.empty? ? {} : JSON.parse(body)
+  case [method, path]
+  when ["POST", "/v1/dice/stats"]
+    [200, dice_stats(data)]
+  when ["POST", "/v1/checks/ability"]
+    [200, ability_check(data)]
+  when ["POST", "/v1/characters/ability-modifier"]
+    [200, ability_modifier(data)]
+  when ["POST", "/v1/characters/proficiency"]
+    [200, proficiency(data)]
+  when ["POST", "/v1/characters/derived-stats"]
+    [200, derived_stats(data)]
+  when ["POST", "/v1/encounters/adjusted-xp"]
+    [200, adjusted_xp(data)]
+  when ["POST", "/v1/initiative/order"]
+    [200, initiative_order(data)]
+  else
+    [404, { "error" => "not found" }]
+  end
+rescue JSON::ParserError, ArgumentError, TypeError, NoMethodError
+  [400, { "error" => "bad request" }]
+end
+
+def read_request(socket)
+  request_line = socket.gets&.chomp
+  return nil unless request_line && !request_line.empty?
+
+  headers = {}
+  while (line = socket.gets)
+    line = line.chomp
+    break if line.empty?
+
+    name, value = line.split(":", 2)
+    headers[name.downcase] = value.strip if name && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? socket.read(length).to_s : ""
+  method, target, = request_line.split(" ")
+  path = target.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+def write_response(socket, status, payload)
+  body = JSON.generate(payload)
+  reason = {
+    200 => "OK",
+    400 => "Bad Request",
+    404 => "Not Found",
+    500 => "Internal Server Error"
+
+exec
+/bin/zsh -lc "sed -n '1,260p' dndeval-characters-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:53471",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+The server is a small TCP HTTP handler with route functions in one file. I’ve got enough context; I’m adding in-memory session storage plus the three combat routes, keeping the existing JSON error behavior.
+exec
+/bin/zsh -lc "sed -n '260,520p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+    500 => "Internal Server Error"
+  }.fetch(status, "OK")
+
+  socket.write(
+    "HTTP/1.1 #{status} #{reason}\r\n" \
+    "Content-Type: application/json\r\n" \
+    "Content-Length: #{body.bytesize}\r\n" \
+    "Connection: close\r\n" \
+    "\r\n" \
+    "#{body}"
+  )
+end
+
+def run_server
+  port = Integer(ENV.fetch("PORT"))
+  server = TCPServer.new("127.0.0.1", port)
+
+  trap("INT") { server.close }
+  trap("TERM") { server.close }
+
+  loop do
+    client = server.accept
+    request = read_request(client)
+    status, payload = request ? route(*request) : [400, { "error" => "bad request" }]
+    write_response(client, status, payload)
+  rescue IOError, SystemCallError
+    break if server.closed?
+  ensure
+    client&.close
+  end
+end
+
+run_server if $PROGRAM_NAME == __FILE__
+
+codex
+I’m editing `server.rb` now. The added state will live in a process-global hash, and response formatting will be shared so create and advance report the same initiative shape.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..2c3ba3d8bbdc39b4fb953fb1b81b7d536935653f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array) && !combatants.empty?
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,105 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active,
++    "order" => session.fetch("order")
++  }
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
+ 
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
++
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..2c3ba3d8bbdc39b4fb953fb1b81b7d536935653f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array) && !combatants.empty?
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,105 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active,
++    "order" => session.fetch("order")
++  }
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
+ 
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
++
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+codex
+I noticed one preservation risk while patching: the existing initiative endpoint accepted an empty combatant list. I’m adjusting the shared helper so only combat sessions require at least one combatant, while `/v1/initiative/order` keeps its old behavior.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..ede12732dc3805258cb6834795093bd05a269942
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active,
++    "order" => session.fetch("order")
++  }
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..ede12732dc3805258cb6834795093bd05a269942
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active,
++    "order" => session.fetch("order")
++  }
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+codex
+The implementation is in place. I’m going to verify it without starting the HTTP server: Ruby syntax check plus direct calls into the route function, since `server.rb` only runs the listener when executed as the main file.
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc "ruby -r ./server -r json -e 'create={\"id\"=>\"enc-1\",\"combatants\"=>[{\"name\"=>\"fighter\",\"dex\"=>1,\"roll\"=>13},{\"name\"=>\"rogue\",\"dex\"=>3,\"roll\"=>14},{\"name\"=>\"mage\",\"dex\"=>2,\"roll\"=>14}]}; p route(\"POST\",\"/v1/combat/sessions\",JSON.generate(create)); p route(\"POST\",\"/v1/combat/sessions/enc-1/conditions\",JSON.generate({\"target\"=>\"fighter\",\"condition\"=>\"blessed\",\"duration_rounds\"=>2})); p route(\"POST\",\"/v1/combat/sessions/enc-1/advance\",\"\"); p route(\"POST\",\"/v1/combat/sessions/enc-1/advance\",\"\"); p route(\"POST\",\"/v1/combat/sessions/enc-1/advance\",\"\")'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+[200, {"id" => "enc-1", "round" => 1, "turn_index" => 0, "active" => {"name" => "rogue", "score" => 17}, "order" => [{"name" => "rogue", "score" => 17}, {"name" => "mage", "score" => 16}, {"name" => "fighter", "score" => 14}]}]
+[200, {"target" => "fighter", "conditions" => [{"condition" => "blessed", "remaining_rounds" => 2}]}]
+[200, {"id" => "enc-1", "round" => 1, "turn_index" => 1, "active" => {"name" => "mage", "score" => 16}, "order" => [{"name" => "rogue", "score" => 17}, {"name" => "mage", "score" => 16}, {"name" => "fighter", "score" => 14}], "conditions" => {"fighter" => [{"condition" => "blessed", "remaining_rounds" => 2}]}}]
+[200, {"id" => "enc-1", "round" => 1, "turn_index" => 2, "active" => {"name" => "fighter", "score" => 14}, "order" => [{"name" => "rogue", "score" => 17}, {"name" => "mage", "score" => 16}, {"name" => "fighter", "score" => 14}], "conditions" => {"fighter" => [{"condition" => "blessed", "remaining_rounds" => 1}]}}]
+[200, {"id" => "enc-1", "round" => 2, "turn_index" => 0, "active" => {"name" => "rogue", "score" => 17}, "order" => [{"name" => "rogue", "score" => 17}, {"name" => "mage", "score" => 16}, {"name" => "fighter", "score" => 14}], "conditions" => {"fighter" => [{"condition" => "blessed", "remaining_rounds" => 1}]}}]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..ede12732dc3805258cb6834795093bd05a269942
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active,
++    "order" => session.fetch("order")
++  }
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+codex
+The direct route checks show the turn/round and condition countdown working. One compatibility detail: the advance spec’s response shape does not include `order`, so I’m tightening that response to match the requested shape exactly while leaving create unchanged.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+codex
+I’m doing one more direct verification pass after the response-shape adjustment, including unknown-session and invalid-condition cases.
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc "ruby -r ./server -r json -e 'create={\"id\"=>\"enc-1\",\"combatants\"=>[{\"name\"=>\"fighter\",\"dex\"=>1,\"roll\"=>13},{\"name\"=>\"rogue\",\"dex\"=>3,\"roll\"=>14},{\"name\"=>\"mage\",\"dex\"=>2,\"roll\"=>14}]}; p route(\"POST\",\"/v1/combat/sessions\",JSON.generate(create)); p route(\"POST\",\"/v1/combat/sessions/missing/advance\",\"\"); p route(\"POST\",\"/v1/combat/sessions/enc-1/conditions\",JSON.generate({\"target\"=>\"fighter\",\"condition\"=>\"blessed\",\"duration_rounds\"=>2})); p route(\"POST\",\"/v1/combat/sessions/enc-1/conditions\",JSON.generate({\"target\"=>\"cleric\",\"condition\"=>\"blessed\",\"duration_rounds\"=>2})); 3.times { p route(\"POST\",\"/v1/combat/sessions/enc-1/advance\",\"\") }'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+[200, {"id" => "enc-1", "round" => 1, "turn_index" => 0, "active" => {"name" => "rogue", "score" => 17}, "order" => [{"name" => "rogue", "score" => 17}, {"name" => "mage", "score" => 16}, {"name" => "fighter", "score" => 14}]}]
+[404, {"error" => "not found"}]
+[200, {"target" => "fighter", "conditions" => [{"condition" => "blessed", "remaining_rounds" => 2}]}]
+[400, {"error" => "bad request"}]
+[200, {"id" => "enc-1", "round" => 1, "turn_index" => 1, "active" => {"name" => "mage", "score" => 16}, "conditions" => {"fighter" => [{"condition" => "blessed", "remaining_rounds" => 2}]}}]
+[200, {"id" => "enc-1", "round" => 1, "turn_index" => 2, "active" => {"name" => "fighter", "score" => 14}, "conditions" => {"fighter" => [{"condition" => "blessed", "remaining_rounds" => 1}]}}]
+[200, {"id" => "enc-1", "round" => 2, "turn_index" => 0, "active" => {"name" => "rogue", "score" => 17}, "conditions" => {"fighter" => [{"condition" => "blessed", "remaining_rounds" => 1}]}}]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+codex
+The verification passed without launching a listener. I’m checking the final diff and `run.sh` permissions so the evaluator can start the foreground server through the expected entrypoint.
+exec
+/bin/zsh -lc 'git diff -- server.rb run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  53 Jul  9 14:43 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+exec
+/bin/zsh -lc "sed -n '1,260p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "socket"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+COMBAT_SESSIONS = {}
+
+def integer?(value)
+  value.is_a?(Integer)
+end
+
+def boolean?(value)
+  value == true || value == false
+end
+
+def require_integer_in_range(value, range, name)
+  raise ArgumentError, "invalid #{name}" unless integer?(value) && range.cover?(value)
+
+  value
+end
+
+def multiplier_for(count)
+  case count
+  when 0 then 1
+  when 1 then 1
+  when 2 then 1.5
+  when 3..6 then 2
+  when 7..10 then 2.5
+  when 11..14 then 3
+  else 4
+  end
+end
+
+def format_number(value)
+  value.is_a?(Float) && value == value.to_i ? value.to_i : value
+end
+
+def difficulty_for(adjusted_xp, thresholds)
+  %w[deadly hard medium easy].each do |name|
+    return name if adjusted_xp >= thresholds.fetch(name)
+  end
+  "trivial"
+end
+
+def dice_stats(data)
+  expression = data["expression"]
+  match = /\A([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?\z/.match(expression.to_s)
+  raise ArgumentError, "invalid dice expression" unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError, "invalid dice expression" unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  min = count + modifier
+  max = (count * sides) + modifier
+  average = (min + max) / 2.0
+
+  {
+    "dice_count" => count,
+    "sides" => sides,
+    "modifier" => modifier,
+    "min" => min,
+    "max" => max,
+    "average" => format_number(average)
+  }
+end
+
+def ability_check(data)
+  roll = data["roll"]
+  modifier = data["modifier"]
+  dc = data["dc"]
+  raise ArgumentError, "invalid ability check" unless [roll, modifier, dc].all? { |value| integer?(value) }
+
+  total = roll + modifier
+  {
+    "total" => total,
+    "success" => total >= dc,
+    "margin" => total - dc
+  }
+end
+
+def ability_modifier_for(score)
+  ((score - 10) / 2.0).floor
+end
+
+def ability_modifier(data)
+  score = require_integer_in_range(data["score"], 1..30, "ability score")
+  { "score" => score, "modifier" => ability_modifier_for(score) }
+end
+
+def proficiency_bonus_for(level)
+  2 + ((level - 1) / 4)
+end
+
+def proficiency(data)
+  level = require_integer_in_range(data["level"], 1..20, "level")
+  { "level" => level, "proficiency_bonus" => proficiency_bonus_for(level) }
+end
+
+def derived_stats(data)
+  level = require_integer_in_range(data["level"], 1..20, "level")
+  abilities = data["abilities"]
+  armor = data["armor"]
+  raise ArgumentError, "invalid abilities" unless abilities.is_a?(Hash)
+  raise ArgumentError, "invalid armor" unless armor.is_a?(Hash)
+
+  modifiers = {}
+  %w[str dex con int wis cha].each do |ability|
+    score = require_integer_in_range(abilities[ability], 1..30, "ability score")
+    modifiers[ability] = ability_modifier_for(score)
+  end
+
+  armor_base = armor["base"]
+  dex_cap = armor["dex_cap"]
+  shield = armor["shield"]
+  raise ArgumentError, "invalid armor" unless integer?(armor_base) && integer?(dex_cap) && boolean?(shield)
+
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus_for(level),
+    "hp_max" => level * (6 + modifiers.fetch("con")),
+    "armor_class" => armor_base + [modifiers.fetch("dex"), dex_cap].min + (shield ? 2 : 0),
+    "modifiers" => modifiers
+  }
+end
+
+def adjusted_xp(data)
+  party = data["party"]
+  monsters = data["monsters"]
+  raise ArgumentError, "invalid encounter" unless party.is_a?(Array) && monsters.is_a?(Array)
+
+  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
+  party.each do |member|
+    level = member.is_a?(Hash) ? member["level"] : nil
+    member_thresholds = LEVEL_THRESHOLDS[level]
+    raise ArgumentError, "unsupported party level" unless member_thresholds
+
+    thresholds.each_key { |name| thresholds[name] += member_thresholds.fetch(name) }
+  end
+
+  base_xp = 0
+  monster_count = 0
+  monsters.each do |monster|
+    raise ArgumentError, "invalid monster" unless monster.is_a?(Hash)
+
+    cr = monster["cr"].to_s
+    count = monster["count"]
+    xp = CR_XP[cr]
+    raise ArgumentError, "unsupported challenge rating" unless xp && integer?(count) && count.positive?
+
+    base_xp += xp * count
+    monster_count += count
+  end
+
+  multiplier = multiplier_for(monster_count)
+  adjusted = base_xp * multiplier
+  adjusted = format_number(adjusted)
+
+  {
+    "base_xp" => base_xp,
+    "monster_count" => monster_count,
+    "multiplier" => format_number(multiplier),
+    "adjusted_xp" => adjusted,
+    "difficulty" => difficulty_for(adjusted, thresholds),
+    "thresholds" => thresholds
+  }
+end
+
+def initiative_order(data)
+  combatants = data["combatants"]
+  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+
+  { "order" => sorted_initiative(combatants) }
+end
+
+def sorted_initiative(combatants)
+  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+
+  combatants.map do |combatant|
+    raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError, "invalid combatant" unless name.is_a?(String) && integer?(dex) && integer?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+end
+
+def combat_response(session, include_order: true, include_conditions: false)
+  active = session.fetch("order").fetch(session.fetch("turn_index"))
+  payload = {
+    "id" => session.fetch("id"),
+    "round" => session.fetch("round"),
+    "turn_index" => session.fetch("turn_index"),
+    "active" => active
+  }
+  payload["order"] = session.fetch("order") if include_order
+  payload["conditions"] = visible_conditions(session) if include_conditions
+  payload
+end
+
+def visible_conditions(session)
+  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
+    result[name] = conditions.map(&:dup) unless conditions.empty?
+  end
+end
+
+def create_combat_session(data)
+  id = data["id"]
+  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
+  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
+  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
+
+  order = sorted_initiative(data["combatants"])
+  session = {
+    "id" => id,
+    "round" => 1,
+    "turn_index" => 0,
+    "order" => order,
+    "conditions" => {}
+  }
+  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
+  COMBAT_SESSIONS[id] = session
+  combat_response(session)
+end
+
+def add_condition(session, data)
+  target = data["target"]
+  condition = data["condition"]
+  duration = data["duration_rounds"]
+  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
+                                            condition.is_a?(String) &&
+                                            integer?(duration) &&
+                                            duration.positive?
+
+  conditions = session.fetch("conditions")[target]
+  raise ArgumentError, "unknown target" unless conditions
+
+exec
+/bin/zsh -lc "sed -n '1,80p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+exec
+/bin/zsh -lc "sed -n '260,420p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+  raise ArgumentError, "unknown target" unless conditions
+
+  conditions << { "condition" => condition, "remaining_rounds" => duration }
+  {
+    "target" => target,
+    "conditions" => conditions.map(&:dup)
+  }
+end
+
+def advance_combat(session)
+  order = session.fetch("order")
+  next_index = session.fetch("turn_index") + 1
+  if next_index >= order.length
+    next_index = 0
+    session["round"] += 1
+  end
+  session["turn_index"] = next_index
+
+  active_name = order.fetch(next_index).fetch("name")
+  active_conditions = session.fetch("conditions").fetch(active_name)
+  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
+  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
+
+  combat_response(session, include_order: false, include_conditions: true)
+end
+
+def route(method, path, body)
+  return [200, { "ok" => true }] if method == "GET" && path == "/health"
+
+  data = body.empty? ? {} : JSON.parse(body)
+  if method == "POST" && path == "/v1/combat/sessions"
+    return [200, create_combat_session(data)]
+  end
+
+  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
+    session = COMBAT_SESSIONS[match[1]]
+    return [404, { "error" => "not found" }] unless session
+
+    return [200, add_condition(session, data)]
+  end
+
+  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
+    session = COMBAT_SESSIONS[match[1]]
+    return [404, { "error" => "not found" }] unless session
+
+    return [200, advance_combat(session)]
+  end
+
+  case [method, path]
+  when ["POST", "/v1/dice/stats"]
+    [200, dice_stats(data)]
+  when ["POST", "/v1/checks/ability"]
+    [200, ability_check(data)]
+  when ["POST", "/v1/characters/ability-modifier"]
+    [200, ability_modifier(data)]
+  when ["POST", "/v1/characters/proficiency"]
+    [200, proficiency(data)]
+  when ["POST", "/v1/characters/derived-stats"]
+    [200, derived_stats(data)]
+  when ["POST", "/v1/encounters/adjusted-xp"]
+    [200, adjusted_xp(data)]
+  when ["POST", "/v1/initiative/order"]
+    [200, initiative_order(data)]
+  else
+    [404, { "error" => "not found" }]
+  end
+rescue JSON::ParserError, ArgumentError, TypeError, NoMethodError
+  [400, { "error" => "bad request" }]
+end
+
+def read_request(socket)
+  request_line = socket.gets&.chomp
+  return nil unless request_line && !request_line.empty?
+
+  headers = {}
+  while (line = socket.gets)
+    line = line.chomp
+    break if line.empty?
+
+    name, value = line.split(":", 2)
+    headers[name.downcase] = value.strip if name && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? socket.read(length).to_s : ""
+  method, target, = request_line.split(" ")
+  path = target.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+def write_response(socket, status, payload)
+  body = JSON.generate(payload)
+  reason = {
+    200 => "OK",
+    400 => "Bad Request",
+    404 => "Not Found",
+    500 => "Internal Server Error"
+  }.fetch(status, "OK")
+
+  socket.write(
+    "HTTP/1.1 #{status} #{reason}\r\n" \
+    "Content-Type: application/json\r\n" \
+    "Content-Length: #{body.bytesize}\r\n" \
+    "Connection: close\r\n" \
+    "\r\n" \
+    "#{body}"
+  )
+end
+
+def run_server
+  port = Integer(ENV.fetch("PORT"))
+  server = TCPServer.new("127.0.0.1", port)
+
+  trap("INT") { server.close }
+  trap("TERM") { server.close }
+
+  loop do
+    client = server.accept
+    request = read_request(client)
+    status, payload = request ? route(*request) : [400, { "error" => "bad request" }]
+    write_response(client, status, payload)
+  rescue IOError, SystemCallError
+    break if server.closed?
+  ensure
+    client&.close
+  end
+end
+
+run_server if $PROGRAM_NAME == __FILE__
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+codex
+`run.sh` is executable and still starts `ruby server.rb` in the foreground. I did not start the server, per the benchmark contract.
+codex
+Implemented Stage 2 combat state in [server.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb).
+
+Added:
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+- In-memory session/condition state for the server lifetime
+
+Preserved `run.sh`; it remains executable and starts the Ruby stdlib server in the foreground using `server.rb`.
+
+Verification completed without starting the HTTP server:
+- `ruby -c server.rb` passes
+- Direct `route(...)` checks passed for create session, add condition, advance, unknown session `404`, and invalid condition `400`
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 6e61d55f4e2747576c98e93bbf4e306cd9f8e255..8daa71814a2161cacc99a416db647f3a46a89296
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T214318Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -20,6 +20,8 @@
+   3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+ }.freeze
+ 
++COMBAT_SESSIONS = {}
++
+ def integer?(value)
+   value.is_a?(Integer)
+ end
+@@ -187,7 +189,13 @@
+   combatants = data["combatants"]
+   raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
+ 
+-  order = combatants.map do |combatant|
++  { "order" => sorted_initiative(combatants) }
++end
++
++def sorted_initiative(combatants)
++  raise ArgumentError, "invalid initiative" unless combatants.is_a?(Array)
++
++  combatants.map do |combatant|
+     raise ArgumentError, "invalid combatant" unless combatant.is_a?(Hash)
+ 
+     name = combatant["name"]
+@@ -197,18 +205,106 @@
+ 
+     { "name" => name, "dex" => dex, "score" => roll + dex }
+   end
++    .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++end
++
++def combat_response(session, include_order: true, include_conditions: false)
++  active = session.fetch("order").fetch(session.fetch("turn_index"))
++  payload = {
++    "id" => session.fetch("id"),
++    "round" => session.fetch("round"),
++    "turn_index" => session.fetch("turn_index"),
++    "active" => active
++  }
++  payload["order"] = session.fetch("order") if include_order
++  payload["conditions"] = visible_conditions(session) if include_conditions
++  payload
++end
++
++def visible_conditions(session)
++  session.fetch("conditions").each_with_object({}) do |(name, conditions), result|
++    result[name] = conditions.map(&:dup) unless conditions.empty?
++  end
++end
++
++def create_combat_session(data)
++  id = data["id"]
++  raise ArgumentError, "invalid session id" unless id.is_a?(String) && !id.empty?
++  raise ArgumentError, "duplicate session id" if COMBAT_SESSIONS.key?(id)
++  raise ArgumentError, "invalid combatants" unless data["combatants"].is_a?(Array) && !data["combatants"].empty?
++
++  order = sorted_initiative(data["combatants"])
++  session = {
++    "id" => id,
++    "round" => 1,
++    "turn_index" => 0,
++    "order" => order,
++    "conditions" => {}
++  }
++  order.each { |combatant| session["conditions"][combatant.fetch("name")] = [] }
++  COMBAT_SESSIONS[id] = session
++  combat_response(session)
++end
++
++def add_condition(session, data)
++  target = data["target"]
++  condition = data["condition"]
++  duration = data["duration_rounds"]
++  raise ArgumentError, "invalid condition" unless target.is_a?(String) &&
++                                            condition.is_a?(String) &&
++                                            integer?(duration) &&
++                                            duration.positive?
++
++  conditions = session.fetch("conditions")[target]
++  raise ArgumentError, "unknown target" unless conditions
+ 
++  conditions << { "condition" => condition, "remaining_rounds" => duration }
+   {
+-    "order" => order
+-      .sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+-      .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++    "target" => target,
++    "conditions" => conditions.map(&:dup)
+   }
+ end
+ 
++def advance_combat(session)
++  order = session.fetch("order")
++  next_index = session.fetch("turn_index") + 1
++  if next_index >= order.length
++    next_index = 0
++    session["round"] += 1
++  end
++  session["turn_index"] = next_index
++
++  active_name = order.fetch(next_index).fetch("name")
++  active_conditions = session.fetch("conditions").fetch(active_name)
++  active_conditions.each { |condition| condition["remaining_rounds"] -= 1 }
++  active_conditions.reject! { |condition| condition.fetch("remaining_rounds") <= 0 }
++
++  combat_response(session, include_order: false, include_conditions: true)
++end
++
+ def route(method, path, body)
+   return [200, { "ok" => true }] if method == "GET" && path == "/health"
+ 
+   data = body.empty? ? {} : JSON.parse(body)
++  if method == "POST" && path == "/v1/combat/sessions"
++    return [200, create_combat_session(data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/conditions\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, add_condition(session, data)]
++  end
++
++  if method == "POST" && (match = %r{\A/v1/combat/sessions/([^/]+)/advance\z}.match(path))
++    session = COMBAT_SESSIONS[match[1]]
++    return [404, { "error" => "not found" }] unless session
++
++    return [200, advance_combat(session)]
++  end
++
+   case [method, path]
+   when ["POST", "/v1/dice/stats"]
+     [200, dice_stats(data)]
+
+tokens used
+36,663

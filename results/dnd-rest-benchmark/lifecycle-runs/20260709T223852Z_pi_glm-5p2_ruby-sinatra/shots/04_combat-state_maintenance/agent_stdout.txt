@@ -1,0 +1,23 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I inherited the Sinatra D&D API (which already passed the `core` and `characters` suites) and added the **Stateful Combat** stage without touching any existing endpoint behavior.
+
+### What I added to `app.rb`
+
+1. **In-memory state**: `SESSIONS = {}` keyed by client-supplied id, guarded by a `Mutex` (Puma is multi-threaded).
+2. **Helpers**: `combatant_json`, `conditions_map` (only non-empty condition lists, in initiative order), and `find_session` (halts `404` for unknown ids).
+3. **Three routes**:
+   - `POST /v1/combat/sessions` — builds initiative order (`score = roll + dex`), sorts by `[-score, -dex, name]`, starts at `round=1, turn_index=0`.
+   - `POST /v1/combat/sessions/:id/conditions` — validates target exists, `condition` is a string, `duration_rounds` is a positive int; appends to the combatant's condition list.
+   - `POST /v1/combat/sessions/:id/advance` — advances `turn_index` (incrementing `round` on wrap), then decrements the *new active* combatant's conditions and removes any that hit `0`.
+
+### Verified end-to-end
+- ✅ Full spec scenario: create → add `blessed` (2 rounds) → 5 advances, confirming the condition only ticks on fighter's turns (`2→1→removed`) and the round wraps correctly.
+- ✅ Error cases: unknown session → `404`; bad target / non-positive or non-integer duration / missing fields / malformed JSON / missing id / empty combatants → `400`.
+- ✅ Route param `:id` correctly matches hyphenated **and** dotted ids (Mustermann sinatra flavor includes dots — confirmed via create+advance on `enc.1`).
+- ✅ All prior-stage endpoints (`health`, `dice`, `ability-check`, `adjusted-xp`, `initiative`, `ability-modifier`, `proficiency`, `derived-stats`) still respond correctly.
+- ✅ Zero server errors in stderr; `run.sh` unchanged and executable; `ruby -c app.rb` clean.
+
+`./run.sh` starts the Puma server in the foreground on `127.0.0.1:$PORT` — ready for the cumulative evaluator suite. 🚀

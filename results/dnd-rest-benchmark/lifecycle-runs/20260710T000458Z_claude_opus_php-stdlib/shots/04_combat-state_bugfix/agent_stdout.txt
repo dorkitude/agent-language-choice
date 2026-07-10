@@ -1,0 +1,9 @@
+The fix works. 🎉 The final advance now returns `"conditions":{"fighter":[]}` — the `fighter` key stays present with an empty list once its condition expires, instead of being dropped entirely.
+
+**Root cause:** In `handle_combat_advance`, once a combatant's last condition expired the code called `unset($session['conditions'][$activeName])`, and `combat_conditions_view` only emitted names with non-empty condition lists. So the `fighter` key vanished from the response, tripping `combat-advance-expired-removed`.
+
+**Fix (`index.php`):**
+- Advance handler now always writes back the (possibly empty) remaining list instead of `unset`ting the key.
+- `combat_conditions_view` now includes any combatant that has a tracked conditions entry, rendering `[]` after expiry — while still excluding combatants who never had conditions.
+
+All prior behavior is preserved (add-condition, decrement-on-active-turn, round wrap, non-active no-decrement all verified in the run above), `run.sh` is unchanged and still starts the server in the foreground on `127.0.0.1:$PORT`, and the server is stopped. Ready. ✅

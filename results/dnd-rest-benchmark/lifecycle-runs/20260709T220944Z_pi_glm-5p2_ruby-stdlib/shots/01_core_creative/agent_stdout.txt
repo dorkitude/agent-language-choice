@@ -1,0 +1,23 @@
+All clean. ✨ Here's the summary, Chef:
+
+## Done — `./run.sh` is ready 🎲🐉
+
+**Implementation:** `server.rb` — a pure Ruby 4.0.5 stdlib HTTP server (only `socket` + `json`, no Sinatra/Rails/Rack/gems). WEBrick was removed from stdlib in Ruby 3.0+, so I built a minimal threaded HTTP server directly on `TCPServer`.
+
+**Endpoints (all spec examples verified byte-for-byte):**
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parses `<count>d<sides>[±<mod>]`, rejects non-positive count/sides & malformed input with 400 |
+| `POST /v1/checks/ability` | `total = roll+mod`, `success = total>=dc`, `margin = total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count-based multipliers (1, 1.5, 2, 2.5, 3, 4), summed level-3 thresholds, highest-reached difficulty (trivial→deadly) |
+| `POST /v1/initiative/order` | Sorts by score desc → dex desc → name asc |
+
+**Key design choices:**
+- Listens on `127.0.0.1` with `PORT` env var (defaults to 4567).
+- Foreground server via `run.sh` → `ruby server.rb`.
+- JSON keys emitted in spec order (Ruby hashes preserve insertion order).
+- Half-multipliers (`1.5`, `2.5`) yield integer `adjusted_xp` when whole (e.g. `400×1.5=600`), exact float otherwise.
+- `average` uses integer floor `(min+max)/2` — matches the integer style of every response field and the D&D convention.
+- Threaded accept loop for concurrent connections; per-request `rescue` keeps the server alive (JSON parse errors → 400, other errors → 500).
+- No server left running. 🧹

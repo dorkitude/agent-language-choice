@@ -82,6 +82,22 @@ Current lifecycle stages:
   `characters`.
 - `combat-state`: adds stateful combat sessions, evaluated with cumulative suite
   `combat-state`.
+- `auth-users`: adds deterministic username/password registration and login,
+  evaluated with cumulative suite `auth-users`.
+- `sqlite-storage`: adds SQLite storage health/reset behavior, evaluated with
+  cumulative suite `sqlite-storage`.
+- `compendium`: adds monster and item compendium APIs, evaluated with
+  cumulative suite `compendium`.
+- `campaign-state`: adds campaign, character, and event-log APIs, evaluated
+  with cumulative suite `campaign-state`.
+- `phb-rules`: adds selected PHB-style rules endpoints, evaluated with
+  cumulative suite `phb-rules`.
+- `dm-tools`: adds DM encounter, loot, and recap helpers, evaluated with
+  cumulative suite `dm-tools`.
+
+The indexed roadmap, prompt contract, and stage-by-stage notes are in
+[`../../docs/roadmap/`](../../docs/roadmap/). Findings from completed runs are
+in [`../../docs/findings/`](../../docs/findings/).
 
 Plan a lifecycle run:
 

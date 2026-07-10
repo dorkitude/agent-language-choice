@@ -1,0 +1,22 @@
+Done, Chef! 🍳
+
+## Root cause
+
+The `combat-advance-expired-removed` test expects that when a combatant's last condition expires, the combatant's key **remains present** in the `conditions` map with an empty list — i.e. `{"fighter": []}` — rather than vanishing entirely.
+
+The previous code did two things that removed it:
+1. In `POST /v1/combat/sessions/:id/advance`, after ticking down conditions it ran `session[:conditions].delete(active[:name]) if list.empty?`, wiping the key.
+2. `conditions_map` skipped any combatant whose list was empty (`next unless list && !list.empty?`), so even if the key had survived it wouldn't have been serialized.
+
+## Fix (in `app.rb`)
+
+- Removed the `delete` line in the advance handler — expired conditions are still rejected from the list, but the combatant's key is retained.
+- Rewrote `conditions_map` to include every combatant that has an entry in `session[:conditions]` (checked via `key?`), even when its list is now empty. Combatants that never had a condition still don't appear, so all earlier tests are unaffected.
+
+## Verification
+
+- `combat-state`: 20/20 ✅ (previously 19/20)
+- `core`: 8/8 ✅
+- `characters`: 13/13 ✅
+
+`run.sh` is unchanged and still starts the Sinatra/Puma server in the foreground on `127.0.0.1:$PORT`. No server is left running.

@@ -1,0 +1,26 @@
+Done, Chef! 🎲⚔️ Everything works end-to-end. Here's the summary:
+
+## What I added
+
+Three stateful combat endpoints to `Main.java`, preserving all prior-stage behavior:
+
+1. **`POST /v1/combat/sessions`** — creates an in-memory combat session with client-supplied `id`, computes initiative (`roll + dex`), sorts by score desc → dex desc → name asc, starts at `round=1, turn_index=0`.
+
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a timed condition to a named combatant (validates target exists → 400, duration positive int → 400, unknown session → 404).
+
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index` (wrapping increments `round`), then ticks down *only the new active combatant's* conditions at the start of their turn, removing any that hit 0.
+
+## Key implementation details
+
+- **In-memory state**: `ConcurrentHashMap<String, CombatSession>` with per-session `synchronized` blocks for safe mutation.
+- **Routing**: added a dynamic-path matcher (`routeCombatSession`) for `{id}`-style routes, kept the exact-match `switch` for all existing static routes untouched.
+- **Body draining**: `drainBody()` on the bodyless `advance` route to keep keep-alive connections clean.
+- **JSON correctness**: cast `int` round/turn_index fields to `long` so the existing `Json.stringify` emits them as bare numbers (it only handles `Long`/`Double`, not `Integer`).
+
+## Verification
+
+- ✅ Compiles clean on OpenJDK 26.0.1
+- ✅ 6/6 deterministic assertions pass (exact spec example + condition tick-down lifecycle)
+- ✅ All error cases return correct codes (404 unknown session, 400 bad target/duration/missing fields/malformed JSON)
+- ✅ All 8 prior-stage endpoints still respond correctly
+- ✅ `./run.sh` starts the server in foreground on `127.0.0.1:$PORT`

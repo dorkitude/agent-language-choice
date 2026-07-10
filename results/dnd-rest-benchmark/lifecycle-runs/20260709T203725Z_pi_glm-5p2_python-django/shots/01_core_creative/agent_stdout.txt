@@ -1,0 +1,28 @@
+Everything is in place and verified, Chef 🎲✨
+
+## Summary
+
+Built the **Core D&D REST Engine** as Django URL routes/views on the pinned stack (Python 3.14.6 + Django 6.0.7, installed into `.deps/` as `run.sh` expects).
+
+**Files:**
+- `dndsite/views.py` — five view functions
+- `dndsite/urls.py` — route wiring (kept the seeded `/health`)
+- `run.sh` — starts `manage.py runserver 127.0.0.1:$PORT --noreload` in the foreground (added a safe `PORT` default)
+- `requirements.txt` — unchanged (`Django==6.0.7`)
+
+**Endpoints (all spec examples reproduced byte-for-byte via the real runserver):**
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok": true}` |
+| `POST /v1/dice/stats` | Regex-parsed `NdM[±K]`; enforces positive count/sides; invalid → 400. `average = (min+max)//2` |
+| `POST /v1/checks/ability` | `total=roll+modifier`, `success=total>=dc`, `margin=total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count multipliers (1, 1.5, 2, 2.5, 3, 4), level-3 thresholds summed across party, difficulty = highest reached (`trivial`→`deadly`) |
+| `POST /v1/initiative/order` | `score=roll+dex`, sorted score desc → dex desc → name asc |
+
+**Verification:**
+- `python3 manage.py check` → 0 issues
+- Django test-client + a transient `runserver` smoke test (since killed) both returned exact spec payloads, e.g. `adjusted_xp`: `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}`
+- Invalid dice expressions (`0d6`, `2d0`, `bad`) → HTTP 400
+- Tie-break verified: three equal-score combatants ordered by dex descending
+
+No server is left running — port confirmed free. `./run.sh` is ready to go. 🐍

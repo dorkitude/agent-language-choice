@@ -1,0 +1,25 @@
+Done, Chef! 🎲⚔️ Here's a summary of what I did.
+
+## What I added
+
+**Three stateful combat endpoints** to `index.php`, preserving all prior-stage endpoints (core + characters):
+
+1. **`POST /v1/combat/sessions`** — creates a session from client-supplied `id` + combatants, computes `score = roll + dex`, sorts by score↓ → dex↓ → name↑, starts `round=1`, `turn_index=0`, returns `id/round/turn_index/active/order`.
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition (positive `duration_rounds`) to a named combatant; 404 for unknown session, 400 for unknown target / bad duration.
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index` (wraps + increments `round` at the end), decrements the *new active* combatant's conditions, removes any that hit 0; returns `id/round/turn_index/active/conditions` (no `order`, matching the spec's "shape").
+
+## Key decisions / root causes
+
+- **PHP's built-in dev server re-runs `index.php` per request**, so `static`/global state resets every request (I verified this empirically: a static counter stayed at 1 across requests). So combat state is **file-backed** (`.combat_sessions.json`), which persists correctly.
+- `run.sh` now `cd`s to its own dir and `rm -f .combat_sessions.json` before starting, so each server process starts with fresh state — matching the spec's "state lasts the lifetime of the server process."
+- **Empty `conditions` serializes as `{}` not `[]`** (via `(object)[]`), so a Go evaluator decoding into `map[string]T` won't choke on a JSON array.
+- The **advance** response deliberately omits `order` (the spec's "Response shape" excludes it, unlike the create response which includes it).
+- A 1d20-1 `average` regression from a prior shot is still correctly `9.5` (untouched).
+
+## Verification
+
+- `php -l` clean; `bash -n run.sh` clean.
+- 18/18 cumulative checks pass (health, dice ±invalid, ability-check, adjusted-xp, ability-mod ±invalid, proficiency, derived-stats, initiative, combat create/conditions/advance ±400/404).
+- Full decrement-to-removal lifecycle traced: `blessed:2` → `1` → removed → `conditions:{}`, with round-wrap at the end of the order. ✅
+
+`./run.sh` is ready and starts the server in the foreground on `127.0.0.1:$PORT`. 🚀

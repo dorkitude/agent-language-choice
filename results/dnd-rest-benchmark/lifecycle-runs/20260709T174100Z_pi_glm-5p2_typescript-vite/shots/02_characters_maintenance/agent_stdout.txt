@@ -1,0 +1,27 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I inherited the existing Vite-middleware D&D REST API and added the three **Character Rules** endpoints while preserving all prior-stage behavior.
+
+### What I added (`src/api.ts`)
+
+Three new `POST` handlers wired into the existing `POST_ROUTES` table (so they reuse the same JSON body parsing, `sendJson`, and `/v1/` 404 fallback as the core suite):
+
+| Endpoint | Logic |
+|---|---|
+| `/v1/characters/ability-modifier` | `modifier = floor((score-10)/2)`; validates `score` is an integer in `1..30` |
+| `/v1/characters/proficiency` | `2 + floor((level-1)/4)`; validates `level` is an integer in `1..20` |
+| `/v1/characters/derived-stats` | Computes all six ability mods, proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` (shield→`2`/`0`) |
+
+### Key correctness details
+- `Math.floor` gives the correct negative-half flooring (score `9` → `-1`, score `1` → `-5`). ✅
+- Integer validation rejects floats (`9.5`), out-of-range (`0`/`31`/`21`), and missing fields with `400`. ✅
+- The spec example reproduces **byte-for-byte**: `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}`. ✅
+
+### Verification
+- `tsc --noEmit` is clean for `api.ts` (the lone diagnostic is a pre-existing `vite.config.ts` NodeNext extension quirk that Vite's esbuild ignores at runtime — the core suite already passed with it).
+- Booted `./run.sh` on a test port and confirmed: all 3 new endpoints (valid + invalid cases), plus full regression of `/health`, dice-stats, ability-check, adjusted-xp, initiative, and the `/v1/*` 404 path.
+
+### `./run.sh`
+Already present and unchanged — starts Vite in the foreground on `127.0.0.1:$PORT`. No server is left running. Ready for the evaluator. 🚀

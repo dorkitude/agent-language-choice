@@ -417,23 +417,19 @@ function advanceTurn(res: http.ServerResponse, sessionId: string): void {
   session.turn_index = nextIndex;
   const active = session.order[nextIndex];
   // At the start of the active combatant's turn, decrement their conditions.
+  // Remove individual conditions that reach 0, but keep the combatant's entry
+  // (with an empty list) so callers can see the target still has no conditions.
   const list = session.conditions.get(active.name);
   if (list) {
     for (const cond of list) {
       cond.remaining_rounds -= 1;
     }
     const filtered = list.filter((c) => c.remaining_rounds > 0);
-    if (filtered.length === 0) {
-      session.conditions.delete(active.name);
-    } else {
-      session.conditions.set(active.name, filtered);
-    }
+    session.conditions.set(active.name, filtered);
   }
   const conditionsResp: Record<string, { condition: string; remaining_rounds: number }[]> = {};
   for (const [name, conds] of session.conditions) {
-    if (conds.length > 0) {
-      conditionsResp[name] = conds.map((c) => ({ condition: c.condition, remaining_rounds: c.remaining_rounds }));
-    }
+    conditionsResp[name] = conds.map((c) => ({ condition: c.condition, remaining_rounds: c.remaining_rounds }));
   }
   return sendJson(res, 200, {
     id: session.id,

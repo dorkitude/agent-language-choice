@@ -1,0 +1,26 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I added the **Character Rules** maintenance stage to the existing Next.js 16 App Router codebase while preserving all prior core endpoints.
+
+### New files
+- **`app/v1/characters/rules.ts`** — shared D&D 5e rules: `abilityModifier` (`floor((score-10)/2)`, floors negative halves correctly), `proficiencyBonus` (`2 + floor((level-1)/4)`), and validators (`isInt`, `isValidScore` 1–30, `isValidLevel` 1–20).
+- **`app/v1/characters/ability-modifier/route.ts`** — `POST /v1/characters/ability-modifier` → `{score, modifier}`.
+- **`app/v1/characters/proficiency/route.ts`** — `POST /v1/characters/proficiency` → `{level, proficiency_bonus}`.
+- **`app/v1/characters/derived-stats/route.ts`** — `POST /v1/characters/derived-stats` → computes all six ability modifiers, proficiency, `hp_max = level*(6+con_mod)`, and `armor_class = base + min(dex_mod, dex_cap) + shield_bonus`.
+
+### Key decisions
+- **Shared module** keeps the modifier/proficiency formula identical to the standalone endpoints (spec requirement), avoiding drift.
+- **Validation**: scores must be integers 1–30, level 1–20, all six abilities required, armor `base`/`dex_cap` must be integers, `shield` optional boolean (defaults to `0` bonus per the spec's "otherwise 0"). Invalid input → `400`.
+- **`run.sh` fix (root cause)**: the original script skipped `next build` whenever `.next/BUILD_ID` existed — and a stale build from the core stage was present, so new routes would never have been served. I changed it to **always rebuild** before `next start`. Build is ~1.7s.
+
+### Verification
+Smoke-tested all spec examples on a throwaway port (server killed after):
+- `score 9 → modifier -1` ✓ (negative-half flooring)
+- proficiency boundaries 1→2, 4→2, 5→3, 8→3, 9→4, 12→4, 13→5, 16→5, 17→6, 20→6 ✓
+- derived-stats spec example → exactly `{level:5, proficiency_bonus:3, hp_max:35, armor_class:16, modifiers:{str:3,dex:2,con:1,int:-1,wis:1,cha:0}}` ✓
+- invalid inputs (score 0, 9.5, level 21, missing ability) → `400` ✓
+- core endpoints (`/health`, `/v1/dice/stats`) still work ✓
+
+`./run.sh` is ready — no server left running. 🛡️

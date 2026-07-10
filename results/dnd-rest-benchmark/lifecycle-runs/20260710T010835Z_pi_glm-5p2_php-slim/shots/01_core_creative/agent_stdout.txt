@@ -1,0 +1,21 @@
+Done, Chef! 🎲🐉 The core D&D REST engine is built and verified.
+
+## Summary
+
+**`index.php`** — a Slim 4 app running on PHP's built-in server, implementing all five endpoints:
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Parses `<count>d<sides>[±<mod>]` via strict regex (positive ints, no leading zeros, optional signed modifier). `min=count+mod`, `max=count*sides+mod`, `average=floor(count*(sides+1)/2)+mod` (the canonical D&D HD-average convention, matching the `2d6+3→10` example). Invalid → 400. |
+| `POST /v1/checks/ability` | `total=roll+mod`, `success=total>=dc`, `margin=total-dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count multipliers (1, 1.5, 2, 2.5, 3, 4), level-3 thresholds summed across party, difficulty = highest threshold reached (trivial→deadly). Multiplier/adjusted_xp keep natural int/float typing (e.g. `337.5` for odd base × 1.5). |
+| `POST /v1/initiative/order` | `score=roll+dex`, sorted by score desc → dex desc → name asc; returns only `name`+`score`. |
+
+**Key design choices:**
+- Strict input validation → JSON `400` for any malformed/missing/unsupported field (unknown CR, non-level-3 party, bad dice grammar, etc.).
+- JSON error handler installed so even 404/500 paths return JSON, never HTML.
+- Deterministic, no randomness — pure stat computations.
+- `run.sh` unchanged: `php -S 127.0.0.1:"$PORT" index.php` (foreground, env-driven port).
+
+**Verified:** all spec examples reproduce byte-for-byte, plus edge cases (fractional adjusted_xp `337.5`, tie-break ordering, trivial/easy/medium/hard/deadly thresholds, negative modifiers, empty combatants, every invalid-dice variant → 400). 🗡️

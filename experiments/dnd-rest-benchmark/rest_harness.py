@@ -117,6 +117,48 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Inherit the expanded service and add stateful combat sessions",
     ),
+    LifecycleStage(
+        id="auth-users",
+        suite="auth-users",
+        spec_path=BENCH_DIR / "challenges" / "auth-users.md",
+        kind="maintenance",
+        description="Add deterministic username/password registration and login APIs",
+    ),
+    LifecycleStage(
+        id="sqlite-storage",
+        suite="sqlite-storage",
+        spec_path=BENCH_DIR / "challenges" / "sqlite-storage.md",
+        kind="maintenance",
+        description="Move durable game-world/state storage behind SQLite-backed APIs",
+    ),
+    LifecycleStage(
+        id="compendium",
+        suite="compendium",
+        spec_path=BENCH_DIR / "challenges" / "compendium.md",
+        kind="maintenance",
+        description="Add monster and item compendium CRUD backed by storage",
+    ),
+    LifecycleStage(
+        id="campaign-state",
+        suite="campaign-state",
+        spec_path=BENCH_DIR / "challenges" / "campaign-state.md",
+        kind="maintenance",
+        description="Add persistent campaign, character, and session-log state APIs",
+    ),
+    LifecycleStage(
+        id="phb-rules",
+        suite="phb-rules",
+        spec_path=BENCH_DIR / "challenges" / "phb-rules.md",
+        kind="maintenance",
+        description="Add selected PHB rules endpoints for spell slots, rests, and equipment load",
+    ),
+    LifecycleStage(
+        id="dm-tools",
+        suite="dm-tools",
+        spec_path=BENCH_DIR / "challenges" / "dm-tools.md",
+        kind="maintenance",
+        description="Add DM-facing encounter, loot, and recap helpers over stored campaign data",
+    ),
 ]
 
 

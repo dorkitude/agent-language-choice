@@ -1,0 +1,1647 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4988-07e9-7421-83b9-d72afc35cdd4
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-slim
+        Language: php
+        Framework/runtime: slim
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8, Composer 2.10.2, Slim 4.15.2, and slim/psr7 1.8.0.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Slim app structure and tests first so the new character endpoints fit the current routing and response patterns without disturbing earlier behavior.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ../20260709T201750Z_codex_gpt-5.5_python-django/
+?? ../20260709T202528Z_pi_kimi-k2p7-code_python-django/
+?? ../20260709T203725Z_pi_glm-5p2_python-django/
+?? ../20260709T205305Z_claude_opus_java-stdlib/
+?? ../20260709T205724Z_claude_sonnet_java-stdlib/
+?? ../20260709T205729Z_codex_gpt-5.5_java-stdlib/
+?? ../20260709T210607Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260709T211756Z_pi_glm-5p2_java-stdlib/
+?? ../20260709T214310Z_claude_opus_ruby-stdlib/
+?? ../20260709T214315Z_claude_sonnet_ruby-stdlib/
+?? ../20260709T214318Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260709T214954Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260709T220944Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260709T222154Z_claude_opus_ruby-sinatra/
+?? ../20260709T222210Z_claude_sonnet_ruby-sinatra/
+?? ../20260709T222228Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260709T223208Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260709T223852Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260709T231139Z_claude_opus_ruby-rails/
+?? ../20260709T231715Z_claude_sonnet_ruby-rails/
+?? ../20260709T232305Z_codex_gpt-5.5_ruby-rails/
+?? ../20260709T233214Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260709T234200Z_pi_glm-5p2_ruby-rails/
+?? ../20260710T000458Z_claude_opus_php-stdlib/
+?? ../20260710T000926Z_claude_sonnet_php-stdlib/
+?? ../20260710T001223Z_codex_gpt-5.5_php-stdlib/
+?? ../20260710T001735Z_pi_kimi-k2p7-code_php-stdlib/
+?? ../20260710T002201Z_pi_glm-5p2_php-stdlib/
+?? ../20260710T004345Z_claude_opus_php-slim/
+?? ../20260710T004927Z_claude_sonnet_php-slim/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+shots/02_characters_maintenance/PROMPT.md
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+dndeval-core-report.json
+composer.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+agent_last_message.txt
+index.php
+setup.json
+composer.lock
+
+codex
+The repo is very small. The only current-app files appear to be `index.php`, `composer.json`, `composer.lock`, and `run.sh`; the git status noise is from sibling benchmark runs, so I’ll ignore it and keep changes inside this workspace.
+exec
+/bin/zsh -lc 'cat composer.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+{
+  "require": {
+    "slim/slim": "4.15.2",
+    "slim/psr7": "1.8.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ ! -d vendor ]; then
+  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
+fi
+
+exec php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc 'cat dndeval-core-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:62687",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,240p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+$app = AppFactory::create();
+
+function jsonResponse(Response $response, array $payload, int $status = 200): Response
+{
+    $response->getBody()->write(json_encode($payload));
+    return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus($status);
+}
+
+function badRequest(Response $response): Response
+{
+    return jsonResponse($response, ['error' => 'bad request'], 400);
+}
+
+function requestJson(Request $request): ?array
+{
+    $raw = (string) $request->getBody();
+    $data = json_decode($raw, true);
+
+    return is_array($data) ? $data : null;
+}
+
+function isIntegerValue(mixed $value): bool
+{
+    return is_int($value);
+}
+
+$app->get('/health', function (Request $request, Response $response) {
+    return jsonResponse($response, ['ok' => true]);
+});
+
+$app->post('/v1/dice/stats', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
+        return badRequest($response);
+    }
+
+    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
+        return badRequest($response);
+    }
+
+    $count = (int) $matches[1];
+    $sides = (int) $matches[2];
+    if ($count <= 0 || $sides <= 0) {
+        return badRequest($response);
+    }
+
+    $modifier = 0;
+    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
+        $modifier = (int) $matches[4];
+        if ($matches[3] === '-') {
+            $modifier *= -1;
+        }
+    }
+
+    $min = $count + $modifier;
+    $max = ($count * $sides) + $modifier;
+    $average = ($min + $max) / 2;
+
+    return jsonResponse($response, [
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $min,
+        'max' => $max,
+        'average' => $average,
+    ]);
+});
+
+$app->post('/v1/checks/ability', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if (
+        $data === null
+        || !array_key_exists('roll', $data)
+        || !array_key_exists('modifier', $data)
+        || !array_key_exists('dc', $data)
+        || !isIntegerValue($data['roll'])
+        || !isIntegerValue($data['modifier'])
+        || !isIntegerValue($data['dc'])
+    ) {
+        return badRequest($response);
+    }
+
+    $total = $data['roll'] + $data['modifier'];
+    $margin = $total - $data['dc'];
+
+    return jsonResponse($response, [
+        'total' => $total,
+        'success' => $total >= $data['dc'],
+        'margin' => $margin,
+    ]);
+});
+
+$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if (
+        $data === null
+        || !isset($data['party'])
+        || !isset($data['monsters'])
+        || !is_array($data['party'])
+        || !is_array($data['monsters'])
+    ) {
+        return badRequest($response);
+    }
+
+    $xpByCr = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($data['party'] as $member) {
+        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
+            return badRequest($response);
+        }
+
+        $thresholds['easy'] += 75;
+        $thresholds['medium'] += 150;
+        $thresholds['hard'] += 225;
+        $thresholds['deadly'] += 400;
+    }
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($data['monsters'] as $monster) {
+        if (
+            !is_array($monster)
+            || !isset($monster['cr'])
+            || !is_string($monster['cr'])
+            || !array_key_exists($monster['cr'], $xpByCr)
+            || !isset($monster['count'])
+            || !isIntegerValue($monster['count'])
+            || $monster['count'] <= 0
+        ) {
+            return badRequest($response);
+        }
+
+        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
+        $monsterCount += $monster['count'];
+    }
+
+    if ($monsterCount === 1) {
+        $multiplier = 1;
+    } elseif ($monsterCount === 2) {
+        $multiplier = 1.5;
+    } elseif ($monsterCount <= 6) {
+        $multiplier = 2;
+    } elseif ($monsterCount <= 10) {
+        $multiplier = 2.5;
+    } elseif ($monsterCount <= 14) {
+        $multiplier = 3;
+    } else {
+        $multiplier = 4;
+    }
+
+    $adjustedXp = $baseXp * $multiplier;
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
+        if ($adjustedXp >= $thresholds[$level]) {
+            $difficulty = $level;
+        }
+    }
+
+    return jsonResponse($response, [
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+});
+
+$app->post('/v1/initiative/order', function (Request $request, Response $response) {
+    $data = requestJson($request);
+    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
+        return badRequest($response);
+    }
+
+    $combatants = [];
+    foreach ($data['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'])
+            || !is_string($combatant['name'])
+            || !isset($combatant['dex'])
+            || !isset($combatant['roll'])
+            || !isIntegerValue($combatant['dex'])
+            || !isIntegerValue($combatant['roll'])
+        ) {
+            return badRequest($response);
+        }
+
+        $combatants[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    usort($combatants, function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+
+    $order = array_map(
+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+        $combatants
+    );
+
+    return jsonResponse($response, ['order' => $order]);
+});
+
+$app->run();
+
+codex
+I found the current route helpers already centralize JSON parsing and `400` responses. I’m going to add small character-rule helpers there, then register the three new `POST /v1/characters/...` routes after the existing core routes.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 1e6075b34bfd811b1472befffd56e0cbfb8b7155..c27e2a1a19fec3ba09faf4a0362d4eebfcf260ff
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -33,6 +33,26 @@
+     return is_int($value);
+ }
+ 
++function isValidAbilityScore(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 30;
++}
++
++function isValidLevel(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 20;
++}
++
++function abilityModifier(int $score): int
++{
++    return (int) floor(($score - 10) / 2);
++}
++
++function proficiencyBonus(int $level): int
++{
++    return intdiv($level - 1, 4) + 2;
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+     return jsonResponse($response, ['ok' => true]);
+ });
+@@ -227,4 +247,74 @@
+     return jsonResponse($response, ['order' => $order]);
+ });
+ 
++$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'score' => $data['score'],
++        'modifier' => abilityModifier($data['score']),
++    ]);
++});
++
++$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++    ]);
++});
++
++$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
++
++    if (
++        $data === null
++        || !array_key_exists('level', $data)
++        || !isValidLevel($data['level'])
++        || !array_key_exists('abilities', $data)
++        || !is_array($data['abilities'])
++        || !array_key_exists('armor', $data)
++        || !is_array($data['armor'])
++        || !array_key_exists('base', $data['armor'])
++        || !isIntegerValue($data['armor']['base'])
++        || !array_key_exists('shield', $data['armor'])
++        || !is_bool($data['armor']['shield'])
++        || !array_key_exists('dex_cap', $data['armor'])
++        || !isIntegerValue($data['armor']['dex_cap'])
++    ) {
++        return badRequest($response);
++    }
++
++    $modifiers = [];
++    foreach ($abilityNames as $abilityName) {
++        if (
++            !array_key_exists($abilityName, $data['abilities'])
++            || !isValidAbilityScore($data['abilities'][$abilityName])
++        ) {
++            return badRequest($response);
++        }
++
++        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
++    }
++
++    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
++    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++        'hp_max' => $data['level'] * (6 + $modifiers['con']),
++        'armor_class' => $armorClass,
++        'modifiers' => $modifiers,
++    ]);
++});
++
+ $app->run();
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 1e6075b34bfd811b1472befffd56e0cbfb8b7155..c27e2a1a19fec3ba09faf4a0362d4eebfcf260ff
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -33,6 +33,26 @@
+     return is_int($value);
+ }
+ 
++function isValidAbilityScore(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 30;
++}
++
++function isValidLevel(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 20;
++}
++
++function abilityModifier(int $score): int
++{
++    return (int) floor(($score - 10) / 2);
++}
++
++function proficiencyBonus(int $level): int
++{
++    return intdiv($level - 1, 4) + 2;
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+     return jsonResponse($response, ['ok' => true]);
+ });
+@@ -227,4 +247,74 @@
+     return jsonResponse($response, ['order' => $order]);
+ });
+ 
++$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'score' => $data['score'],
++        'modifier' => abilityModifier($data['score']),
++    ]);
++});
++
++$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++    ]);
++});
++
++$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
++
++    if (
++        $data === null
++        || !array_key_exists('level', $data)
++        || !isValidLevel($data['level'])
++        || !array_key_exists('abilities', $data)
++        || !is_array($data['abilities'])
++        || !array_key_exists('armor', $data)
++        || !is_array($data['armor'])
++        || !array_key_exists('base', $data['armor'])
++        || !isIntegerValue($data['armor']['base'])
++        || !array_key_exists('shield', $data['armor'])
++        || !is_bool($data['armor']['shield'])
++        || !array_key_exists('dex_cap', $data['armor'])
++        || !isIntegerValue($data['armor']['dex_cap'])
++    ) {
++        return badRequest($response);
++    }
++
++    $modifiers = [];
++    foreach ($abilityNames as $abilityName) {
++        if (
++            !array_key_exists($abilityName, $data['abilities'])
++            || !isValidAbilityScore($data['abilities'][$abilityName])
++        ) {
++            return badRequest($response);
++        }
++
++        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
++    }
++
++    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
++    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++        'hp_max' => $data['level'] * (6 + $modifiers['con']),
++        'armor_class' => $armorClass,
++        'modifiers' => $modifiers,
++    ]);
++});
++
+ $app->run();
+
+codex
+The endpoints are in place. I’m doing a static PHP syntax check now and then I’ll verify `run.sh` still satisfies the foreground server contract without starting it.
+exec
+/bin/zsh -lc "ls -l run.sh && sed -n '1,80p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  225 Jul  9 17:57 run.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ ! -d vendor ]; then
+  COMPOSER_CACHE_DIR="${COMPOSER_CACHE_DIR:-$(pwd)/.composer-cache}" composer install --no-interaction --no-progress
+fi
+
+exec php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+exec
+/bin/zsh -lc 'composer validate --no-check-publish' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 280ms:
+No syntax errors detected in index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 1e6075b34bfd811b1472befffd56e0cbfb8b7155..c27e2a1a19fec3ba09faf4a0362d4eebfcf260ff
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -33,6 +33,26 @@
+     return is_int($value);
+ }
+ 
++function isValidAbilityScore(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 30;
++}
++
++function isValidLevel(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 20;
++}
++
++function abilityModifier(int $score): int
++{
++    return (int) floor(($score - 10) / 2);
++}
++
++function proficiencyBonus(int $level): int
++{
++    return intdiv($level - 1, 4) + 2;
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+     return jsonResponse($response, ['ok' => true]);
+ });
+@@ -227,4 +247,74 @@
+     return jsonResponse($response, ['order' => $order]);
+ });
+ 
++$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'score' => $data['score'],
++        'modifier' => abilityModifier($data['score']),
++    ]);
++});
++
++$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++    ]);
++});
++
++$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
++
++    if (
++        $data === null
++        || !array_key_exists('level', $data)
++        || !isValidLevel($data['level'])
++        || !array_key_exists('abilities', $data)
++        || !is_array($data['abilities'])
++        || !array_key_exists('armor', $data)
++        || !is_array($data['armor'])
++        || !array_key_exists('base', $data['armor'])
++        || !isIntegerValue($data['armor']['base'])
++        || !array_key_exists('shield', $data['armor'])
++        || !is_bool($data['armor']['shield'])
++        || !array_key_exists('dex_cap', $data['armor'])
++        || !isIntegerValue($data['armor']['dex_cap'])
++    ) {
++        return badRequest($response);
++    }
++
++    $modifiers = [];
++    foreach ($abilityNames as $abilityName) {
++        if (
++            !array_key_exists($abilityName, $data['abilities'])
++            || !isValidAbilityScore($data['abilities'][$abilityName])
++        ) {
++            return badRequest($response);
++        }
++
++        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
++    }
++
++    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
++    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++        'hp_max' => $data['level'] * (6 + $modifiers['con']),
++        'armor_class' => $armorClass,
++        'modifiers' => $modifiers,
++    ]);
++});
++
+ $app->run();
+
+ succeeded in 353ms:
+./composer.json is valid, but with a few warnings
+See https://getcomposer.org/doc/04-schema.md for details on the schema
+# General warnings
+- No license specified, it is recommended to do so. For closed-source software you may use "proprietary" as license.
+- require.slim/slim : exact version constraints (4.15.2) should be avoided if the package follows semantic versioning
+- require.slim/psr7 : exact version constraints (1.8.0) should be avoided if the package follows semantic versioning
+
+codex
+Syntax and Composer metadata validation pass. Composer only reports the expected warnings from the benchmark’s exact version pins and missing license; I haven’t changed dependencies.
+exec
+/bin/zsh -lc 'git diff -- index.php run.sh composer.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "nl -ba index.php | sed -n '1,280p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+     1	<?php
+     2	require __DIR__ . '/vendor/autoload.php';
+     3	
+     4	use Psr\Http\Message\ResponseInterface as Response;
+     5	use Psr\Http\Message\ServerRequestInterface as Request;
+     6	use Slim\Factory\AppFactory;
+     7	
+     8	$app = AppFactory::create();
+     9	
+    10	function jsonResponse(Response $response, array $payload, int $status = 200): Response
+    11	{
+    12	    $response->getBody()->write(json_encode($payload));
+    13	    return $response
+    14	        ->withHeader('Content-Type', 'application/json')
+    15	        ->withStatus($status);
+    16	}
+    17	
+    18	function badRequest(Response $response): Response
+    19	{
+    20	    return jsonResponse($response, ['error' => 'bad request'], 400);
+    21	}
+    22	
+    23	function requestJson(Request $request): ?array
+    24	{
+    25	    $raw = (string) $request->getBody();
+    26	    $data = json_decode($raw, true);
+    27	
+    28	    return is_array($data) ? $data : null;
+    29	}
+    30	
+    31	function isIntegerValue(mixed $value): bool
+    32	{
+    33	    return is_int($value);
+    34	}
+    35	
+    36	function isValidAbilityScore(mixed $value): bool
+    37	{
+    38	    return isIntegerValue($value) && $value >= 1 && $value <= 30;
+    39	}
+    40	
+    41	function isValidLevel(mixed $value): bool
+    42	{
+    43	    return isIntegerValue($value) && $value >= 1 && $value <= 20;
+    44	}
+    45	
+    46	function abilityModifier(int $score): int
+    47	{
+    48	    return (int) floor(($score - 10) / 2);
+    49	}
+    50	
+    51	function proficiencyBonus(int $level): int
+    52	{
+    53	    return intdiv($level - 1, 4) + 2;
+    54	}
+    55	
+    56	$app->get('/health', function (Request $request, Response $response) {
+    57	    return jsonResponse($response, ['ok' => true]);
+    58	});
+    59	
+    60	$app->post('/v1/dice/stats', function (Request $request, Response $response) {
+    61	    $data = requestJson($request);
+    62	    if ($data === null || !isset($data['expression']) || !is_string($data['expression'])) {
+    63	        return badRequest($response);
+    64	    }
+    65	
+    66	    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $data['expression'], $matches)) {
+    67	        return badRequest($response);
+    68	    }
+    69	
+    70	    $count = (int) $matches[1];
+    71	    $sides = (int) $matches[2];
+    72	    if ($count <= 0 || $sides <= 0) {
+    73	        return badRequest($response);
+    74	    }
+    75	
+    76	    $modifier = 0;
+    77	    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
+    78	        $modifier = (int) $matches[4];
+    79	        if ($matches[3] === '-') {
+    80	            $modifier *= -1;
+    81	        }
+    82	    }
+    83	
+    84	    $min = $count + $modifier;
+    85	    $max = ($count * $sides) + $modifier;
+    86	    $average = ($min + $max) / 2;
+    87	
+    88	    return jsonResponse($response, [
+    89	        'dice_count' => $count,
+    90	        'sides' => $sides,
+    91	        'modifier' => $modifier,
+    92	        'min' => $min,
+    93	        'max' => $max,
+    94	        'average' => $average,
+    95	    ]);
+    96	});
+    97	
+    98	$app->post('/v1/checks/ability', function (Request $request, Response $response) {
+    99	    $data = requestJson($request);
+   100	    if (
+   101	        $data === null
+   102	        || !array_key_exists('roll', $data)
+   103	        || !array_key_exists('modifier', $data)
+   104	        || !array_key_exists('dc', $data)
+   105	        || !isIntegerValue($data['roll'])
+   106	        || !isIntegerValue($data['modifier'])
+   107	        || !isIntegerValue($data['dc'])
+   108	    ) {
+   109	        return badRequest($response);
+   110	    }
+   111	
+   112	    $total = $data['roll'] + $data['modifier'];
+   113	    $margin = $total - $data['dc'];
+   114	
+   115	    return jsonResponse($response, [
+   116	        'total' => $total,
+   117	        'success' => $total >= $data['dc'],
+   118	        'margin' => $margin,
+   119	    ]);
+   120	});
+   121	
+   122	$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
+   123	    $data = requestJson($request);
+   124	    if (
+   125	        $data === null
+   126	        || !isset($data['party'])
+   127	        || !isset($data['monsters'])
+   128	        || !is_array($data['party'])
+   129	        || !is_array($data['monsters'])
+   130	    ) {
+   131	        return badRequest($response);
+   132	    }
+   133	
+   134	    $xpByCr = [
+   135	        '0' => 10,
+   136	        '1/8' => 25,
+   137	        '1/4' => 50,
+   138	        '1/2' => 100,
+   139	        '1' => 200,
+   140	        '2' => 450,
+   141	        '3' => 700,
+   142	        '4' => 1100,
+   143	        '5' => 1800,
+   144	    ];
+   145	
+   146	    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+   147	    foreach ($data['party'] as $member) {
+   148	        if (!is_array($member) || !isset($member['level']) || !isIntegerValue($member['level']) || $member['level'] !== 3) {
+   149	            return badRequest($response);
+   150	        }
+   151	
+   152	        $thresholds['easy'] += 75;
+   153	        $thresholds['medium'] += 150;
+   154	        $thresholds['hard'] += 225;
+   155	        $thresholds['deadly'] += 400;
+   156	    }
+   157	
+   158	    $baseXp = 0;
+   159	    $monsterCount = 0;
+   160	    foreach ($data['monsters'] as $monster) {
+   161	        if (
+   162	            !is_array($monster)
+   163	            || !isset($monster['cr'])
+   164	            || !is_string($monster['cr'])
+   165	            || !array_key_exists($monster['cr'], $xpByCr)
+   166	            || !isset($monster['count'])
+   167	            || !isIntegerValue($monster['count'])
+   168	            || $monster['count'] <= 0
+   169	        ) {
+   170	            return badRequest($response);
+   171	        }
+   172	
+   173	        $baseXp += $xpByCr[$monster['cr']] * $monster['count'];
+   174	        $monsterCount += $monster['count'];
+   175	    }
+   176	
+   177	    if ($monsterCount === 1) {
+   178	        $multiplier = 1;
+   179	    } elseif ($monsterCount === 2) {
+   180	        $multiplier = 1.5;
+   181	    } elseif ($monsterCount <= 6) {
+   182	        $multiplier = 2;
+   183	    } elseif ($monsterCount <= 10) {
+   184	        $multiplier = 2.5;
+   185	    } elseif ($monsterCount <= 14) {
+   186	        $multiplier = 3;
+   187	    } else {
+   188	        $multiplier = 4;
+   189	    }
+   190	
+   191	    $adjustedXp = $baseXp * $multiplier;
+   192	    $difficulty = 'trivial';
+   193	    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
+   194	        if ($adjustedXp >= $thresholds[$level]) {
+   195	            $difficulty = $level;
+   196	        }
+   197	    }
+   198	
+   199	    return jsonResponse($response, [
+   200	        'base_xp' => $baseXp,
+   201	        'monster_count' => $monsterCount,
+   202	        'multiplier' => $multiplier,
+   203	        'adjusted_xp' => $adjustedXp,
+   204	        'difficulty' => $difficulty,
+   205	        'thresholds' => $thresholds,
+   206	    ]);
+   207	});
+   208	
+   209	$app->post('/v1/initiative/order', function (Request $request, Response $response) {
+   210	    $data = requestJson($request);
+   211	    if ($data === null || !isset($data['combatants']) || !is_array($data['combatants'])) {
+   212	        return badRequest($response);
+   213	    }
+   214	
+   215	    $combatants = [];
+   216	    foreach ($data['combatants'] as $combatant) {
+   217	        if (
+   218	            !is_array($combatant)
+   219	            || !isset($combatant['name'])
+   220	            || !is_string($combatant['name'])
+   221	            || !isset($combatant['dex'])
+   222	            || !isset($combatant['roll'])
+   223	            || !isIntegerValue($combatant['dex'])
+   224	            || !isIntegerValue($combatant['roll'])
+   225	        ) {
+   226	            return badRequest($response);
+   227	        }
+   228	
+   229	        $combatants[] = [
+   230	            'name' => $combatant['name'],
+   231	            'dex' => $combatant['dex'],
+   232	            'score' => $combatant['roll'] + $combatant['dex'],
+   233	        ];
+   234	    }
+   235	
+   236	    usort($combatants, function (array $a, array $b): int {
+   237	        return ($b['score'] <=> $a['score'])
+   238	            ?: ($b['dex'] <=> $a['dex'])
+   239	            ?: strcmp($a['name'], $b['name']);
+   240	    });
+   241	
+   242	    $order = array_map(
+   243	        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+   244	        $combatants
+   245	    );
+   246	
+   247	    return jsonResponse($response, ['order' => $order]);
+   248	});
+   249	
+   250	$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
+   251	    $data = requestJson($request);
+   252	    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
+   253	        return badRequest($response);
+   254	    }
+   255	
+   256	    return jsonResponse($response, [
+   257	        'score' => $data['score'],
+   258	        'modifier' => abilityModifier($data['score']),
+   259	    ]);
+   260	});
+   261	
+   262	$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
+   263	    $data = requestJson($request);
+   264	    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
+   265	        return badRequest($response);
+   266	    }
+   267	
+   268	    return jsonResponse($response, [
+   269	        'level' => $data['level'],
+   270	        'proficiency_bonus' => proficiencyBonus($data['level']),
+   271	    ]);
+   272	});
+   273	
+   274	$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
+   275	    $data = requestJson($request);
+   276	    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+   277	
+   278	    if (
+   279	        $data === null
+   280	        || !array_key_exists('level', $data)
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 1e6075b34bfd811b1472befffd56e0cbfb8b7155..c27e2a1a19fec3ba09faf4a0362d4eebfcf260ff
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -33,6 +33,26 @@
+     return is_int($value);
+ }
+ 
++function isValidAbilityScore(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 30;
++}
++
++function isValidLevel(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 20;
++}
++
++function abilityModifier(int $score): int
++{
++    return (int) floor(($score - 10) / 2);
++}
++
++function proficiencyBonus(int $level): int
++{
++    return intdiv($level - 1, 4) + 2;
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+     return jsonResponse($response, ['ok' => true]);
+ });
+@@ -227,4 +247,74 @@
+     return jsonResponse($response, ['order' => $order]);
+ });
+ 
++$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'score' => $data['score'],
++        'modifier' => abilityModifier($data['score']),
++    ]);
++});
++
++$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++    ]);
++});
++
++$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
++
++    if (
++        $data === null
++        || !array_key_exists('level', $data)
++        || !isValidLevel($data['level'])
++        || !array_key_exists('abilities', $data)
++        || !is_array($data['abilities'])
++        || !array_key_exists('armor', $data)
++        || !is_array($data['armor'])
++        || !array_key_exists('base', $data['armor'])
++        || !isIntegerValue($data['armor']['base'])
++        || !array_key_exists('shield', $data['armor'])
++        || !is_bool($data['armor']['shield'])
++        || !array_key_exists('dex_cap', $data['armor'])
++        || !isIntegerValue($data['armor']['dex_cap'])
++    ) {
++        return badRequest($response);
++    }
++
++    $modifiers = [];
++    foreach ($abilityNames as $abilityName) {
++        if (
++            !array_key_exists($abilityName, $data['abilities'])
++            || !isValidAbilityScore($data['abilities'][$abilityName])
++        ) {
++            return badRequest($response);
++        }
++
++        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
++    }
++
++    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
++    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++        'hp_max' => $data['level'] * (6 + $modifiers['con']),
++        'armor_class' => $armorClass,
++        'modifiers' => $modifiers,
++    ]);
++});
++
+ $app->run();
+
+exec
+/bin/zsh -lc 'test -d vendor && echo vendor-present || echo vendor-missing' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+vendor-present
+
+exec
+/bin/zsh -lc "nl -ba index.php | sed -n '274,360p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+   274	$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
+   275	    $data = requestJson($request);
+   276	    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+   277	
+   278	    if (
+   279	        $data === null
+   280	        || !array_key_exists('level', $data)
+   281	        || !isValidLevel($data['level'])
+   282	        || !array_key_exists('abilities', $data)
+   283	        || !is_array($data['abilities'])
+   284	        || !array_key_exists('armor', $data)
+   285	        || !is_array($data['armor'])
+   286	        || !array_key_exists('base', $data['armor'])
+   287	        || !isIntegerValue($data['armor']['base'])
+   288	        || !array_key_exists('shield', $data['armor'])
+   289	        || !is_bool($data['armor']['shield'])
+   290	        || !array_key_exists('dex_cap', $data['armor'])
+   291	        || !isIntegerValue($data['armor']['dex_cap'])
+   292	    ) {
+   293	        return badRequest($response);
+   294	    }
+   295	
+   296	    $modifiers = [];
+   297	    foreach ($abilityNames as $abilityName) {
+   298	        if (
+   299	            !array_key_exists($abilityName, $data['abilities'])
+   300	            || !isValidAbilityScore($data['abilities'][$abilityName])
+   301	        ) {
+   302	            return badRequest($response);
+   303	        }
+   304	
+   305	        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
+   306	    }
+   307	
+   308	    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
+   309	    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
+   310	
+   311	    return jsonResponse($response, [
+   312	        'level' => $data['level'],
+   313	        'proficiency_bonus' => proficiencyBonus($data['level']),
+   314	        'hp_max' => $data['level'] * (6 + $modifiers['con']),
+   315	        'armor_class' => $armorClass,
+   316	        'modifiers' => $modifiers,
+   317	    ]);
+   318	});
+   319	
+   320	$app->run();
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 1e6075b34bfd811b1472befffd56e0cbfb8b7155..c27e2a1a19fec3ba09faf4a0362d4eebfcf260ff
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -33,6 +33,26 @@
+     return is_int($value);
+ }
+ 
++function isValidAbilityScore(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 30;
++}
++
++function isValidLevel(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 20;
++}
++
++function abilityModifier(int $score): int
++{
++    return (int) floor(($score - 10) / 2);
++}
++
++function proficiencyBonus(int $level): int
++{
++    return intdiv($level - 1, 4) + 2;
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+     return jsonResponse($response, ['ok' => true]);
+ });
+@@ -227,4 +247,74 @@
+     return jsonResponse($response, ['order' => $order]);
+ });
+ 
++$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'score' => $data['score'],
++        'modifier' => abilityModifier($data['score']),
++    ]);
++});
++
++$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++    ]);
++});
++
++$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
++
++    if (
++        $data === null
++        || !array_key_exists('level', $data)
++        || !isValidLevel($data['level'])
++        || !array_key_exists('abilities', $data)
++        || !is_array($data['abilities'])
++        || !array_key_exists('armor', $data)
++        || !is_array($data['armor'])
++        || !array_key_exists('base', $data['armor'])
++        || !isIntegerValue($data['armor']['base'])
++        || !array_key_exists('shield', $data['armor'])
++        || !is_bool($data['armor']['shield'])
++        || !array_key_exists('dex_cap', $data['armor'])
++        || !isIntegerValue($data['armor']['dex_cap'])
++    ) {
++        return badRequest($response);
++    }
++
++    $modifiers = [];
++    foreach ($abilityNames as $abilityName) {
++        if (
++            !array_key_exists($abilityName, $data['abilities'])
++            || !isValidAbilityScore($data['abilities'][$abilityName])
++        ) {
++            return badRequest($response);
++        }
++
++        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
++    }
++
++    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
++    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++        'hp_max' => $data['level'] * (6 + $modifiers['con']),
++        'armor_class' => $armorClass,
++        'modifiers' => $modifiers,
++    ]);
++});
++
+ $app->run();
+
+codex
+Implemented the character maintenance endpoints in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php:36):
+
+- `POST /v1/characters/ability-modifier`
+- `POST /v1/characters/proficiency`
+- `POST /v1/characters/derived-stats`
+
+Added shared helpers for ability score validation, level validation, ability modifiers, and proficiency bonus. `run.sh` was already correct and still starts `php -S 127.0.0.1:"$PORT" index.php` in the foreground.
+
+Verification run:
+- `php -l index.php` passed.
+- `composer validate --no-check-publish` passed with only existing benchmark-related warnings about exact pinned versions and missing license.
+
+I did not start the HTTP server, per the contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+index 1e6075b34bfd811b1472befffd56e0cbfb8b7155..c27e2a1a19fec3ba09faf4a0362d4eebfcf260ff
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T005550Z_codex_gpt-5.5_php-slim/index.php
+@@ -33,6 +33,26 @@
+     return is_int($value);
+ }
+ 
++function isValidAbilityScore(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 30;
++}
++
++function isValidLevel(mixed $value): bool
++{
++    return isIntegerValue($value) && $value >= 1 && $value <= 20;
++}
++
++function abilityModifier(int $score): int
++{
++    return (int) floor(($score - 10) / 2);
++}
++
++function proficiencyBonus(int $level): int
++{
++    return intdiv($level - 1, 4) + 2;
++}
++
+ $app->get('/health', function (Request $request, Response $response) {
+     return jsonResponse($response, ['ok' => true]);
+ });
+@@ -227,4 +247,74 @@
+     return jsonResponse($response, ['order' => $order]);
+ });
+ 
++$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('score', $data) || !isValidAbilityScore($data['score'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'score' => $data['score'],
++        'modifier' => abilityModifier($data['score']),
++    ]);
++});
++
++$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    if ($data === null || !array_key_exists('level', $data) || !isValidLevel($data['level'])) {
++        return badRequest($response);
++    }
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++    ]);
++});
++
++$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
++    $data = requestJson($request);
++    $abilityNames = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
++
++    if (
++        $data === null
++        || !array_key_exists('level', $data)
++        || !isValidLevel($data['level'])
++        || !array_key_exists('abilities', $data)
++        || !is_array($data['abilities'])
++        || !array_key_exists('armor', $data)
++        || !is_array($data['armor'])
++        || !array_key_exists('base', $data['armor'])
++        || !isIntegerValue($data['armor']['base'])
++        || !array_key_exists('shield', $data['armor'])
++        || !is_bool($data['armor']['shield'])
++        || !array_key_exists('dex_cap', $data['armor'])
++        || !isIntegerValue($data['armor']['dex_cap'])
++    ) {
++        return badRequest($response);
++    }
++
++    $modifiers = [];
++    foreach ($abilityNames as $abilityName) {
++        if (
++            !array_key_exists($abilityName, $data['abilities'])
++            || !isValidAbilityScore($data['abilities'][$abilityName])
++        ) {
++            return badRequest($response);
++        }
++
++        $modifiers[$abilityName] = abilityModifier($data['abilities'][$abilityName]);
++    }
++
++    $shieldBonus = $data['armor']['shield'] ? 2 : 0;
++    $armorClass = $data['armor']['base'] + min($modifiers['dex'], $data['armor']['dex_cap']) + $shieldBonus;
++
++    return jsonResponse($response, [
++        'level' => $data['level'],
++        'proficiency_bonus' => proficiencyBonus($data['level']),
++        'hp_max' => $data['level'] * (6 + $modifiers['con']),
++        'armor_class' => $armorClass,
++        'modifiers' => $modifiers,
++    ]);
++});
++
+ $app->run();
+
+tokens used
+20,067

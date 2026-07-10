@@ -1,0 +1,19 @@
+Done, Chef 🎲✨
+
+## Summary
+
+Built a single-file Java stdlib REST server (`Main.java` using `com.sun.net.httpserver.HttpServer`, OpenJDK 26.0.1) with `run.sh` that compiles + runs in the foreground on `127.0.0.1:$PORT`.
+
+**Endpoints (all verified against spec examples + edge cases):**
+- `GET /health` → `{"ok":true}`
+- `POST /v1/dice/stats` — regex parser for `NdS[±M]`, validates count/sides > 0, computes min/max/average (fractional averages like `1d4`→`2.5` emit cleanly)
+- `POST /v1/checks/ability` → total/success/margin
+- `POST /v1/encounters/adjusted-xp` — CR→XP table, all 6 multiplier tiers (1, 1.5, 2, 2.5, 3, 4), summed party thresholds, difficulty via inclusive `>=` bands (trivial→deadly)
+- `POST /v1/initiative/order` — sort by score desc → dex desc → name asc
+
+**Key implementation choices:**
+- Hand-written recursive-descent JSON parser + serializer (stdlib only — no external deps). Serializer emits whole-valued doubles as integers (`2.0`→`2`, `1700.0`→`1700`) and fractional ones minimally (`1.5`, `2.5`), so `multiplier`/`adjusted_xp`/`average` match the spec's integer style exactly.
+- Error model: `400` for invalid dice expressions, malformed/empty JSON, missing fields, unknown CR; `404` for unknown route or wrong method; `500` fallback.
+- Lenient coercion (missing numerics default to 0; CR accepts string or whole-number) to avoid spurious crashes, while staying strict on the grammar.
+
+**Verified:** every spec sample matches byte-for-byte, all invalid dice expressions return 400, multiplier tiers x1–x4 confirmed, threshold boundaries inclusive (adj=400→deadly, =150→medium, =75→easy), summed multi-member party thresholds correct, and `./run.sh` keeps the process alive in the foreground. No server left running. 🛡️

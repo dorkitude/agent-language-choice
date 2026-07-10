@@ -1,0 +1,21 @@
+All 20/20 tests pass now. 🎉
+
+## Summary
+
+The bug was in the `combat-advance-expired-removed` case, Chef. 🐛
+
+**Root cause:** `_conditions_view()` filtered out any combatant whose condition list was empty:
+
+```python
+if conditions   # dropped fighter once its list became []
+```
+
+When `fighter`'s `blessed` condition decremented to `0` and was removed, its list became `[]`, so the `fighter` key vanished entirely from the response — but the evaluator expects the key to persist as `{"fighter": []}`. Simply removing the filter wasn't viable either, because that would surface `rogue`/`mage` (who never had conditions) in earlier tests that expect only `fighter`.
+
+**Fix:** Track which combatants have *ever* had a condition attached, and include exactly those in the view — even when their list is empty:
+
+- Added a `"conditioned": set()` to each session (`dndsite/urls.py:340`)
+- Added `session["conditioned"].add(target)` when a condition is attached (`urls.py:378`)
+- `_conditions_view()` now keeps a name if `name in session["conditioned"]` rather than `if conditions` (`urls.py:292`)
+
+No prior-stage behavior was touched, and `./run.sh` is unchanged and ready. ✨

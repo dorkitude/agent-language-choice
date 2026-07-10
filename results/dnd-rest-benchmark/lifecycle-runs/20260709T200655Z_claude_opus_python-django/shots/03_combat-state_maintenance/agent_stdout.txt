@@ -1,0 +1,21 @@
+Done! 🐉⚔️
+
+## Summary
+
+I inherited the existing Django D&D API and added the **Stateful Combat** stage without touching any prior behavior. All new logic lives in `dndsite/urls.py` (matching the seeded project's single-module style).
+
+**Added endpoints** (backed by an in-memory `COMBAT_SESSIONS` dict, process-lifetime state):
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Creates a session; initiative = `roll + dex`, sorted by score↓, dex↓, name↑; starts at `round=1`, `turn_index=0`. Duplicate/blank `id` → 400. |
+| `POST /v1/combat/sessions/{id}/conditions` | Attaches a condition to a named combatant. Unknown session → 404; bad target / non-positive duration / bad body → 400. |
+| `POST /v1/combat/sessions/{id}/advance` | Advances `turn_index`, wraps to 0 and bumps `round`, decrements only the *active* combatant's conditions, drops any that hit 0. |
+
+**Verified end-to-end** against a live server 🎯:
+- Create returns `rogue 17 → mage 16 → fighter 14` exactly as the spec example
+- Conditions decrement only on the active combatant's turn; expire at 0 (rogue's `hasted` vanished on wrap to round 2)
+- Error cases: duplicate id → `400`, unknown session → `404`, bad target → `400`
+- Regression check: existing `/v1/initiative/order` still correct
+
+`run.sh` was already correct (foreground server on `127.0.0.1:$PORT`) — no changes needed. Ready! 🎉

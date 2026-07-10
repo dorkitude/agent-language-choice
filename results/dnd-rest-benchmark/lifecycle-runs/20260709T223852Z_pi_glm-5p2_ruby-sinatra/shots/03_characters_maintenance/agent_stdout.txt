@@ -1,0 +1,29 @@
+All green, Chef! 🎲 The maintenance stage is complete and `./run.sh` is already in place and executable.
+
+## What I added
+
+Three new endpoints in `app.rb`, plus two top-level helpers (`ability_modifier`, `proficiency_bonus`):
+
+**`POST /v1/characters/ability-modifier`** — validates `score` is an integer 1–30, returns `{"score":..., "modifier":...}`. Ruby's `Integer#/` floors toward −∞, so score 9 → `(9-10)/2 = -1` ✓
+
+**`POST /v1/characters/proficiency`** — validates `level` is an integer 1–20, returns `{"level":..., "proficiency_bonus":...}` via a `case` matching the tier table (1–4→2, 5–8→3, … 17–20→6).
+
+**`POST /v1/characters/derived-stats`** — validates `level` (1–20), all six abilities (str/dex/con/int/wis/cha, each int 1–30), and `armor` (`base` + `dex_cap` ints, `shield` optional → `shield_bonus` 2 only when `armor.shield == true`). Computes:
+- `hp_max = level * (6 + con_modifier)`
+- `armor_class = base + min(dex_modifier, dex_cap) + shield_bonus`
+
+## Verification
+
+The spec example reproduces **exactly**:
+```
+{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,
+ "modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}
+```
+
+Invalid inputs (score 0/31, level 0, missing ability) all return `400`. Existing routes (`/health`, `/v1/dice/stats`, `/v1/checks/ability`, `/v1/encounters/adjusted-xp`, `/v1/initiative/order`) confirmed still working — no regressions. ✨
+
+`./run.sh` remains:
+```bash
+bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
+```
+Foreground, loopback, `PORT`-driven. 🚀

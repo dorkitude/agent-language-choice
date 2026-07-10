@@ -1,0 +1,18 @@
+All done ✅ Here's a summary of what was added to `index.php`:
+
+## Character Rules stage — added endpoints
+
+**Helpers** (in the Helpers section):
+- `abilityModifier(int $score): int` — `(int) floor(($score - 10) / 2)`, correctly flooring negative halves (score 9 → -1).
+- `proficiencyBonus(int $level): int` — `2 + intdiv($level - 1, 4)` gives the exact band mapping (1-4→2, 5-8→3, …, 17-20→6).
+- `isIntInRange(mixed, int, int): bool` — shared integer/range validator.
+
+**Routes** (inserted before the existing initiative route, preserving all prior endpoints):
+
+1. `POST /v1/characters/ability-modifier` — validates `score` is int 1–30, returns `{"score", "modifier"}`.
+2. `POST /v1/characters/proficiency` — validates `level` is int 1–20, returns `{"level", "proficiency_bonus"}`.
+3. `POST /v1/characters/derived-stats` — validates `level` (1–20), all six abilities (str/dex/con/int/wis/cha, each int 1–30), and `armor` (`base` int, `shield` bool, `dex_cap` int). Computes modifiers for every ability, proficiency from level, `hp_max = level * (6 + con_modifier)`, and `armor_class = base + min(dex_modifier, dex_cap) + (shield ? 2 : 0)`. Returns the full derived-stats object.
+
+All invalid inputs return `400` with `{"error":"bad_request"}`. `run.sh` was already correct (`php -S 127.0.0.1:"$PORT" index.php`) and untouched.
+
+Verified against the spec example: score 9 → modifier -1; level 9 → bonus 4; derived-stats spec input → `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{...}}` exactly as specified. Regression tests on `/health`, `/v1/dice/stats`, `/v1/checks/ability`, and `/v1/initiative/order` all still return 200 with their original shapes. 🛡️

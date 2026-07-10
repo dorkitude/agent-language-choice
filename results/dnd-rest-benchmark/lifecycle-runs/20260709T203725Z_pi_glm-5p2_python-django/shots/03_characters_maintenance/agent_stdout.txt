@@ -1,0 +1,20 @@
+All done! 🎉
+
+## Summary
+
+I inherited the existing Django D&D REST API and added the **Character Rules** maintenance stage — three new `POST` endpoints under `/v1/characters/` — while preserving all prior behavior.
+
+### Changes
+
+**`dndsite/views.py`** — added three views plus a small `_is_int` helper (guards against JSON booleans, since `isinstance(True, int)` is `True` in Python):
+
+- **`ability_modifier`** — validates `score` is an int in `[1, 30]`; `modifier = (score - 10) // 2`. Python's `//` floors toward negative infinity, so score `9` → `-1` correctly. ✓
+- **`proficiency`** — validates `level` in `[1, 20]`; `bonus = 2 + (level - 1) // 4`, giving the exact tiers 2/3/4/5/6. ✓
+- **`derived_stats`** — validates level, all six abilities (each in `[1, 30]`), and `armor.{base, shield, dex_cap}` (shield must be a real bool). Computes modifiers, proficiency, `hp_max = level * (6 + con_mod)`, and `armor_class = base + min(dex_mod, dex_cap) + (2 if shield else 0)`. ✓
+
+**`dndsite/urls.py`** — registered the three new routes alongside the existing ones.
+
+**`run.sh`** — unchanged; starts `runserver` in the foreground on `127.0.0.1:$PORT` with `.deps` on `PYTHONPATH`.
+
+### Verification
+Tested all new endpoints (including the spec example → `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{...}}`), invalid-input `400` paths, and every prior-stage endpoint — all green. Django `6.0.7`, no downgrades, server not left running.

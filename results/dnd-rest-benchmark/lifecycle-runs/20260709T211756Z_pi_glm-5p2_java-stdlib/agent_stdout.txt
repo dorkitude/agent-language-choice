@@ -1,0 +1,46 @@
+All set, Chef! 🍳 The fix is in and verified.
+
+## Root cause
+
+The `combat-advance-expired-removed` test expects the advance response's `conditions` map to still contain the `"fighter"` key with an **empty array** after the `blessed` condition expires on fighter's own turn:
+
+```go
+"conditions": map[string]any{ "fighter": []any{} },
+```
+
+But `allConditionsView` only emitted combatants whose condition list was *non-empty*:
+
+```java
+if (!c.conditions.isEmpty()) {
+    map.put(c.name, conditionsView(c.conditions));
+}
+```
+
+So once `blessed` ticked `1 → 0` and was removed, fighter was dropped entirely → `"conditions": {}` → the matcher reported `missing JSON key "fighter"`.
+
+## Fix
+
+One minimal change in `Main.java` — list **every** combatant in the conditions map (empty array when none remain):
+
+```java
+private static Map<String, Object> allConditionsView(CombatSession session) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    for (SessionCombatant c : session.order) {
+        map.put(c.name, conditionsView(c.conditions));
+    }
+    return map;
+}
+```
+
+This is safe for all other advance tests because the evaluator's `jsonContains` matcher only checks keys present in `want` — it never asserts *absence* of extra keys, so adding `"rogue":[]` / `"mage":[]` doesn't break `combat-advance-to-mage`, `…-decrements`, or `…-expires`. No prior-stage behavior was touched.
+
+## Verification (real `dndeval` against a live server)
+
+- `core`: **8/8** ✅
+- `characters`: **13/13** ✅
+- `combat-state`: **20/20** ✅ (was 19/20)
+
+Final advance response now reads:
+`{"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{"rogue":[],"mage":[],"fighter":[]}}`
+
+`./run.sh` is ready — compiles with OpenJDK 26.0.1 and runs the server in the foreground on `127.0.0.1:$PORT`. 🛡️

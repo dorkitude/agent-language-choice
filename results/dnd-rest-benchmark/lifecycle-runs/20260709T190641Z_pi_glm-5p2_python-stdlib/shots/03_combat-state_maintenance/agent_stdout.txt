@@ -1,0 +1,27 @@
+All done, Chef! 🎲⚔️
+
+## Summary
+
+I added the **Stateful Combat** stage to the existing D&D REST API while preserving every prior-stage endpoint (all 13 core + character-rule tests still pass).
+
+### What was added to `server.py`
+
+**In-memory state** — a module-level `SESSIONS` dict guarded by a `threading.Lock` (safe under `ThreadingHTTPServer`).
+
+**Three new endpoints:**
+
+1. **`POST /v1/combat/sessions`** — validates `id` (non-empty string) + `combatants` (non-empty list of `{name, dex, roll}` with strict int checks), computes initiative `score = roll + dex`, sorts by **score desc, dex desc, name asc**, stores `round=1, turn_index=0`, returns `{id, round, turn_index, active, order}`. Malformed → `400`.
+
+2. **`POST /v1/combat/sessions/{id}/conditions`** — validates `target` (must name an existing combatant), `condition` (string), `duration_rounds` (positive int). Appends the condition to that combatant and returns `{target, conditions}`. Unknown session → `404`, bad input → `400`.
+
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index` (wrapping increments `round`), decrements conditions on the **newly active** combatant only, removes any that hit `0`, returns `{id, round, turn_index, active, conditions}` where `conditions` lists only combatants with remaining conditions. Unknown session → `404`.
+
+### Routing
+The existing exact-match `POST_ROUTES` dispatch is untouched; combat routes use dedicated regex patterns (`/v1/combat/sessions`, `.../{id}/conditions`, `.../{id}/advance`) with URL-unquoted session ids. A `_respond` helper maps `(status, payload)` tuples to the right `400`/`404`/`2xx` responses.
+
+### Verified
+- Spec example reproduces byte-for-byte (create → condition → advance #1).
+- Full condition lifecycle: `blessed` 2→1 at fighter's turn, removed at `0`, round increments on wrap.
+- `404` for unknown sessions, `400` for empty combatants / unknown target / non-positive duration.
+- All 13 prior-stage endpoints still return correct status + payloads.
+- `run.sh` unchanged — starts `server.py` in the foreground on `127.0.0.1:$PORT`. ✨

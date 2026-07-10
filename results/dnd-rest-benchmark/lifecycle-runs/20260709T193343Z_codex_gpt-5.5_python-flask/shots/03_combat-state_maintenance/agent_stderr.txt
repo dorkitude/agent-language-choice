@@ -1,0 +1,2995 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4862-7ff4-7893-9678-d241ff7b5631
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-flask
+        Language: python
+        Framework/runtime: flask
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Flask 3.1.3. Implement the REST API as Flask routes.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Flask app and tests first so the combat state routes fit the current API shape without disturbing earlier behavior.
+exec
+/bin/zsh -lc 'find . -maxdepth 2 -type f | sort' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+./PROMPT.md
+./VERSION-PINS.json
+./__pycache__/app.cpython-314.pyc
+./agent_last_message.txt
+./agent_stderr.txt
+./agent_stdout.txt
+./app.py
+./dndeval-characters-report.json
+./dndeval-core-report.json
+./lifecycle-result.json
+./requirements.txt
+./run.sh
+./server_stderr.txt
+./server_stdout.txt
+./setup.json
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+requirements.txt
+PROMPT.md
+dndeval-characters-report.json
+setup.json
+agent_last_message.txt
+agent_stdout.txt
+app.py
+lifecycle-result.json
+run.sh
+server_stdout.txt
+server_stderr.txt
+agent_stderr.txt
+VERSION-PINS.json
+dndeval-core-report.json
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+
+codex
+The repo is small. I found unrelated dirty state outside this workspace, so I’ll ignore that and only touch the current Flask run directory.
+exec
+/bin/zsh -lc 'cat requirements.txt' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+Flask==3.1.3
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 app.py
+
+exec
+/bin/zsh -lc "sed -n '1,260p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+import os
+import re
+
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+
+
+def bad_request():
+    return jsonify(error="bad_request"), 400
+
+
+def json_body():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("JSON object required")
+    return data
+
+
+def required_int(data, key):
+    value = data.get(key)
+    if type(value) is not int:
+        raise ValueError(f"{key} must be an integer")
+    return value
+
+
+def clean_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def ability_modifier(score):
+    if type(score) is not int or score < 1 or score > 30:
+        raise ValueError("score must be an integer from 1 through 30")
+    return (score - 10) // 2
+
+
+def proficiency_bonus(level):
+    if type(level) is not int or level < 1 or level > 20:
+        raise ValueError("level must be an integer from 1 through 20")
+    return 2 + (level - 1) // 4
+
+
+@app.get("/health")
+def health():
+    return jsonify(ok=True)
+
+
+@app.post("/v1/dice/stats")
+def dice_stats():
+    try:
+        data = json_body()
+        expression = data.get("expression")
+        if not isinstance(expression, str):
+            return bad_request()
+
+        match = DICE_RE.fullmatch(expression)
+        if match is None:
+            return bad_request()
+
+        dice_count = int(match.group(1))
+        sides = int(match.group(2))
+        if dice_count <= 0 or sides <= 0:
+            return bad_request()
+
+        modifier = int(match.group(4) or 0)
+        if match.group(3) == "-":
+            modifier = -modifier
+
+        minimum = dice_count + modifier
+        maximum = dice_count * sides + modifier
+        average = dice_count * (sides + 1) / 2 + modifier
+        return jsonify(
+            dice_count=dice_count,
+            sides=sides,
+            modifier=modifier,
+            min=minimum,
+            max=maximum,
+            average=clean_number(average),
+        )
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/checks/ability")
+def ability_check():
+    try:
+        data = json_body()
+        roll = required_int(data, "roll")
+        modifier = required_int(data, "modifier")
+        dc = required_int(data, "dc")
+        total = roll + modifier
+        return jsonify(total=total, success=total >= dc, margin=total - dc)
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+def monster_multiplier(monster_count):
+    if monster_count <= 0:
+        raise ValueError("monster_count must be positive")
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+@app.post("/v1/encounters/adjusted-xp")
+def adjusted_xp():
+    try:
+        data = json_body()
+        party = data.get("party")
+        monsters = data.get("monsters")
+        if not isinstance(party, list) or not isinstance(monsters, list):
+            return bad_request()
+
+        thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+        for member in party:
+            if not isinstance(member, dict):
+                return bad_request()
+            level = required_int(member, "level")
+            if level not in LEVEL_THRESHOLDS:
+                return bad_request()
+            for name, value in LEVEL_THRESHOLDS[level].items():
+                thresholds[name] += value
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            if not isinstance(monster, dict):
+                return bad_request()
+            cr = monster.get("cr")
+            count = required_int(monster, "count")
+            if cr not in CR_XP or count <= 0:
+                return bad_request()
+            base_xp += CR_XP[cr] * count
+            monster_count += count
+
+        multiplier = monster_multiplier(monster_count)
+        adjusted = base_xp * multiplier
+        difficulty = "trivial"
+        for name in ("easy", "medium", "hard", "deadly"):
+            if adjusted >= thresholds[name]:
+                difficulty = name
+
+        return jsonify(
+            base_xp=base_xp,
+            monster_count=monster_count,
+            multiplier=clean_number(multiplier),
+            adjusted_xp=clean_number(adjusted),
+            difficulty=difficulty,
+            thresholds=thresholds,
+        )
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/initiative/order")
+def initiative_order():
+    try:
+        data = json_body()
+        combatants = data.get("combatants")
+        if not isinstance(combatants, list):
+            return bad_request()
+
+        entries = []
+        for combatant in combatants:
+            if not isinstance(combatant, dict):
+                return bad_request()
+            name = combatant.get("name")
+            if not isinstance(name, str):
+                return bad_request()
+            dex = required_int(combatant, "dex")
+            roll = required_int(combatant, "roll")
+            score = roll + dex
+            entries.append({"name": name, "dex": dex, "score": score})
+
+        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+        return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/characters/ability-modifier")
+def character_ability_modifier():
+    try:
+        data = json_body()
+        score = required_int(data, "score")
+        return jsonify(score=score, modifier=ability_modifier(score))
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/characters/proficiency")
+def character_proficiency():
+    try:
+        data = json_body()
+        level = required_int(data, "level")
+        return jsonify(level=level, proficiency_bonus=proficiency_bonus(level))
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/characters/derived-stats")
+def character_derived_stats():
+    try:
+        data = json_body()
+        level = required_int(data, "level")
+        bonus = proficiency_bonus(level)
+
+        abilities = data.get("abilities")
+        armor = data.get("armor")
+        if not isinstance(abilities, dict) or not isinstance(armor, dict):
+            return bad_request()
+
+        modifiers = {}
+        for key in ABILITY_KEYS:
+            modifiers[key] = ability_modifier(required_int(abilities, key))
+
+        armor_base = required_int(armor, "base")
+        dex_cap = required_int(armor, "dex_cap")
+        shield = armor.get("shield")
+        if type(shield) is not bool:
+            return bad_request()
+
+        hp_max = level * (6 + modifiers["con"])
+        armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+        return jsonify(
+            level=level,
+            proficiency_bonus=bonus,
+            hp_max=hp_max,
+            armor_class=armor_class,
+
+exec
+/bin/zsh -lc 'cat dndeval-core-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:65230",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc 'cat dndeval-characters-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:65330",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+The existing app keeps all routes in `app.py` with small validation helpers. I’m going to add an in-memory combat session store and route handlers in that same style.
+exec
+/bin/zsh -lc "sed -n '260,520p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+            armor_class=armor_class,
+            modifiers=modifiers,
+        )
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+I’ll reject malformed sessions early: duplicate session IDs, empty combatant lists, non-string IDs/names, and non-integer initiative fields. Conditions will be returned only for combatants that currently have active conditions, matching the example response.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..ca3db089bc313a88447ff3bc288c807e5b018628
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants):
++    if not isinstance(combatants, list) or len(combatants) == 0:
++        raise ValueError("combatants must be a non-empty list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..ca3db089bc313a88447ff3bc288c807e5b018628
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants):
++    if not isinstance(combatants, list) or len(combatants) == 0:
++        raise ValueError("combatants must be a non-empty list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..64563f0780b8b3625f84dcddadf9709f793fbe7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants):
++    if not isinstance(combatants, list) or len(combatants) == 0:
++        raise ValueError("combatants must be a non-empty list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"))
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..64563f0780b8b3625f84dcddadf9709f793fbe7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants):
++    if not isinstance(combatants, list) or len(combatants) == 0:
++        raise ValueError("combatants must be a non-empty list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"))
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+One small compatibility issue surfaced: the old initiative endpoint accepted an empty `combatants` list and returned an empty order. I’m keeping that behavior for the existing endpoint while requiring non-empty combat sessions for the new stateful route.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+The routes are in place. I’m going to verify syntax and exercise the new endpoints through Flask’s test client, which avoids starting the foreground server.
+exec
+/bin/zsh -lc 'python3 -m py_compile app.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from app import app, COMBAT_SESSIONS
+
+COMBAT_SESSIONS.clear()
+client = app.test_client()
+
+payload = {
+    \"id\": \"enc-1\",
+    \"combatants\": [
+        {\"name\": \"fighter\", \"dex\": 1, \"roll\": 13},
+        {\"name\": \"rogue\", \"dex\": 3, \"roll\": 14},
+        {\"name\": \"mage\", \"dex\": 2, \"roll\": 14},
+    ],
+}
+resp = client.post('/v1/combat/sessions', json=payload)
+print('create', resp.status_code, resp.get_json())
+resp = client.post('/v1/combat/sessions/enc-1/conditions', json={\"target\":\"fighter\",\"condition\":\"blessed\",\"duration_rounds\":2})
+print('condition', resp.status_code, resp.get_json())
+for i in range(4):
+    resp = client.post('/v1/combat/sessions/enc-1/advance')
+    print('advance', i + 1, resp.status_code, resp.get_json())
+print('missing', client.post('/v1/combat/sessions/nope/advance').status_code)
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py", line 4, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+`py_compile` passed. The first endpoint smoke test missed the local dependency path that `run.sh` sets, so I’m rerunning it with the same `PYTHONPATH` environment.
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+from app import app, COMBAT_SESSIONS
+
+COMBAT_SESSIONS.clear()
+client = app.test_client()
+
+payload = {
+    \"id\": \"enc-1\",
+    \"combatants\": [
+        {\"name\": \"fighter\", \"dex\": 1, \"roll\": 13},
+        {\"name\": \"rogue\", \"dex\": 3, \"roll\": 14},
+        {\"name\": \"mage\", \"dex\": 2, \"roll\": 14},
+    ],
+}
+resp = client.post('/v1/combat/sessions', json=payload)
+print('create', resp.status_code, resp.get_json())
+resp = client.post('/v1/combat/sessions/enc-1/conditions', json={\"target\":\"fighter\",\"condition\":\"blessed\",\"duration_rounds\":2})
+print('condition', resp.status_code, resp.get_json())
+for i in range(4):
+    resp = client.post('/v1/combat/sessions/enc-1/advance')
+    print('advance', i + 1, resp.status_code, resp.get_json())
+print('missing', client.post('/v1/combat/sessions/nope/advance').status_code)
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+create 200 {'active': {'name': 'rogue', 'score': 17}, 'id': 'enc-1', 'order': [{'name': 'rogue', 'score': 17}, {'name': 'mage', 'score': 16}, {'name': 'fighter', 'score': 14}], 'round': 1, 'turn_index': 0}
+condition 200 {'conditions': [{'condition': 'blessed', 'remaining_rounds': 2}], 'target': 'fighter'}
+advance 1 200 {'active': {'name': 'mage', 'score': 16}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 2}]}, 'id': 'enc-1', 'round': 1, 'turn_index': 1}
+advance 2 200 {'active': {'name': 'fighter', 'score': 14}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 1}]}, 'id': 'enc-1', 'round': 1, 'turn_index': 2}
+advance 3 200 {'active': {'name': 'rogue', 'score': 17}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 1}]}, 'id': 'enc-1', 'round': 2, 'turn_index': 0}
+advance 4 200 {'active': {'name': 'mage', 'score': 16}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 1}]}, 'id': 'enc-1', 'round': 2, 'turn_index': 1}
+missing 404
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+The combat lifecycle smoke test matches the requested ordering and decrement timing: the fighter’s condition only ticks down when fighter becomes active. I’ll do a final diff and run-script check now.
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  100 Jul  9 12:33 run.sh
+
+exec
+/bin/zsh -lc 'git diff -- app.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+from app import app
+client = app.test_client()
+checks = [
+    ('health', client.get('/health').status_code),
+    ('dice', client.post('/v1/dice/stats', json={'expression': '2d6+3'}).status_code),
+    ('initiative-empty', client.post('/v1/initiative/order', json={'combatants': []}).get_json()),
+    ('ability-mod', client.post('/v1/characters/ability-modifier', json={'score': 9}).get_json()),
+]
+for item in checks:
+    print(item)
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+('health', 200)
+('dice', 200)
+('initiative-empty', {'order': []})
+('ability-mod', {'modifier': -1, 'score': 9})
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+The run script is present, executable, and still starts `python3 app.py` with the local dependency path. Existing representative routes still respond as before.
+exec
+/bin/zsh -lc "sed -n '1,380p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+import os
+import re
+
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+
+COMBAT_SESSIONS = {}
+
+
+def bad_request():
+    return jsonify(error="bad_request"), 400
+
+
+def not_found():
+    return jsonify(error="not_found"), 404
+
+
+def json_body():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("JSON object required")
+    return data
+
+
+def required_int(data, key):
+    value = data.get(key)
+    if type(value) is not int:
+        raise ValueError(f"{key} must be an integer")
+    return value
+
+
+def clean_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def ability_modifier(score):
+    if type(score) is not int or score < 1 or score > 30:
+        raise ValueError("score must be an integer from 1 through 30")
+    return (score - 10) // 2
+
+
+def proficiency_bonus(level):
+    if type(level) is not int or level < 1 or level > 20:
+        raise ValueError("level must be an integer from 1 through 20")
+    return 2 + (level - 1) // 4
+
+
+def initiative_entries(combatants, allow_empty=True):
+    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
+        raise ValueError("combatants must be a list")
+
+    entries = []
+    for combatant in combatants:
+        if not isinstance(combatant, dict):
+            raise ValueError("combatant must be an object")
+        name = combatant.get("name")
+        if not isinstance(name, str):
+            raise ValueError("name must be a string")
+        dex = required_int(combatant, "dex")
+        roll = required_int(combatant, "roll")
+        score = roll + dex
+        entries.append({"name": name, "dex": dex, "score": score})
+
+    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return entries
+
+
+def combat_public_state(session, include_conditions=False):
+    response = {
+        "id": session["id"],
+        "round": session["round"],
+        "turn_index": session["turn_index"],
+        "active": session["order"][session["turn_index"]],
+        "order": session["order"],
+    }
+    if include_conditions:
+        response["conditions"] = active_conditions(session)
+        del response["order"]
+    return response
+
+
+def active_conditions(session):
+    return {
+        name: conditions
+        for name, conditions in session["conditions"].items()
+        if len(conditions) > 0
+    }
+
+
+@app.get("/health")
+def health():
+    return jsonify(ok=True)
+
+
+@app.post("/v1/dice/stats")
+def dice_stats():
+    try:
+        data = json_body()
+        expression = data.get("expression")
+        if not isinstance(expression, str):
+            return bad_request()
+
+        match = DICE_RE.fullmatch(expression)
+        if match is None:
+            return bad_request()
+
+        dice_count = int(match.group(1))
+        sides = int(match.group(2))
+        if dice_count <= 0 or sides <= 0:
+            return bad_request()
+
+        modifier = int(match.group(4) or 0)
+        if match.group(3) == "-":
+            modifier = -modifier
+
+        minimum = dice_count + modifier
+        maximum = dice_count * sides + modifier
+        average = dice_count * (sides + 1) / 2 + modifier
+        return jsonify(
+            dice_count=dice_count,
+            sides=sides,
+            modifier=modifier,
+            min=minimum,
+            max=maximum,
+            average=clean_number(average),
+        )
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/checks/ability")
+def ability_check():
+    try:
+        data = json_body()
+        roll = required_int(data, "roll")
+        modifier = required_int(data, "modifier")
+        dc = required_int(data, "dc")
+        total = roll + modifier
+        return jsonify(total=total, success=total >= dc, margin=total - dc)
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+def monster_multiplier(monster_count):
+    if monster_count <= 0:
+        raise ValueError("monster_count must be positive")
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+@app.post("/v1/encounters/adjusted-xp")
+def adjusted_xp():
+    try:
+        data = json_body()
+        party = data.get("party")
+        monsters = data.get("monsters")
+        if not isinstance(party, list) or not isinstance(monsters, list):
+            return bad_request()
+
+        thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+        for member in party:
+            if not isinstance(member, dict):
+                return bad_request()
+            level = required_int(member, "level")
+            if level not in LEVEL_THRESHOLDS:
+                return bad_request()
+            for name, value in LEVEL_THRESHOLDS[level].items():
+                thresholds[name] += value
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            if not isinstance(monster, dict):
+                return bad_request()
+            cr = monster.get("cr")
+            count = required_int(monster, "count")
+            if cr not in CR_XP or count <= 0:
+                return bad_request()
+            base_xp += CR_XP[cr] * count
+            monster_count += count
+
+        multiplier = monster_multiplier(monster_count)
+        adjusted = base_xp * multiplier
+        difficulty = "trivial"
+        for name in ("easy", "medium", "hard", "deadly"):
+            if adjusted >= thresholds[name]:
+                difficulty = name
+
+        return jsonify(
+            base_xp=base_xp,
+            monster_count=monster_count,
+            multiplier=clean_number(multiplier),
+            adjusted_xp=clean_number(adjusted),
+            difficulty=difficulty,
+            thresholds=thresholds,
+        )
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/initiative/order")
+def initiative_order():
+    try:
+        data = json_body()
+        combatants = data.get("combatants")
+        entries = initiative_entries(combatants)
+        return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/characters/ability-modifier")
+def character_ability_modifier():
+    try:
+        data = json_body()
+        score = required_int(data, "score")
+        return jsonify(score=score, modifier=ability_modifier(score))
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/characters/proficiency")
+def character_proficiency():
+    try:
+        data = json_body()
+        level = required_int(data, "level")
+        return jsonify(level=level, proficiency_bonus=proficiency_bonus(level))
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/characters/derived-stats")
+def character_derived_stats():
+    try:
+        data = json_body()
+        level = required_int(data, "level")
+        bonus = proficiency_bonus(level)
+
+        abilities = data.get("abilities")
+        armor = data.get("armor")
+        if not isinstance(abilities, dict) or not isinstance(armor, dict):
+            return bad_request()
+
+        modifiers = {}
+        for key in ABILITY_KEYS:
+            modifiers[key] = ability_modifier(required_int(abilities, key))
+
+        armor_base = required_int(armor, "base")
+        dex_cap = required_int(armor, "dex_cap")
+        shield = armor.get("shield")
+        if type(shield) is not bool:
+            return bad_request()
+
+        hp_max = level * (6 + modifiers["con"])
+        armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+        return jsonify(
+            level=level,
+            proficiency_bonus=bonus,
+            hp_max=hp_max,
+            armor_class=armor_class,
+            modifiers=modifiers,
+        )
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/combat/sessions")
+def create_combat_session():
+    try:
+        data = json_body()
+        session_id = data.get("id")
+        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
+            return bad_request()
+
+        entries = initiative_entries(data.get("combatants"), allow_empty=False)
+        names = [entry["name"] for entry in entries]
+        if len(set(names)) != len(names):
+            return bad_request()
+
+        session = {
+            "id": session_id,
+            "round": 1,
+            "turn_index": 0,
+            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
+            "combatants": set(names),
+            "conditions": {name: [] for name in names},
+        }
+        COMBAT_SESSIONS[session_id] = session
+        return jsonify(combat_public_state(session))
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/combat/sessions/<session_id>/conditions")
+def add_combat_condition(session_id):
+    session = COMBAT_SESSIONS.get(session_id)
+    if session is None:
+        return not_found()
+
+    try:
+        data = json_body()
+        target = data.get("target")
+        condition = data.get("condition")
+        duration_rounds = data.get("duration_rounds")
+        if target not in session["combatants"]:
+            return bad_request()
+        if not isinstance(condition, str):
+            return bad_request()
+        if type(duration_rounds) is not int or duration_rounds <= 0:
+            return bad_request()
+
+        session["conditions"][target].append(
+            {"condition": condition, "remaining_rounds": duration_rounds}
+        )
+        return jsonify(target=target, conditions=session["conditions"][target])
+    except (TypeError, ValueError):
+        return bad_request()
+
+
+@app.post("/v1/combat/sessions/<session_id>/advance")
+def advance_combat_turn(session_id):
+    session = COMBAT_SESSIONS.get(session_id)
+    if session is None:
+        return not_found()
+
+    session["turn_index"] += 1
+    if session["turn_index"] == len(session["order"]):
+        session["turn_index"] = 0
+        session["round"] += 1
+
+    active_name = session["order"][session["turn_index"]]["name"]
+    remaining_conditions = []
+    for condition in session["conditions"][active_name]:
+        condition["remaining_rounds"] -= 1
+        if condition["remaining_rounds"] > 0:
+            remaining_conditions.append(condition)
+    session["conditions"][active_name] = remaining_conditions
+
+    return jsonify(combat_public_state(session, include_conditions=True))
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+codex
+Implemented stateful combat in [app.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py).
+
+Added:
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+- In-memory session storage for process lifetime
+- `404` JSON response for unknown combat sessions
+- Compatibility preserved for existing initiative behavior, including empty `combatants`
+
+Verified:
+- `python3 -m py_compile app.py`
+- Flask test-client smoke test for create session, add condition, advance turns, missing session
+- Representative existing endpoints still respond correctly
+- [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/run.sh) exists, is executable, and starts the Flask server in the foreground using `PORT`.
+
+I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+index 60fca24588296d48979ca6b02c1355fde17cc760..11ee84aa0d2fd97f269274cd15c68d1c4027599a
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T193343Z_codex_gpt-5.5_python-flask/app.py
+@@ -26,11 +26,17 @@
+ 
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return jsonify(error="bad_request"), 400
+ 
+ 
++def not_found():
++    return jsonify(error="not_found"), 404
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -63,6 +69,48 @@
+     return 2 + (level - 1) // 4
+ 
+ 
++def initiative_entries(combatants, allow_empty=True):
++    if not isinstance(combatants, list) or (len(combatants) == 0 and not allow_empty):
++        raise ValueError("combatants must be a list")
++
++    entries = []
++    for combatant in combatants:
++        if not isinstance(combatant, dict):
++            raise ValueError("combatant must be an object")
++        name = combatant.get("name")
++        if not isinstance(name, str):
++            raise ValueError("name must be a string")
++        dex = required_int(combatant, "dex")
++        roll = required_int(combatant, "roll")
++        score = roll + dex
++        entries.append({"name": name, "dex": dex, "score": score})
++
++    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return entries
++
++
++def combat_public_state(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++        "order": session["order"],
++    }
++    if include_conditions:
++        response["conditions"] = active_conditions(session)
++        del response["order"]
++    return response
++
++
++def active_conditions(session):
++    return {
++        name: conditions
++        for name, conditions in session["conditions"].items()
++        if len(conditions) > 0
++    }
++
++
+ @app.get("/health")
+ def health():
+     return jsonify(ok=True)
+@@ -188,22 +236,7 @@
+     try:
+         data = json_body()
+         combatants = data.get("combatants")
+-        if not isinstance(combatants, list):
+-            return bad_request()
+-
+-        entries = []
+-        for combatant in combatants:
+-            if not isinstance(combatant, dict):
+-                return bad_request()
+-            name = combatant.get("name")
+-            if not isinstance(name, str):
+-                return bad_request()
+-            dex = required_int(combatant, "dex")
+-            roll = required_int(combatant, "roll")
+-            score = roll + dex
+-            entries.append({"name": name, "dex": dex, "score": score})
+-
+-        entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++        entries = initiative_entries(combatants)
+         return jsonify(order=[{"name": item["name"], "score": item["score"]} for item in entries])
+     except (TypeError, ValueError):
+         return bad_request()
+@@ -264,5 +297,80 @@
+         return bad_request()
+ 
+ 
++@app.post("/v1/combat/sessions")
++def create_combat_session():
++    try:
++        data = json_body()
++        session_id = data.get("id")
++        if not isinstance(session_id, str) or session_id in COMBAT_SESSIONS:
++            return bad_request()
++
++        entries = initiative_entries(data.get("combatants"), allow_empty=False)
++        names = [entry["name"] for entry in entries]
++        if len(set(names)) != len(names):
++            return bad_request()
++
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": [{"name": entry["name"], "score": entry["score"]} for entry in entries],
++            "combatants": set(names),
++            "conditions": {name: [] for name in names},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return jsonify(combat_public_state(session))
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/conditions")
++def add_combat_condition(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    try:
++        data = json_body()
++        target = data.get("target")
++        condition = data.get("condition")
++        duration_rounds = data.get("duration_rounds")
++        if target not in session["combatants"]:
++            return bad_request()
++        if not isinstance(condition, str):
++            return bad_request()
++        if type(duration_rounds) is not int or duration_rounds <= 0:
++            return bad_request()
++
++        session["conditions"][target].append(
++            {"condition": condition, "remaining_rounds": duration_rounds}
++        )
++        return jsonify(target=target, conditions=session["conditions"][target])
++    except (TypeError, ValueError):
++        return bad_request()
++
++
++@app.post("/v1/combat/sessions/<session_id>/advance")
++def advance_combat_turn(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] == len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    remaining_conditions = []
++    for condition in session["conditions"][active_name]:
++        condition["remaining_rounds"] -= 1
++        if condition["remaining_rounds"] > 0:
++            remaining_conditions.append(condition)
++    session["conditions"][active_name] = remaining_conditions
++
++    return jsonify(combat_public_state(session, include_conditions=True))
++
++
+ if __name__ == "__main__":
+     app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+tokens used
+24,989

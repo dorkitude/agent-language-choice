@@ -1,0 +1,35 @@
+All green 🎉 The implementation is complete and verified, Chef.
+
+## Summary
+
+I added the **Stateful Combat** stage to the existing PHP/Symfony-components D&D REST API while preserving all prior-stage behavior.
+
+### What I added to `index.php`
+
+**Three new endpoints** (routing via Symfony `RouteCollection` with `{id}` path params):
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Creates a session; sorts initiative by score desc → dex desc → name asc; starts `round=1`, `turn_index=0` |
+| `POST /v1/combat/sessions/{id}/conditions` | Attaches a condition to a named combatant (validates target ∈ session, positive int duration) |
+| `POST /v1/combat/sessions/{id}/advance` | Advances turn, wraps+increments round, decrements conditions on the **newly active** combatant, removes expired ones |
+
+### Key design decisions
+
+1. **State persistence** — PHP's built-in server re-executes the router per request (confirmed: statics reset, but `getmypid()` is stable), and APCu is unavailable. So I persist state to a **per-PID JSON file** (`.combat_sessions_<pid>.json`) with `LOCK_EX` writes. `run.sh` wipes stale files on startup for a deterministic clean slate.
+
+2. **Dispatch generalization** — Updated the dispatcher to forward route params (e.g. `id`) positionally to handlers, so `combat_add_condition(Request, string $id)` works while existing single-arg handlers are unaffected.
+
+3. **Empty `{}` vs `[]`** — PHP encodes an empty array as JSON `[]`, but the spec models `conditions` as an object. `combat_conditions_view` returns `new \stdClass()` when empty so it emits `{}`; non-empty maps still emit `{"combatant":[...]}`.
+
+4. **Validation/error codes** — `400` for malformed input (missing/empty id, empty combatants, non-positive duration, unknown target, invalid JSON); `404` for unknown session IDs.
+
+### Verification
+- ✅ All 3 spec examples match **byte-for-byte**
+- ✅ Full condition lifecycle (decrement on owner's turn, expiry removal, round-wrap) correct
+- ✅ Tie-breakers (score → dex → name) correct
+- ✅ All 13 prior-stage endpoints (core + characters) preserved
+- ✅ Error cases return correct 400/404/405
+- ✅ No PHP errors/warnings in stderr; `php -l` clean
+
+`./run.sh` starts the server in the foreground on `127.0.0.1:$PORT` — ready to go. ⚔️

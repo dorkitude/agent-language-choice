@@ -1,0 +1,3661 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4887-921c-7d40-b607-3513f84b0730
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-django
+        Language: python
+        Framework/runtime: django
+        Lifecycle stage: core
+        Shot kind: creative
+
+        Create the first implementation from the seeded starter files.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Django 6.0.7. Implement the REST API as Django URL routes/views inside the seeded minimal project.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the seeded Django project first, then wire the requested JSON endpoints into the existing structure and verify them without starting a long-running server.
+exec
+/bin/zsh -lc 'find . -maxdepth 3 -type f | sort' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+./PROMPT.md
+./VERSION-PINS.json
+./dndsite/__init__.py
+./dndsite/settings.py
+./dndsite/urls.py
+./manage.py
+./requirements.txt
+./run.sh
+./shots/01_core_creative/PROMPT.md
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 105ms:
+run.sh
+shots/01_core_creative/PROMPT.md
+VERSION-PINS.json
+PROMPT.md
+requirements.txt
+manage.py
+dndsite/urls.py
+dndsite/settings.py
+dndsite/__init__.py
+
+codex
+The project is very small: just `manage.py`, settings, URLs, requirements, and `run.sh`. I’m reading those now to preserve the starter shape and keep the implementation contained.
+exec
+/bin/zsh -lc "sed -n '1,220p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+from django.http import JsonResponse
+from django.urls import path
+
+def health(request):
+    return JsonResponse({"ok": True})
+
+urlpatterns = [
+    path("health", health),
+]
+
+exec
+/bin/zsh -lc "sed -n '1,80p' requirements.txt" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc "sed -n '1,180p' manage.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+Django==6.0.7
+
+ succeeded in 0ms:
+#!/usr/bin/env python3
+import os
+import sys
+
+def main():
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dndsite.settings")
+    from django.core.management import execute_from_command_line
+    execute_from_command_line(sys.argv)
+
+if __name__ == "__main__":
+    main()
+
+exec
+/bin/zsh -lc "sed -n '1,260p' dndsite/settings.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+SECRET_KEY = "benchmark"
+DEBUG = True
+ROOT_URLCONF = "dndsite.urls"
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+INSTALLED_APPS = []
+MIDDLEWARE = []
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 manage.py runserver 127.0.0.1:"$PORT" --noreload
+
+codex
+I’m going to implement the REST handlers directly in `dndsite/urls.py`, using Django’s built-in `JsonResponse` and strict JSON parsing. Invalid dice expressions get the required 400; I’ll also return 400 for malformed JSON or unsupported payload values so the API fails predictably.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..6e01e06f4d3ed4e4a050c038fb8d9236ca7aec1e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,187 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": count * (sides + 1) / 2 + modifier,
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..6e01e06f4d3ed4e4a050c038fb8d9236ca7aec1e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,187 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": count * (sides + 1) / 2 + modifier,
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+The endpoint code is in place. I’m going to run Django’s checks and a small test-client probe for the specified examples, which avoids launching the foreground server before the final answer.
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  142 Jul  9 13:17 run.sh
+
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 manage.py check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/manage.py", line 11, in <module>
+    main()
+    ~~~~^^
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/manage.py", line 7, in main
+    from django.core.management import execute_from_command_line
+ModuleNotFoundError: No module named 'django'
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..6e01e06f4d3ed4e4a050c038fb8d9236ca7aec1e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,187 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": count * (sides + 1) / 2 + modifier,
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+`run.sh` is executable, but the local Python environment currently can’t import Django from `.deps`, so `manage.py check` can’t run here. I’m checking whether dependencies were seeded elsewhere before I fall back to syntax-level verification.
+exec
+/bin/zsh -lc 'find . -maxdepth 3 -type d | sort' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+.
+./dndsite
+./shots
+./shots/01_core_creative
+
+exec
+/bin/zsh -lc 'python3 --version' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+Python 3.14.6
+
+exec
+/bin/zsh -lc 'python3 -m py_compile manage.py dndsite/urls.py dndsite/settings.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..6e01e06f4d3ed4e4a050c038fb8d9236ca7aec1e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,187 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": count * (sides + 1) / 2 + modifier,
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+Syntax compilation passes under Python 3.14.6. I’m making one small response-shape cleanup so dice averages that are whole numbers serialize as JSON integers, matching the sample exactly while still returning fractional averages when needed.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+The dice response cleanup is done. I’ll run syntax verification again and inspect the final diff so I can call out exactly what changed.
+exec
+/bin/zsh -lc 'python3 -m py_compile manage.py dndsite/urls.py dndsite/settings.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git diff -- dndsite/urls.py run.sh requirements.txt manage.py dndsite/settings.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+exec
+/bin/zsh -lc "sed -n '1,260p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+import json
+import re
+
+from django.http import JsonResponse
+from django.urls import path
+
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+
+def json_error(status=400):
+    return JsonResponse({"error": "bad request"}, status=status)
+
+
+def json_number(value):
+    return int(value) if value == int(value) else value
+
+
+def body_json(request):
+    if request.method != "POST":
+        return None
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def health(request):
+    return JsonResponse({"ok": True})
+
+
+def dice_stats(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    expression = payload.get("expression")
+    if not isinstance(expression, str):
+        return json_error()
+
+    match = DICE_RE.fullmatch(expression)
+    if not match:
+        return json_error()
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        return json_error()
+
+    modifier = int(match.group(4) or "0")
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    return JsonResponse(
+        {
+            "dice_count": count,
+            "sides": sides,
+            "modifier": modifier,
+            "min": count + modifier,
+            "max": count * sides + modifier,
+            "average": json_number(count * (sides + 1) / 2 + modifier),
+        }
+    )
+
+
+def ability_check(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    try:
+        roll = int(payload["roll"])
+        modifier = int(payload["modifier"])
+        dc = int(payload["dc"])
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    total = roll + modifier
+    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
+
+
+def monster_multiplier(monster_count):
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def adjusted_xp(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    party = payload.get("party")
+    monsters = payload.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        return json_error()
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    try:
+        for member in party:
+            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
+            for key in thresholds:
+                thresholds[key] += member_thresholds[key]
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            count = int(monster["count"])
+            if count < 0:
+                return json_error()
+            base_xp += CR_XP[str(monster["cr"])] * count
+            monster_count += count
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
+    adjusted = base_xp * multiplier
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted >= thresholds[name]:
+            difficulty = name
+
+    return JsonResponse(
+        {
+            "base_xp": base_xp,
+            "monster_count": monster_count,
+            "multiplier": multiplier,
+            "adjusted_xp": adjusted,
+            "difficulty": difficulty,
+            "thresholds": thresholds,
+        }
+    )
+
+
+def initiative_order(request):
+    payload = body_json(request)
+    if payload is None:
+        return json_error()
+
+    combatants = payload.get("combatants")
+    if not isinstance(combatants, list):
+        return json_error()
+
+    order = []
+    try:
+        for combatant in combatants:
+            name = str(combatant["name"])
+            dex = int(combatant["dex"])
+            roll = int(combatant["roll"])
+            order.append({"name": name, "dex": dex, "score": roll + dex})
+    except (KeyError, TypeError, ValueError):
+        return json_error()
+
+    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return JsonResponse(
+        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+    )
+
+
+urlpatterns = [
+    path("health", health),
+    path("v1/dice/stats", dice_stats),
+    path("v1/checks/ability", ability_check),
+    path("v1/encounters/adjusted-xp", adjusted_xp),
+    path("v1/initiative/order", initiative_order),
+]
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+Because Django itself is absent in this sandbox, I can’t exercise the real framework stack. I’m running the view functions with minimal in-memory stubs now to validate the benchmark payload logic and response bodies.
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import importlib
+import json
+import sys
+import types
+
+http = types.ModuleType('django.http')
+urls = types.ModuleType('django.urls')
+django = types.ModuleType('django')
+
+class JsonResponse(dict):
+    def __init__(self, data, status=200):
+        super().__init__(data)
+        self.status_code = status
+
+def path(route, view):
+    return (route, view)
+
+http.JsonResponse = JsonResponse
+urls.path = path
+sys.modules['django'] = django
+sys.modules['django.http'] = http
+sys.modules['django.urls'] = urls
+
+mod = importlib.import_module('dndsite.urls')
+
+class Request:
+    method = 'POST'
+    def __init__(self, payload):
+        self.body = json.dumps(payload).encode()
+
+checks = [
+    (mod.health(types.SimpleNamespace()), {'ok': True}, 200),
+    (mod.dice_stats(Request({'expression': '2d6+3'})), {'dice_count': 2, 'sides': 6, 'modifier': 3, 'min': 5, 'max': 15, 'average': 10}, 200),
+    (mod.ability_check(Request({'roll': 9, 'modifier': 5, 'dc': 15})), {'total': 14, 'success': False, 'margin': -1}, 200),
+    (mod.adjusted_xp(Request({'party': [{'level': 3}, {'level': 3}, {'level': 3}, {'level': 3}], 'monsters': [{'cr': '1', 'count': 2}, {'cr': '2', 'count': 1}]})), {'base_xp': 850, 'monster_count': 3, 'multiplier': 2, 'adjusted_xp': 1700, 'difficulty': 'deadly', 'thresholds': {'easy': 300, 'medium': 600, 'hard': 900, 'deadly': 1600}}, 200),
+    (mod.initiative_order(Request({'combatants': [{'name': 'rogue', 'dex': 3, 'roll': 14}, {'name': 'ogre', 'dex': -1, 'roll': 16}]})), {'order': [{'name': 'rogue', 'score': 17}, {'name': 'ogre', 'score': 15}]}, 200),
+]
+
+for response, expected, status in checks:
+    assert dict(response) == expected, (dict(response), expected)
+    assert response.status_code == status, response.status_code
+
+bad = mod.dice_stats(Request({'expression': '0d6'}))
+assert bad.status_code == 400, bad.status_code
+print('stubbed endpoint checks passed')
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+stubbed endpoint checks passed
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+The stubbed checks passed for all sample payloads and the invalid dice case. I’m cleaning up bytecode generated by verification so the workspace only has the implementation files changed.
+exec
+/bin/zsh -lc 'find . -type d -name __pycache__ -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+./__pycache__
+./dndsite/__pycache__
+
+exec
+/bin/zsh -lc "find . -type f -name '*.pyc' -print" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+./__pycache__/manage.cpython-314.pyc
+./dndsite/__pycache__/urls.cpython-314.pyc
+./dndsite/__pycache__/settings.cpython-314.pyc
+./dndsite/__pycache__/__init__.cpython-314.pyc
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+2026-07-09T20:19:49.403254Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'rm -rf __pycache__ dndsite/__pycache__ && find . -type d -name __pycache__ -print'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'rm -rf __pycache__ dndsite/__pycache__ && find . -type d -name __pycache__ -print'` rejected: blocked by policy\")" }
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+The cleanup command with `rm -rf` was blocked by policy. I’ll remove only the specific bytecode files I just generated, then remove the now-empty cache directories.
+exec
+/bin/zsh -lc 'rm __pycache__/manage.cpython-314.pyc' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'rm dndsite/__pycache__/urls.cpython-314.pyc dndsite/__pycache__/settings.cpython-314.pyc dndsite/__pycache__/__init__.cpython-314.pyc' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+exec
+/bin/zsh -lc 'rmdir dndsite/__pycache__' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'rmdir __pycache__' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+The generated bytecode is gone. I’m doing one last workspace-local check for cache files and then I’ll summarize the implementation and verification status.
+exec
+/bin/zsh -lc "find . -type f -name '*.pyc' -print" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'find . -type d -name __pycache__ -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 manage.py runserver 127.0.0.1:"$PORT" --noreload
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+codex
+Implemented the core D&D REST API in [dndsite/urls.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py:1). It now includes:
+
+- `GET /health`
+- `POST /v1/dice/stats`
+- `POST /v1/checks/ability`
+- `POST /v1/encounters/adjusted-xp`
+- `POST /v1/initiative/order`
+
+`run.sh` was already present, executable, and starts Django in the foreground on `127.0.0.1:$PORT`.
+
+Verification:
+- `python3 -m py_compile manage.py dndsite/urls.py dndsite/settings.py` passed.
+- Stubbed endpoint checks for all sample payloads and an invalid dice expression passed.
+- Could not run `manage.py check` because Django is not installed/importable in this sandbox (`ModuleNotFoundError: No module named 'django'`).
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 85e765b8917e836f5e9069c96183cd2de1c56037..50eb4fd2603483af773176ccf34d6f8334a6d492
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T201750Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -1,9 +1,191 @@
++import json
++import re
++
+ from django.http import JsonResponse
+ from django.urls import path
+ 
++
++CR_XP = {
++    "0": 10,
++    "1/8": 25,
++    "1/4": 50,
++    "1/2": 100,
++    "1": 200,
++    "2": 450,
++    "3": 700,
++    "4": 1100,
++    "5": 1800,
++}
++
++LEVEL_THRESHOLDS = {
++    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
++}
++
++DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
++
++
++def json_error(status=400):
++    return JsonResponse({"error": "bad request"}, status=status)
++
++
++def json_number(value):
++    return int(value) if value == int(value) else value
++
++
++def body_json(request):
++    if request.method != "POST":
++        return None
++    try:
++        payload = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return None
++    return payload if isinstance(payload, dict) else None
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
++
++def dice_stats(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    expression = payload.get("expression")
++    if not isinstance(expression, str):
++        return json_error()
++
++    match = DICE_RE.fullmatch(expression)
++    if not match:
++        return json_error()
++
++    count = int(match.group(1))
++    sides = int(match.group(2))
++    if count <= 0 or sides <= 0:
++        return json_error()
++
++    modifier = int(match.group(4) or "0")
++    if match.group(3) == "-":
++        modifier = -modifier
++
++    return JsonResponse(
++        {
++            "dice_count": count,
++            "sides": sides,
++            "modifier": modifier,
++            "min": count + modifier,
++            "max": count * sides + modifier,
++            "average": json_number(count * (sides + 1) / 2 + modifier),
++        }
++    )
++
++
++def ability_check(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    try:
++        roll = int(payload["roll"])
++        modifier = int(payload["modifier"])
++        dc = int(payload["dc"])
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    total = roll + modifier
++    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
++
++
++def monster_multiplier(monster_count):
++    if monster_count == 1:
++        return 1
++    if monster_count == 2:
++        return 1.5
++    if monster_count <= 6:
++        return 2
++    if monster_count <= 10:
++        return 2.5
++    if monster_count <= 14:
++        return 3
++    return 4
++
++
++def adjusted_xp(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    party = payload.get("party")
++    monsters = payload.get("monsters")
++    if not isinstance(party, list) or not isinstance(monsters, list):
++        return json_error()
++
++    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
++    try:
++        for member in party:
++            member_thresholds = LEVEL_THRESHOLDS[int(member["level"])]
++            for key in thresholds:
++                thresholds[key] += member_thresholds[key]
++
++        base_xp = 0
++        monster_count = 0
++        for monster in monsters:
++            count = int(monster["count"])
++            if count < 0:
++                return json_error()
++            base_xp += CR_XP[str(monster["cr"])] * count
++            monster_count += count
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    multiplier = monster_multiplier(monster_count) if monster_count > 0 else 0
++    adjusted = base_xp * multiplier
++    difficulty = "trivial"
++    for name in ("easy", "medium", "hard", "deadly"):
++        if adjusted >= thresholds[name]:
++            difficulty = name
++
++    return JsonResponse(
++        {
++            "base_xp": base_xp,
++            "monster_count": monster_count,
++            "multiplier": multiplier,
++            "adjusted_xp": adjusted,
++            "difficulty": difficulty,
++            "thresholds": thresholds,
++        }
++    )
++
++
++def initiative_order(request):
++    payload = body_json(request)
++    if payload is None:
++        return json_error()
++
++    combatants = payload.get("combatants")
++    if not isinstance(combatants, list):
++        return json_error()
++
++    order = []
++    try:
++        for combatant in combatants:
++            name = str(combatant["name"])
++            dex = int(combatant["dex"])
++            roll = int(combatant["roll"])
++            order.append({"name": name, "dex": dex, "score": roll + dex})
++    except (KeyError, TypeError, ValueError):
++        return json_error()
++
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return JsonResponse(
++        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
++    )
++
++
+ urlpatterns = [
+     path("health", health),
++    path("v1/dice/stats", dice_stats),
++    path("v1/checks/ability", ability_check),
++    path("v1/encounters/adjusted-xp", adjusted_xp),
++    path("v1/initiative/order", initiative_order),
+ ]
+
+tokens used
+24,878

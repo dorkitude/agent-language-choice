@@ -1,0 +1,29 @@
+Everything is in place and verified, Chef 🎲✨
+
+## Summary
+
+I added the **Stage 2: Stateful Combat** endpoints to the existing Django project while preserving all prior-stage behavior (core + characters suites untouched).
+
+### Changes
+
+**`dndsite/views.py`** — added three view functions + an in-memory session store (`_COMBAT_SESSIONS`, a module-level dict that lives for the server process lifetime):
+
+- `combat_create_session` — `POST /v1/combat/sessions`: computes `score = roll + dex`, sorts by score desc → dex desc → name asc, starts `round=1`, `turn_index=0`, returns `active` + `order`.
+- `combat_add_condition` — `POST /v1/combat/sessions/{id}/conditions`: validates `target` is a real combatant, `condition` is a string, `duration_rounds` is a positive int; attaches to the named combatant; returns the target's full condition list.
+- `combat_advance` — `POST /v1/combat/sessions/{id}/advance`: advances `turn_index` (incrementing `round` on wrap to 0), then decrements conditions on the **newly active** combatant at the start of their turn, removing any that hit 0. Returns the full `conditions` map (only combatants with remaining conditions).
+
+**`dndsite/urls.py`** — added the three routes (using `<str:sid>` converters).
+
+### Error handling
+- `404` for unknown session IDs (checked before body validation so it wins).
+- `400` for malformed input: missing/empty `id`, empty `combatants`, bad combatant fields, non-string `target`/`condition`, non-positive-integer `duration_rounds`, or `target` not naming a combatant.
+- `400` for non-POST methods (consistent with existing views).
+
+### Verification
+Ran the server end-to-end and confirmed:
+- Create / add-condition / advance responses match the spec examples **byte-for-byte**.
+- The condition-decrement logic ticks down only on the owning combatant's own turns and is removed at 0; round increments on wrap.
+- `404`/`400` paths all return the expected statuses.
+- Prior-stage endpoints (`/health`, `/v1/initiative/order`) still work; `manage.py check` reports no issues.
+
+`run.sh` was already correct and executable — starts the server in the foreground on `127.0.0.1:$PORT` with `--noreload` (single process, so in-memory state persists). No server left running. 🐍

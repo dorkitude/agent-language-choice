@@ -1,0 +1,2596 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f483e-0649-7db2-87b3-815068411b91
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-stdlib
+        Language: python
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 standard library only, such as http.server and json.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing stdlib server and test surface first, then make the smallest compatible change for the combat-state endpoints.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+server.py
+
+codex
+The current directory has a compact `server.py` plus `run.sh`. The git status noise is outside this workspace root, so I’ll leave it alone and only touch this run’s files.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+exec
+/bin/zsh -lc "sed -n '1,260p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+python3 server.py
+
+ succeeded in 0ms:
+#!/usr/bin/env python3
+import json
+import os
+import re
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+MONSTER_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+ABILITY_NAMES = ("str", "dex", "con", "int", "wis", "cha")
+
+
+class BadRequest(Exception):
+    pass
+
+
+def require_int(value, name):
+    if type(value) is not int:
+        raise BadRequest(f"{name} must be an integer")
+    return value
+
+
+def require_range(value, name, minimum, maximum):
+    value = require_int(value, name)
+    if value < minimum or value > maximum:
+        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+def ability_modifier_for_score(score):
+    score = require_range(score, "score", 1, 30)
+    return (score - 10) // 2
+
+
+def proficiency_bonus_for_level(level):
+    level = require_range(level, "level", 1, 20)
+    return 2 + (level - 1) // 4
+
+
+def dice_stats(payload):
+    expression = payload.get("expression")
+    if type(expression) is not str:
+        raise BadRequest("expression must be a string")
+
+    match = DICE_RE.fullmatch(expression)
+    if not match:
+        raise BadRequest("invalid dice expression")
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        raise BadRequest("dice count and sides must be positive")
+
+    modifier = int(match.group(4) or "0")
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    minimum = count + modifier
+    maximum = count * sides + modifier
+    average = count * (sides + 1) / 2 + modifier
+    if average.is_integer():
+        average = int(average)
+
+    return {
+        "dice_count": count,
+        "sides": sides,
+        "modifier": modifier,
+        "min": minimum,
+        "max": maximum,
+        "average": average,
+    }
+
+
+def ability_check(payload):
+    roll = require_int(payload.get("roll"), "roll")
+    modifier = require_int(payload.get("modifier"), "modifier")
+    dc = require_int(payload.get("dc"), "dc")
+    total = roll + modifier
+    return {"total": total, "success": total >= dc, "margin": total - dc}
+
+
+def monster_multiplier(count):
+    if count <= 0:
+        raise BadRequest("monster count must be positive")
+    if count == 1:
+        return 1
+    if count == 2:
+        return 1.5
+    if count <= 6:
+        return 2
+    if count <= 10:
+        return 2.5
+    if count <= 14:
+        return 3
+    return 4
+
+
+def encounter_xp(payload):
+    party = payload.get("party")
+    monsters = payload.get("monsters")
+    if type(party) is not list or type(monsters) is not list:
+        raise BadRequest("party and monsters must be arrays")
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    for member in party:
+        if type(member) is not dict:
+            raise BadRequest("party members must be objects")
+        level = require_int(member.get("level"), "level")
+        if level not in LEVEL_THRESHOLDS:
+            raise BadRequest("unsupported level")
+        for key, value in LEVEL_THRESHOLDS[level].items():
+            thresholds[key] += value
+
+    base_xp = 0
+    total_monsters = 0
+    for monster in monsters:
+        if type(monster) is not dict:
+            raise BadRequest("monsters must be objects")
+        cr = monster.get("cr")
+        count = require_int(monster.get("count"), "count")
+        if cr not in MONSTER_XP:
+            raise BadRequest("unsupported challenge rating")
+        if count <= 0:
+            raise BadRequest("monster count must be positive")
+        base_xp += MONSTER_XP[cr] * count
+        total_monsters += count
+
+    multiplier = monster_multiplier(total_monsters)
+    adjusted_xp = base_xp * multiplier
+    if isinstance(adjusted_xp, float) and adjusted_xp.is_integer():
+        adjusted_xp = int(adjusted_xp)
+
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted_xp >= thresholds[name]:
+            difficulty = name
+
+    return {
+        "base_xp": base_xp,
+        "monster_count": total_monsters,
+        "multiplier": multiplier,
+        "adjusted_xp": adjusted_xp,
+        "difficulty": difficulty,
+        "thresholds": thresholds,
+    }
+
+
+def initiative_order(payload):
+    combatants = payload.get("combatants")
+    if type(combatants) is not list:
+        raise BadRequest("combatants must be an array")
+
+    entries = []
+    for combatant in combatants:
+        if type(combatant) is not dict:
+            raise BadRequest("combatants must be objects")
+        name = combatant.get("name")
+        if type(name) is not str:
+            raise BadRequest("name must be a string")
+        dex = require_int(combatant.get("dex"), "dex")
+        roll = require_int(combatant.get("roll"), "roll")
+        score = roll + dex
+        entries.append({"name": name, "dex": dex, "score": score})
+
+    entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
+
+
+def character_ability_modifier(payload):
+    score = require_range(payload.get("score"), "score", 1, 30)
+    return {"score": score, "modifier": ability_modifier_for_score(score)}
+
+
+def character_proficiency(payload):
+    level = require_range(payload.get("level"), "level", 1, 20)
+    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
+
+
+def character_derived_stats(payload):
+    level = require_range(payload.get("level"), "level", 1, 20)
+    abilities = payload.get("abilities")
+    armor = payload.get("armor")
+    if type(abilities) is not dict:
+        raise BadRequest("abilities must be an object")
+    if type(armor) is not dict:
+        raise BadRequest("armor must be an object")
+
+    modifiers = {}
+    for name in ABILITY_NAMES:
+        modifiers[name] = ability_modifier_for_score(abilities.get(name))
+
+    armor_base = require_int(armor.get("base"), "base")
+    shield = armor.get("shield")
+    if type(shield) is not bool:
+        raise BadRequest("shield must be a boolean")
+    dex_cap = require_int(armor.get("dex_cap"), "dex_cap")
+
+    shield_bonus = 2 if shield else 0
+    return {
+        "level": level,
+        "proficiency_bonus": proficiency_bonus_for_level(level),
+        "hp_max": level * (6 + modifiers["con"]),
+        "armor_class": armor_base + min(modifiers["dex"], dex_cap) + shield_bonus,
+        "modifiers": modifiers,
+    }
+
+
+POST_ROUTES = {
+    "/v1/dice/stats": dice_stats,
+    "/v1/checks/ability": ability_check,
+    "/v1/encounters/adjusted-xp": encounter_xp,
+    "/v1/initiative/order": initiative_order,
+    "/v1/characters/ability-modifier": character_ability_modifier,
+    "/v1/characters/proficiency": character_proficiency,
+    "/v1/characters/derived-stats": character_derived_stats,
+}
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "DndRest/1.0"
+
+    def log_message(self, format, *args):
+        return
+
+    def send_json(self, status, payload):
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_json(200, {"ok": True})
+        else:
+            self.send_json(404, {"error": "not found"})
+
+    def do_POST(self):
+        route = POST_ROUTES.get(self.path)
+        if route is None:
+            self.send_json(404, {"error": "not found"})
+            return
+
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-characters-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:62925",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-core-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:62846",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+I’ve got the existing route style: pure functions raise `BadRequest`, and `do_POST` dispatches exact paths. I’m reading the remainder of the handler before patching so the new dynamic combat routes use the same error behavior.
+exec
+/bin/zsh -lc "sed -n '260,520p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+exec
+/bin/zsh -lc "sed -n '1,240p' shots/03_combat-state_maintenance/PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if type(payload) is not dict:
+                raise BadRequest("request body must be an object")
+            response = route(payload)
+        except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            self.send_json(400, {"error": "bad request"})
+            return
+
+        self.send_json(200, response)
+
+
+def main():
+    port = int(os.environ.get("PORT", "8000"))
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
+
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: python-stdlib
+        Language: python
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 standard library only, such as http.server and json.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+exec
+/bin/zsh -lc "find shots -maxdepth 2 -type f -name '*combat*' -o -name 'PROMPT.md' | sort" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+shots/01_core_creative/PROMPT.md
+shots/02_characters_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/PROMPT.md
+
+codex
+I’m going to add a small in-memory session store, helpers for initiative/session serialization, and dynamic POST dispatch for `/conditions` and `/advance`. This keeps the existing fixed POST routes intact.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..6083a40cb383c948c815f7143fb73766d263b8ae
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..6083a40cb383c948c815f7143fb73766d263b8ae
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+codex
+One compatibility issue surfaced in the edit: the shared initiative helper would have made empty `/v1/initiative/order` requests invalid where the old code returned an empty order. I’m tightening that so only combat sessions require at least one combatant.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..2e8b6f8139eb0a2b5f448cb6a5a8b4971e6be5d4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload, allow_empty=True):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not allow_empty and not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload, allow_empty=False)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..2e8b6f8139eb0a2b5f448cb6a5a8b4971e6be5d4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload, allow_empty=True):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not allow_empty and not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload, allow_empty=False)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+codex
+I’ll verify this without launching the HTTP server: syntax check plus direct calls through the route functions for create, condition add, turn advance, and a prior initiative edge case.
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  56 Jul  9 11:53 run.sh
+
+exec
+/bin/zsh -lc 'python3 -m py_compile server.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import server
+server.COMBAT_SESSIONS.clear()
+created = server.create_combat_session({
+    'id': 'enc-1',
+    'combatants': [
+        {'name': 'fighter', 'dex': 1, 'roll': 13},
+        {'name': 'rogue', 'dex': 3, 'roll': 14},
+        {'name': 'mage', 'dex': 2, 'roll': 14},
+    ],
+})
+print(created)
+print(server.add_condition('enc-1', {'target': 'fighter', 'condition': 'blessed', 'duration_rounds': 2}))
+print(server.advance_combat_session('enc-1', {}))
+print(server.advance_combat_session('enc-1', {}))
+print(server.advance_combat_session('enc-1', {}))
+print(server.initiative_order({'combatants': []}))
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+{'id': 'enc-1', 'round': 1, 'turn_index': 0, 'active': {'name': 'rogue', 'score': 17}, 'order': [{'name': 'rogue', 'score': 17}, {'name': 'mage', 'score': 16}, {'name': 'fighter', 'score': 14}]}
+{'target': 'fighter', 'conditions': [{'condition': 'blessed', 'remaining_rounds': 2}]}
+{'id': 'enc-1', 'round': 1, 'turn_index': 1, 'active': {'name': 'mage', 'score': 16}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 2}]}}
+{'id': 'enc-1', 'round': 1, 'turn_index': 2, 'active': {'name': 'fighter', 'score': 14}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 1}]}}
+{'id': 'enc-1', 'round': 2, 'turn_index': 0, 'active': {'name': 'rogue', 'score': 17}, 'conditions': {'fighter': [{'condition': 'blessed', 'remaining_rounds': 1}]}}
+{'order': []}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..2e8b6f8139eb0a2b5f448cb6a5a8b4971e6be5d4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload, allow_empty=True):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not allow_empty and not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload, allow_empty=False)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+codex
+The direct checks match the stage examples: ordering is correct, inactive conditions stay unchanged, active conditions decrement, and round increments on wrap. I’m doing a final diff pass for accidental behavior changes.
+exec
+/bin/zsh -lc 'git diff -- server.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short -- server.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+?? run.sh
+?? server.py
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..2e8b6f8139eb0a2b5f448cb6a5a8b4971e6be5d4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload, allow_empty=True):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not allow_empty and not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload, allow_empty=False)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+codex
+Implemented stateful combat in [server.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py):
+
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+
+State is in memory, initiative sorting follows the required tie breakers, conditions decrement only when their combatant becomes active, and unknown sessions return `404`.
+
+Verification done without starting the server:
+- `python3 -m py_compile server.py`
+- Direct function checks for session creation, condition add, turn advance, condition expiration behavior, and prior empty initiative behavior.
+
+`./run.sh` is present, executable, and still starts `python3 server.py` in the foreground.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+index e04335babcb047e94ddc239591cdb1d80157c4a0..2e8b6f8139eb0a2b5f448cb6a5a8b4971e6be5d4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T185336Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -3,6 +3,8 @@
+ import os
+ import re
+ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from threading import Lock
++from urllib.parse import unquote, urlparse
+ 
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+@@ -30,6 +32,14 @@
+     pass
+ 
+ 
++class NotFound(Exception):
++    pass
++
++
++COMBAT_SESSIONS = {}
++COMBAT_LOCK = Lock()
++
++
+ def require_int(value, name):
+     if type(value) is not int:
+         raise BadRequest(f"{name} must be an integer")
+@@ -162,9 +172,16 @@
+ 
+ 
+ def initiative_order(payload):
++    entries = combat_order_entries(payload)
++    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++
++
++def combat_order_entries(payload, allow_empty=True):
+     combatants = payload.get("combatants")
+     if type(combatants) is not list:
+         raise BadRequest("combatants must be an array")
++    if not allow_empty and not combatants:
++        raise BadRequest("combatants must not be empty")
+ 
+     entries = []
+     for combatant in combatants:
+@@ -179,7 +196,7 @@
+         entries.append({"name": name, "dex": dex, "score": score})
+ 
+     entries.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+-    return {"order": [{"name": item["name"], "score": item["score"]} for item in entries]}
++    return entries
+ 
+ 
+ def character_ability_modifier(payload):
+@@ -221,6 +238,120 @@
+     }
+ 
+ 
++def public_combatant(combatant):
++    return {"name": combatant["name"], "score": combatant["score"]}
++
++
++def session_response(session):
++    active = session["order"][session["turn_index"]]
++    return {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": public_combatant(active),
++        "order": [public_combatant(item) for item in session["order"]],
++    }
++
++
++def conditions_response(session):
++    conditions = {}
++    for name, items in session["conditions"].items():
++        if items:
++            conditions[name] = [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in items
++            ]
++    return conditions
++
++
++def create_combat_session(payload):
++    session_id = payload.get("id")
++    if type(session_id) is not str:
++        raise BadRequest("id must be a string")
++
++    order = combat_order_entries(payload, allow_empty=False)
++    with COMBAT_LOCK:
++        if session_id in COMBAT_SESSIONS:
++            raise BadRequest("session id already exists")
++        session = {
++            "id": session_id,
++            "round": 1,
++            "turn_index": 0,
++            "order": order,
++            "conditions": {},
++        }
++        COMBAT_SESSIONS[session_id] = session
++        return session_response(session)
++
++
++def combat_session_by_id(session_id):
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        raise NotFound("unknown session")
++    return session
++
++
++def add_condition(session_id, payload):
++    target = payload.get("target")
++    condition = payload.get("condition")
++    duration_rounds = require_int(payload.get("duration_rounds"), "duration_rounds")
++    if type(target) is not str:
++        raise BadRequest("target must be a string")
++    if type(condition) is not str:
++        raise BadRequest("condition must be a string")
++    if duration_rounds <= 0:
++        raise BadRequest("duration_rounds must be positive")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        names = {combatant["name"] for combatant in session["order"]}
++        if target not in names:
++            raise BadRequest("target must be a combatant")
++        target_conditions = session["conditions"].setdefault(target, [])
++        target_conditions.append({"condition": condition, "remaining_rounds": duration_rounds})
++        return {
++            "target": target,
++            "conditions": [
++                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
++                for item in target_conditions
++            ],
++        }
++
++
++def advance_combat_session(session_id, payload):
++    if payload:
++        raise BadRequest("advance does not accept a request body")
++
++    with COMBAT_LOCK:
++        session = combat_session_by_id(session_id)
++        next_index = session["turn_index"] + 1
++        if next_index == len(session["order"]):
++            next_index = 0
++            session["round"] += 1
++        session["turn_index"] = next_index
++
++        active_name = session["order"][next_index]["name"]
++        active_conditions = session["conditions"].get(active_name, [])
++        remaining = []
++        for item in active_conditions:
++            updated = item["remaining_rounds"] - 1
++            if updated > 0:
++                remaining.append({"condition": item["condition"], "remaining_rounds": updated})
++        if remaining:
++            session["conditions"][active_name] = remaining
++        else:
++            session["conditions"].pop(active_name, None)
++
++        active = session["order"][session["turn_index"]]
++        return {
++            "id": session["id"],
++            "round": session["round"],
++            "turn_index": session["turn_index"],
++            "active": public_combatant(active),
++            "conditions": conditions_response(session),
++        }
++
++
+ POST_ROUTES = {
+     "/v1/dice/stats": dice_stats,
+     "/v1/checks/ability": ability_check,
+@@ -229,8 +360,12 @@
+     "/v1/characters/ability-modifier": character_ability_modifier,
+     "/v1/characters/proficiency": character_proficiency,
+     "/v1/characters/derived-stats": character_derived_stats,
++    "/v1/combat/sessions": create_combat_session,
+ }
+ 
++COMBAT_CONDITIONS_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/conditions$")
++COMBAT_ADVANCE_RE = re.compile(r"^/v1/combat/sessions/([^/]+)/advance$")
++
+ 
+ class Handler(BaseHTTPRequestHandler):
+     server_version = "DndRest/1.0"
+@@ -253,20 +388,33 @@
+             self.send_json(404, {"error": "not found"})
+ 
+     def do_POST(self):
+-        route = POST_ROUTES.get(self.path)
+-        if route is None:
+-            self.send_json(404, {"error": "not found"})
+-            return
+-
+         try:
++            path = urlparse(self.path).path
+             length = int(self.headers.get("Content-Length", "0"))
+-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
++            raw_body = self.rfile.read(length)
++            payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+             if type(payload) is not dict:
+                 raise BadRequest("request body must be an object")
+-            response = route(payload)
++
++            route = POST_ROUTES.get(path)
++            if route is not None:
++                response = route(payload)
++            else:
++                match = COMBAT_CONDITIONS_RE.fullmatch(path)
++                if match:
++                    response = add_condition(unquote(match.group(1)), payload)
++                else:
++                    match = COMBAT_ADVANCE_RE.fullmatch(path)
++                    if match:
++                        response = advance_combat_session(unquote(match.group(1)), payload)
++                    else:
++                        raise NotFound("route not found")
+         except (BadRequest, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+             self.send_json(400, {"error": "bad request"})
+             return
++        except NotFound:
++            self.send_json(404, {"error": "not found"})
++            return
+ 
+         self.send_json(200, response)
+ 
+
+tokens used
+34,043

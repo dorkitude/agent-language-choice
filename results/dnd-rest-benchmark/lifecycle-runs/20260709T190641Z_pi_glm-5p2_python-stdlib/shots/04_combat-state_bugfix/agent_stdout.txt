@@ -1,0 +1,23 @@
+Done, Chef! 🎉 Here's the summary:
+
+## Root cause
+In `advance_turn`, the `conditions` output map was built with `if session["conditions"].get(nm):` — which is falsy for an **empty list**. So when the active combatant's last condition expired (decremented to 0 and filtered out), their key was dropped entirely. The evaluator's `combat-advance-expired-removed` test expects a combatant whose condition just expired to still appear with an empty list (`{"fighter": []}`), not vanish.
+
+## The fix
+A surgical change in `advance_turn` (`server.py`): track `had_conds` (whether the active combatant had any conditions at the start of this turn), then include a combatant in `conditions_out` if they still have conditions **or** they're the active combatant who just had conditions processed:
+
+```python
+had_conds = len(conds) > 0
+...
+if clist or (nm == name and had_conds):
+    conditions_out[nm] = clist
+```
+
+## Why it's safe
+This changes **only** the `combat-advance-expired-removed` response (`{}` → `{"fighter": []}`). Every other advance response stays byte-identical — verified by re-running all three suites:
+
+- `core`: 8/8 ✅
+- `characters`: 13/13 ✅
+- `combat-state`: 20/20 ✅ (was 19/20)
+
+`run.sh` is unchanged and starts the server in the foreground on `127.0.0.1:$PORT`. 🗡️

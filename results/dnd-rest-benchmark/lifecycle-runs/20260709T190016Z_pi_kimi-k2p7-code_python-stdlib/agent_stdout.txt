@@ -1,0 +1,29 @@
+Fixed, Chef! 🍳
+
+The bug was in `advance_turn()` in `server.py`: it filtered out combatants with empty condition lists before returning the `conditions` map.
+
+```python
+# Before
+conditions = {name: list(conds) for name, conds in session["conditions"].items() if conds}
+
+# After
+conditions = {name: list(conds) for name, conds in session["conditions"].items()}
+```
+
+This made the expired `blessed` condition cause the `fighter` key to disappear entirely from the `advance` response, when the test expected it to remain with an empty list `[]`.
+
+I verified the exact failing scenario by running the server locally and advancing through the turn order — after the fighter's condition expires, the response now includes:
+
+```json
+{"id": "enc-1", "round": 2, "turn_index": 2, "active": {"name": "fighter", "score": 14}, "conditions": {"rogue": [], "mage": [], "fighter": []}}
+```
+
+`./run.sh` is unchanged and ready:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+exec python3 server.py
+```
+
+It starts the server in the foreground on `127.0.0.1:$PORT` using Python 3.14.6 stdlib.

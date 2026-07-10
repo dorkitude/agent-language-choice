@@ -1,0 +1,13 @@
+Everything's in place, Chef! 🎲
+
+## Summary
+
+**Root cause:** When a condition's remaining duration reached `0` during `advance_turn`, the code both removed the condition from the list *and* deleted the combatant's key from the `conditions` map (via `session[:conditions].delete(...)`). The `conditions_view` helper also skipped empty lists. The result was `conditions: {}` — but the `combat-advance-expired-removed` test expects the combatant's key (`fighter`) to remain present (with an empty array) after its conditions expire.
+
+**Fix** (two minimal changes in `server.rb`):
+
+1. **`advance_turn`** — removed the `session[:conditions].delete(active[:name]) if conds.empty?` line. The expired condition is still rejected from the list (per spec: "Remove a condition when its remaining duration reaches `0`"), but the combatant's now-empty key is retained.
+
+2. **`conditions_view`** — stopped skipping empty lists, so a combatant that has ever had a condition keeps its key in the view (mapped to `[]` once all conditions expire). Combatants that never received a condition (like `rogue`/`mage`) remain absent, matching the spec example.
+
+This preserves all prior-stage behavior (verified the create/add/advance sequence matches the spec examples exactly) while fixing the one failing test. `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT` — ready to go. 🚀

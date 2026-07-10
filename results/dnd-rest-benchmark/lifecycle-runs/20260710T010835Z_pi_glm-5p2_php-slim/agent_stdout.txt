@@ -1,0 +1,29 @@
+All done, Chef! 🎲✨
+
+## Root cause
+
+The `combat-advance-expired-removed` test failed because the code was *over*-removing state when a condition expired:
+
+1. In the **advance handler**, when a combatant's last condition hit `remaining_rounds == 0`, the code did `unset($s['conditions'][$activeName])` — wiping the combatant's key entirely from the conditions map.
+2. In **`combatConditionsView`**, the code additionally skipped any combatant whose list was empty (`if (!empty($conds))`).
+
+So after fighter's `blessed` condition expired, the response's `conditions` collapsed to `{}`, and the test couldn't find the `"fighter"` key it expected.
+
+The spec says *"Remove a **condition** when its remaining duration reaches 0"* — that's the condition entry, not the combatant's slot in the map.
+
+## Fix (two small changes in `index.php`)
+
+- **Advance handler**: removed the `unset(...)` so the combatant's key is retained with an empty `[]` list after expiry.
+- **`combatConditionsView`**: now emits every combatant that has a conditions entry, including those whose list is now empty (still serializes the truly-empty map as `{}` for consumers decoding into a map type).
+
+## Verification
+
+Replayed the full cumulative combat sequence end-to-end. The previously-failing final advance now returns:
+
+```json
+{"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{"fighter":[]}}
+```
+
+— the `"fighter"` key is present with an empty array. All earlier advances (decrement, round-wrap, still-active condition) are byte-for-byte unchanged, so the 19 previously-passing tests remain green.
+
+`run.sh` is unchanged and ready: it wipes `.combat_sessions.json` for a clean start and serves `index.php` in the foreground on `127.0.0.1:$PORT`. 🗡️

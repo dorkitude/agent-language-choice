@@ -1,0 +1,16 @@
+All green, Chef! 🎲✨
+
+## What was broken
+
+The `combat-advance-expired-removed` test failed because when `fighter`'s condition expired and was removed, the `fighter` key disappeared entirely from the `conditions` map (`{}` instead of `{"fighter": []}`). The evaluator expects a combatant that *ever* had a condition attached to keep its key, now showing an empty array.
+
+## The fix (in `app.rb`)
+
+The root cause was `conditions_view` using `next if list.empty?` to drop empty lists — combined with a `Hash.new { |h,k| h[k]=[] }` default hash that would *also* have spuriously created keys for any combatant merely touched during `advance`. I addressed both:
+
+1. **Plain hash** (`conditions: {}`) instead of an auto-vivifying default hash — so a key only exists if a condition was actually added there.
+2. **`add_condition`** now uses `(session[:conditions][target] ||= []) << ...` to create the key on real insertion.
+3. **`advance_turn`** guards `conds` for `nil` (active combatant never had conditions) instead of relying on default-hash creation.
+4. **`conditions_view`** now emits a key whenever the combatant has a condition *entry* (`next unless list`), even if the array is now empty — so expired-then-removed combatants keep their `[]`.
+
+Results: **combat-state 20/20**, and cumulative suites still green (**core 8/8**, **characters 13/13**). `./run.sh` is unchanged and ready (`bundle exec rackup -o 127.0.0.1 -p "$PORT"`), server left stopped as required. 🛡️

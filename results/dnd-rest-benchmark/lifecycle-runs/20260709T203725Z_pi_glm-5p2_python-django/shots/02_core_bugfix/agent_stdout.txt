@@ -1,0 +1,24 @@
+Done, Chef! 🎉
+
+## Summary
+
+**Root cause:** In `dndsite/views.py`, the dice average was computed with floor division `//`, truncating half-values to integers.
+
+```python
+average = (minimum + maximum) // 2   # 1d20-1: (0+19)//2 = 9 ❌
+```
+
+**Fix:** Switched to true division `/` and collapse whole numbers back to `int` so the JSON matches the spec's integer form (`"average": 10`) while preserving fractions (`9.5`):
+
+```python
+average = (minimum + maximum) / 2
+if average == int(average):
+    average = int(average)
+```
+
+**Verification:** All 8 endpoints now return the spec-exact JSON:
+- `2d6+3` → `average: 10` ✓
+- `1d20-1` → `average: 9.5` ✓ (the previously-failing case)
+- invalid expr → `400` ✓, plus ability/encounter/initiative all unchanged.
+
+`run.sh` is unchanged and starts the Django server in the foreground on `127.0.0.1:$PORT` via `manage.py runserver --noreload`.

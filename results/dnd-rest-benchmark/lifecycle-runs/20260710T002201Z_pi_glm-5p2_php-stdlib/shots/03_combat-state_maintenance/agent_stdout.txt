@@ -1,0 +1,23 @@
+The implementation is complete and verified, Chef! 🐉⚔️
+
+## Summary
+
+I added the **combat-state** stage to the existing PHP stdlib D&D REST API while preserving all prior-stage endpoints (`/health`, dice, checks, encounters, initiative, characters).
+
+### Key challenge: PHP built-in server statelessness
+The PHP CLI server re-executes `index.php` for *every* request, so static/global variables reset each time (verified empirically: a `static $count` stayed at `1` across requests). I solved this by persisting combat sessions to a JSON file (`.combat-sessions.json`), which `run.sh` wipes on startup for a clean per-process state.
+
+### Three new endpoints
+1. **`POST /v1/combat/sessions`** — computes initiative (`roll+dex`), sorts by score desc → dex desc → name asc, starts at `round=1`/`turn_index=0`, returns `active` + `order`.
+2. **`POST /v1/combat/sessions/{id}/conditions`** — validates target exists, `duration_rounds` is a positive int; appends to the combatant's condition list; returns all of that target's conditions.
+3. **`POST /v1/combat/sessions/{id}/advance`** — bumps `turn_index` (wraps + increments `round` at the end), decrements only the **new active** combatant's conditions, removes any hitting `0`, and returns `conditions` as an object (empty → `{}` via `(object)` cast).
+
+### Verified behavior
+- All spec examples reproduce byte-for-byte
+- Full condition lifecycle: `2→1` on fighter's turns, unchanged on others' turns, round wrap `1→2`, removal at `0` → `{}`
+- Tie-breaking, multiple conditions per target
+- `404` for unknown session IDs; `400` for bad target / non-positive or float duration / missing id / empty combatants
+- Prior stages (incl. `derived-stats`) still pass
+- Clean restart wipes state (enc-X → 404 after restart)
+
+`./run.sh` starts the server in the foreground on `127.0.0.1:$PORT`. No Composer packages added — pure PHP 8.5.8 stdlib. ✨

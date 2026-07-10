@@ -1,0 +1,1947 @@
+Reading additional input from stdin...
+OpenAI Codex v0.143.0
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f48b2-6f93-7aa3-aed1-ffb68aa92b82
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: java-stdlib
+        Language: java
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use OpenJDK 26.0.1 and only the Java standard library, such as com.sun.net.httpserver.HttpServer.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:52312 passed=false tests=19/20
+PASS	health	2ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	7ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	3ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{}}
+
+
+Error: suite failed: 19/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Java implementation and the combat response construction first, then make the smallest change that preserves empty combatant condition keys where the evaluator expects them.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/agent_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/dndeval-combat-state-report.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/lifecycle-result.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/server_stdout.txt
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/setup.json
+ M ../20260709T165747Z_pi_glm-5p2_typescript-node/src/server.ts
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/agent_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stderr.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/server_stdout.txt
+?? ../20260709T165747Z_pi_glm-5p2_typescript-node/shots/04_combat-state_bugfix/setup.json
+?? ../20260709T171529Z_claude_opus_typescript-vite/
+?? ../20260709T172117Z_claude_sonnet_typescript-vite/
+?? ../20260709T172500Z_codex_gpt-5.5_typescript-vite/
+?? ../20260709T173247Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260709T174100Z_pi_glm-5p2_typescript-vite/
+?? ../20260709T175456Z_claude_opus_typescript-nextjs/
+?? ../20260709T180313Z_claude_sonnet_typescript-nextjs/
+?? ../20260709T181019Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260709T182441Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260709T183041Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260709T184505Z_claude_opus_python-stdlib/
+?? ../20260709T184831Z_claude_sonnet_python-stdlib/
+?? ../20260709T185336Z_codex_gpt-5.5_python-stdlib/
+?? ../20260709T190016Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260709T190641Z_pi_glm-5p2_python-stdlib/
+?? ../20260709T192237Z_claude_opus_python-flask/
+?? ../20260709T192712Z_claude_sonnet_python-flask/
+?? ../20260709T193343Z_codex_gpt-5.5_python-flask/
+?? ../20260709T194057Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260709T194424Z_pi_glm-5p2_python-flask/
+?? ../20260709T200655Z_claude_opus_python-django/
+?? ../20260709T201234Z_claude_sonnet_python-django/
+?? ../20260709T201750Z_codex_gpt-5.5_python-django/
+?? ../20260709T202528Z_pi_kimi-k2p7-code_python-django/
+?? ../20260709T203725Z_pi_glm-5p2_python-django/
+?? ../20260709T205305Z_claude_opus_java-stdlib/
+?? ../20260709T205724Z_claude_sonnet_java-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+agent_last_message.txt
+setup.json
+dndeval-combat-state-report.json
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+lifecycle-result.json
+run.sh
+Main.java
+server_stderr.txt
+VERSION-PINS.json
+agent_stderr.txt
+dndeval-core-report.json
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/PROMPT.md
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+
+codex
+The repository status shows unrelated changes outside this workspace. I’ll leave those alone and focus only on `Main.java` and `run.sh` here.
+exec
+/bin/zsh -lc 'cat dndeval-combat-state-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+{
+  "suite": "combat-state",
+  "base_url": "http://127.0.0.1:52312",
+  "passed": false,
+  "passed_count": 19,
+  "total_count": 20,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 2
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 7
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 3
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": false,
+      "status": 200,
+      "duration_ms": 0,
+      "error": "conditions: missing JSON key \"fighter\"",
+      "response_body": "{\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"conditions\":{}}"
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' Main.java" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class Main {
+    private static final Pattern DICE = Pattern.compile("^(\\d+)d(\\d+)([+-]\\d+)?$");
+    private static final String COMBAT_SESSIONS_PREFIX = "/v1/combat/sessions/";
+    private static final Map<String, CombatSession> COMBAT_SESSIONS = new LinkedHashMap<>();
+    private static final Map<String, Integer> CR_XP = Map.of(
+            "0", 10,
+            "1/8", 25,
+            "1/4", 50,
+            "1/2", 100,
+            "1", 200,
+            "2", 450,
+            "3", 700,
+            "4", 1100,
+            "5", 1800
+    );
+
+    public static void main(String[] args) throws Exception {
+        String rawPort = System.getenv("PORT");
+        if (rawPort == null || rawPort.isBlank()) {
+            throw new IllegalStateException("PORT is required");
+        }
+        int port = Integer.parseInt(rawPort);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+        server.createContext("/", new ApiHandler());
+        server.setExecutor(null);
+        server.start();
+    }
+
+    private static final class ApiHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            try {
+                String method = exchange.getRequestMethod();
+                String path = exchange.getRequestURI().getPath();
+                if ("GET".equals(method) && "/health".equals(path)) {
+                    sendJson(exchange, 200, Map.of("ok", true));
+                    return;
+                }
+                if (!"POST".equals(method)) {
+                    sendText(exchange, 404, "not found");
+                    return;
+                }
+
+                String rawBody = readBody(exchange);
+                Object body = rawBody.isBlank() ? new LinkedHashMap<>() : Json.parse(rawBody);
+                if (!(body instanceof Map<?, ?> request)) {
+                    sendText(exchange, 400, "invalid json");
+                    return;
+                }
+
+                if ("/v1/combat/sessions".equals(path)) {
+                    sendJson(exchange, 200, createCombatSession(request));
+                    return;
+                }
+                if (path.startsWith(COMBAT_SESSIONS_PREFIX)) {
+                    Object response = combatSessionAction(path.substring(COMBAT_SESSIONS_PREFIX.length()), request);
+                    if (response == null) {
+                        sendText(exchange, 404, "not found");
+                    } else {
+                        sendJson(exchange, 200, response);
+                    }
+                    return;
+                }
+
+                switch (path) {
+                    case "/v1/dice/stats" -> sendJson(exchange, 200, diceStats(request));
+                    case "/v1/checks/ability" -> sendJson(exchange, 200, abilityCheck(request));
+                    case "/v1/encounters/adjusted-xp" -> sendJson(exchange, 200, adjustedXp(request));
+                    case "/v1/initiative/order" -> sendJson(exchange, 200, initiativeOrder(request));
+                    case "/v1/characters/ability-modifier" -> sendJson(exchange, 200, abilityModifier(request));
+                    case "/v1/characters/proficiency" -> sendJson(exchange, 200, proficiency(request));
+                    case "/v1/characters/derived-stats" -> sendJson(exchange, 200, derivedStats(request));
+                    default -> sendText(exchange, 404, "not found");
+                }
+            } catch (BadRequest e) {
+                sendText(exchange, 400, "bad request");
+            } catch (Exception e) {
+                sendText(exchange, 500, "internal error");
+            } finally {
+                exchange.close();
+            }
+        }
+    }
+
+    private static Map<String, Object> diceStats(Map<?, ?> request) {
+        String expression = stringField(request, "expression");
+        Matcher matcher = DICE.matcher(expression);
+        if (!matcher.matches()) {
+            throw new BadRequest();
+        }
+        int count = parsePositiveInt(matcher.group(1));
+        int sides = parsePositiveInt(matcher.group(2));
+        int modifier = matcher.group(3) == null ? 0 : parseInt(matcher.group(3));
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("dice_count", count);
+        response.put("sides", sides);
+        response.put("modifier", modifier);
+        response.put("min", count + modifier);
+        response.put("max", count * sides + modifier);
+        response.put("average", count * (sides + 1) / 2.0 + modifier);
+        return response;
+    }
+
+    private static Map<String, Object> abilityCheck(Map<?, ?> request) {
+        int roll = intField(request, "roll");
+        int modifier = intField(request, "modifier");
+        int dc = intField(request, "dc");
+        int total = roll + modifier;
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("total", total);
+        response.put("success", total >= dc);
+        response.put("margin", total - dc);
+        return response;
+    }
+
+    private static Map<String, Object> adjustedXp(Map<?, ?> request) {
+        List<?> party = listField(request, "party");
+        List<?> monsters = listField(request, "monsters");
+
+        int easy = 0;
+        int medium = 0;
+        int hard = 0;
+        int deadly = 0;
+        for (Object member : party) {
+            Map<?, ?> map = objectValue(member);
+            int level = intField(map, "level");
+            if (level != 3) {
+                throw new BadRequest();
+            }
+            easy += 75;
+            medium += 150;
+            hard += 225;
+            deadly += 400;
+        }
+
+        int baseXp = 0;
+        int monsterCount = 0;
+        for (Object monster : monsters) {
+            Map<?, ?> map = objectValue(monster);
+            String cr = stringField(map, "cr");
+            int count = intField(map, "count");
+            Integer xp = CR_XP.get(cr);
+            if (xp == null || count < 0) {
+                throw new BadRequest();
+            }
+            baseXp += xp * count;
+            monsterCount += count;
+        }
+
+        double multiplier = monsterMultiplier(monsterCount);
+        double adjusted = baseXp * multiplier;
+        String difficulty = "trivial";
+        if (adjusted >= easy) difficulty = "easy";
+        if (adjusted >= medium) difficulty = "medium";
+        if (adjusted >= hard) difficulty = "hard";
+        if (adjusted >= deadly) difficulty = "deadly";
+
+        Map<String, Object> thresholds = new LinkedHashMap<>();
+        thresholds.put("easy", easy);
+        thresholds.put("medium", medium);
+        thresholds.put("hard", hard);
+        thresholds.put("deadly", deadly);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("base_xp", baseXp);
+        response.put("monster_count", monsterCount);
+        response.put("multiplier", multiplier);
+        response.put("adjusted_xp", adjusted);
+        response.put("difficulty", difficulty);
+        response.put("thresholds", thresholds);
+        return response;
+    }
+
+    private static Map<String, Object> initiativeOrder(Map<?, ?> request) {
+        List<Combatant> combatants = combatantsField(request);
+        combatants.sort(initiativeComparator());
+
+        return Map.of("order", orderList(combatants));
+    }
+
+    private static synchronized Map<String, Object> createCombatSession(Map<?, ?> request) {
+        String id = stringField(request, "id");
+        if (id.isEmpty() || COMBAT_SESSIONS.containsKey(id)) {
+            throw new BadRequest();
+        }
+
+        List<Combatant> combatants = combatantsField(request);
+        if (combatants.isEmpty()) {
+            throw new BadRequest();
+        }
+        combatants.sort(initiativeComparator());
+
+        CombatSession session = new CombatSession(id, combatants);
+        COMBAT_SESSIONS.put(id, session);
+        return sessionResponse(session);
+    }
+
+    private static synchronized Object combatSessionAction(String suffix, Map<?, ?> request) {
+        int slash = suffix.indexOf('/');
+        if (slash <= 0) {
+            return null;
+        }
+        String id = suffix.substring(0, slash);
+        String action = suffix.substring(slash + 1);
+        CombatSession session = COMBAT_SESSIONS.get(id);
+        if (session == null) {
+            return null;
+        }
+
+        return switch (action) {
+            case "conditions" -> addCondition(session, request);
+            case "advance" -> advanceTurn(session);
+            default -> null;
+        };
+    }
+
+    private static Map<String, Object> addCondition(CombatSession session, Map<?, ?> request) {
+        String target = stringField(request, "target");
+        if (!session.conditions.containsKey(target)) {
+            throw new BadRequest();
+        }
+        String condition = stringField(request, "condition");
+        int duration = intField(request, "duration_rounds");
+        if (duration <= 0) {
+            throw new BadRequest();
+        }
+
+        session.conditions.get(target).add(new Condition(condition, duration));
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("target", target);
+        response.put("conditions", conditionList(session.conditions.get(target)));
+        return response;
+    }
+
+    private static Map<String, Object> advanceTurn(CombatSession session) {
+        session.turnIndex++;
+        if (session.turnIndex >= session.order.size()) {
+            session.turnIndex = 0;
+            session.round++;
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+javac Main.java
+java Main
+
+codex
+The failing path is in the advance response: expired conditions are being removed correctly, but the JSON omits the target once its list is empty. I’m reading the rest of the combat helper code to patch that serialization behavior precisely.
+exec
+/bin/zsh -lc "sed -n '260,620p' Main.java" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+            session.round++;
+        }
+
+        String active = session.order.get(session.turnIndex).name();
+        List<Condition> conditions = session.conditions.get(active);
+        for (int i = conditions.size() - 1; i >= 0; i--) {
+            Condition condition = conditions.get(i);
+            condition.remainingRounds--;
+            if (condition.remainingRounds <= 0) {
+                conditions.remove(i);
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", session.id);
+        response.put("round", session.round);
+        response.put("turn_index", session.turnIndex);
+        response.put("active", activeCombatant(session));
+        response.put("conditions", conditionsResponse(session));
+        return response;
+    }
+
+    private static List<Combatant> combatantsField(Map<?, ?> request) {
+        List<Combatant> combatants = new ArrayList<>();
+        for (Object item : listField(request, "combatants")) {
+            Map<?, ?> map = objectValue(item);
+            String name = stringField(map, "name");
+            int dex = intField(map, "dex");
+            int roll = intField(map, "roll");
+            combatants.add(new Combatant(name, dex, roll, roll + dex));
+        }
+        return combatants;
+    }
+
+    private static Comparator<Combatant> initiativeComparator() {
+        return Comparator
+                .comparingInt(Combatant::score).reversed()
+                .thenComparing(Comparator.comparingInt(Combatant::dex).reversed())
+                .thenComparing(Combatant::name);
+    }
+
+    private static Map<String, Object> sessionResponse(CombatSession session) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", session.id);
+        response.put("round", session.round);
+        response.put("turn_index", session.turnIndex);
+        response.put("active", activeCombatant(session));
+        response.put("order", orderList(session.order));
+        return response;
+    }
+
+    private static Map<String, Object> activeCombatant(CombatSession session) {
+        Combatant combatant = session.order.get(session.turnIndex);
+        Map<String, Object> active = new LinkedHashMap<>();
+        active.put("name", combatant.name());
+        active.put("score", combatant.score());
+        return active;
+    }
+
+    private static List<Object> orderList(List<Combatant> combatants) {
+        List<Object> order = new ArrayList<>();
+        for (Combatant combatant : combatants) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", combatant.name());
+            entry.put("score", combatant.score());
+            order.add(entry);
+        }
+        return order;
+    }
+
+    private static Map<String, Object> conditionsResponse(CombatSession session) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        for (Combatant combatant : session.order) {
+            List<Condition> conditions = session.conditions.get(combatant.name());
+            if (!conditions.isEmpty()) {
+                response.put(combatant.name(), conditionList(conditions));
+            }
+        }
+        return response;
+    }
+
+    private static List<Object> conditionList(List<Condition> conditions) {
+        List<Object> list = new ArrayList<>();
+        for (Condition condition : conditions) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("condition", condition.name);
+            entry.put("remaining_rounds", condition.remainingRounds);
+            list.add(entry);
+        }
+        return list;
+    }
+
+    private static Map<String, Object> abilityModifier(Map<?, ?> request) {
+        int score = abilityScoreField(request, "score");
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("score", score);
+        response.put("modifier", abilityModifier(score));
+        return response;
+    }
+
+    private static Map<String, Object> proficiency(Map<?, ?> request) {
+        int level = levelField(request, "level");
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("level", level);
+        response.put("proficiency_bonus", proficiencyBonus(level));
+        return response;
+    }
+
+    private static Map<String, Object> derivedStats(Map<?, ?> request) {
+        int level = levelField(request, "level");
+        Map<?, ?> abilities = objectField(request, "abilities");
+        Map<?, ?> armor = objectField(request, "armor");
+
+        Map<String, Object> modifiers = new LinkedHashMap<>();
+        int str = abilityModifier(abilityScoreField(abilities, "str"));
+        int dex = abilityModifier(abilityScoreField(abilities, "dex"));
+        int con = abilityModifier(abilityScoreField(abilities, "con"));
+        int intel = abilityModifier(abilityScoreField(abilities, "int"));
+        int wis = abilityModifier(abilityScoreField(abilities, "wis"));
+        int cha = abilityModifier(abilityScoreField(abilities, "cha"));
+        modifiers.put("str", str);
+        modifiers.put("dex", dex);
+        modifiers.put("con", con);
+        modifiers.put("int", intel);
+        modifiers.put("wis", wis);
+        modifiers.put("cha", cha);
+
+        int armorBase = intField(armor, "base");
+        boolean shield = booleanField(armor, "shield");
+        int dexCap = intField(armor, "dex_cap");
+        int shieldBonus = shield ? 2 : 0;
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("level", level);
+        response.put("proficiency_bonus", proficiencyBonus(level));
+        response.put("hp_max", level * (6 + con));
+        response.put("armor_class", armorBase + Math.min(dex, dexCap) + shieldBonus);
+        response.put("modifiers", modifiers);
+        return response;
+    }
+
+    private static int abilityModifier(int score) {
+        return Math.floorDiv(score - 10, 2);
+    }
+
+    private static int proficiencyBonus(int level) {
+        return 2 + (level - 1) / 4;
+    }
+
+    private static double monsterMultiplier(int count) {
+        if (count <= 0) return 1.0;
+        if (count == 1) return 1.0;
+        if (count == 2) return 1.5;
+        if (count <= 6) return 2.0;
+        if (count <= 10) return 2.5;
+        if (count <= 14) return 3.0;
+        return 4.0;
+    }
+
+    private static int parsePositiveInt(String value) {
+        int parsed = parseInt(value);
+        if (parsed <= 0) {
+            throw new BadRequest();
+        }
+        return parsed;
+    }
+
+    private static int parseInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new BadRequest();
+        }
+    }
+
+    private static String stringField(Map<?, ?> map, String key) {
+        Object value = map.get(key);
+        if (!(value instanceof String string)) {
+            throw new BadRequest();
+        }
+        return string;
+    }
+
+    private static int intField(Map<?, ?> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Integer integer) {
+            return integer;
+        }
+        if (value instanceof Long number && number >= Integer.MIN_VALUE && number <= Integer.MAX_VALUE) {
+            return number.intValue();
+        }
+        throw new BadRequest();
+    }
+
+    private static int abilityScoreField(Map<?, ?> map, String key) {
+        int score = intField(map, key);
+        if (score < 1 || score > 30) {
+            throw new BadRequest();
+        }
+        return score;
+    }
+
+    private static int levelField(Map<?, ?> map, String key) {
+        int level = intField(map, key);
+        if (level < 1 || level > 20) {
+            throw new BadRequest();
+        }
+        return level;
+    }
+
+    private static boolean booleanField(Map<?, ?> map, String key) {
+        Object value = map.get(key);
+        if (!(value instanceof Boolean bool)) {
+            throw new BadRequest();
+        }
+        return bool;
+    }
+
+    private static List<?> listField(Map<?, ?> map, String key) {
+        Object value = map.get(key);
+        if (!(value instanceof List<?> list)) {
+            throw new BadRequest();
+        }
+        return list;
+    }
+
+    private static Map<?, ?> objectField(Map<?, ?> map, String key) {
+        return objectValue(map.get(key));
+    }
+
+    private static Map<?, ?> objectValue(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            throw new BadRequest();
+        }
+        return map;
+    }
+
+    private static String readBody(HttpExchange exchange) throws IOException {
+        try (InputStream input = exchange.getRequestBody()) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static void sendJson(HttpExchange exchange, int status, Object value) throws IOException {
+        byte[] bytes = Json.stringify(value).getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, bytes.length);
+        try (OutputStream output = exchange.getResponseBody()) {
+            output.write(bytes);
+        }
+    }
+
+    private static void sendText(HttpExchange exchange, int status, String value) throws IOException {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+        exchange.sendResponseHeaders(status, bytes.length);
+        try (OutputStream output = exchange.getResponseBody()) {
+            output.write(bytes);
+        }
+    }
+
+    private record Combatant(String name, int dex, int roll, int score) {
+    }
+
+    private static final class CombatSession {
+        private final String id;
+        private final List<Combatant> order;
+        private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
+        private int round = 1;
+        private int turnIndex = 0;
+
+        CombatSession(String id, List<Combatant> order) {
+            this.id = id;
+            this.order = order;
+            for (Combatant combatant : order) {
+                conditions.putIfAbsent(combatant.name(), new ArrayList<>());
+            }
+        }
+    }
+
+    private static final class Condition {
+        private final String name;
+        private int remainingRounds;
+
+        Condition(String name, int remainingRounds) {
+            this.name = name;
+            this.remainingRounds = remainingRounds;
+        }
+    }
+
+    private static final class BadRequest extends RuntimeException {
+    }
+
+    private static final class Json {
+        static Object parse(String source) {
+            Parser parser = new Parser(source);
+            Object value = parser.parseValue();
+            parser.skipWhitespace();
+            if (!parser.atEnd()) {
+                throw new BadRequest();
+            }
+            return value;
+        }
+
+        static String stringify(Object value) {
+            StringBuilder out = new StringBuilder();
+            writeValue(out, value);
+            return out.toString();
+        }
+
+        private static void writeValue(StringBuilder out, Object value) {
+            if (value == null) {
+                out.append("null");
+            } else if (value instanceof String string) {
+                writeString(out, string);
+            } else if (value instanceof Boolean bool) {
+                out.append(bool);
+            } else if (value instanceof Integer || value instanceof Long) {
+                out.append(value);
+            } else if (value instanceof Double number) {
+                if (number.isNaN() || number.isInfinite()) {
+                    throw new IllegalArgumentException();
+                }
+                if (number == Math.rint(number)) {
+                    out.append(number.longValue());
+                } else {
+                    out.append(BigDecimal.valueOf(number).stripTrailingZeros().toPlainString());
+                }
+            } else if (value instanceof Map<?, ?> map) {
+                out.append('{');
+                boolean first = true;
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    if (!first) out.append(',');
+                    first = false;
+                    writeString(out, String.valueOf(entry.getKey()));
+                    out.append(':');
+                    writeValue(out, entry.getValue());
+                }
+                out.append('}');
+            } else if (value instanceof List<?> list) {
+                out.append('[');
+                for (int i = 0; i < list.size(); i++) {
+                    if (i > 0) out.append(',');
+                    writeValue(out, list.get(i));
+                }
+                out.append(']');
+            } else {
+                throw new IllegalArgumentException();
+            }
+        }
+
+        private static void writeString(StringBuilder out, String value) {
+            out.append('"');
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                switch (c) {
+                    case '"' -> out.append("\\\"");
+                    case '\\' -> out.append("\\\\");
+                    case '\b' -> out.append("\\b");
+
+exec
+/bin/zsh -lc 'rg -n "conditionsResponse|conditionList|advanceTurn|CombatSession|Condition" Main.java' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+22:    private static final Map<String, CombatSession> COMBAT_SESSIONS = new LinkedHashMap<>();
+70:                    sendJson(exchange, 200, createCombatSession(request));
+201:    private static synchronized Map<String, Object> createCombatSession(Map<?, ?> request) {
+213:        CombatSession session = new CombatSession(id, combatants);
+225:        CombatSession session = COMBAT_SESSIONS.get(id);
+231:            case "conditions" -> addCondition(session, request);
+232:            case "advance" -> advanceTurn(session);
+237:    private static Map<String, Object> addCondition(CombatSession session, Map<?, ?> request) {
+248:        session.conditions.get(target).add(new Condition(condition, duration));
+252:        response.put("conditions", conditionList(session.conditions.get(target)));
+256:    private static Map<String, Object> advanceTurn(CombatSession session) {
+264:        List<Condition> conditions = session.conditions.get(active);
+266:            Condition condition = conditions.get(i);
+278:        response.put("conditions", conditionsResponse(session));
+301:    private static Map<String, Object> sessionResponse(CombatSession session) {
+311:    private static Map<String, Object> activeCombatant(CombatSession session) {
+330:    private static Map<String, Object> conditionsResponse(CombatSession session) {
+333:            List<Condition> conditions = session.conditions.get(combatant.name());
+335:                response.put(combatant.name(), conditionList(conditions));
+341:    private static List<Object> conditionList(List<Condition> conditions) {
+343:        for (Condition condition : conditions) {
+526:    private static final class CombatSession {
+529:        private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
+533:        CombatSession(String id, List<Combatant> order) {
+542:    private static final class Condition {
+546:        Condition(String name, int remainingRounds) {
+
+codex
+I’m going to track which combatants have ever received a condition and serialize those keys even after their list becomes empty. That matches the failing expectation without adding empty keys for every inactive combatant.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..a96341510ef0608369752a8344c849611bfee289
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -10,9 +10,11 @@
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashSet;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..a96341510ef0608369752a8344c849611bfee289
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -10,9 +10,11 @@
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashSet;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+codex
+The patch is in place. I’m compiling with the pinned Java toolchain path as exercised by `run.sh`, without starting the HTTP server.
+exec
+/bin/zsh -lc 'git diff -- Main.java run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'javac Main.java' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..a96341510ef0608369752a8344c849611bfee289
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -10,9 +10,11 @@
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashSet;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+ succeeded in 382ms:
+codex
+`javac Main.java` succeeds. I noticed this workspace itself appears untracked from the parent repository, so `git diff` does not show the local file change; I’ll verify the edited lines directly and clean any compile artifacts.
+exec
+/bin/zsh -lc "find . -maxdepth 1 -name '*.class' -print" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+./Main$Json.class
+./Main$Json$Parser.class
+./Main$CombatSession.class
+./Main$Condition.class
+./Main$ApiHandler.class
+./Main$BadRequest.class
+./Main.class
+./Main$Combatant.class
+
+exec
+/bin/zsh -lc "sed -n '1,28p' Main.java && sed -n '236,338p' Main.java && sed -n '526,536p' Main.java" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class Main {
+    private static final Pattern DICE = Pattern.compile("^(\\d+)d(\\d+)([+-]\\d+)?$");
+    private static final String COMBAT_SESSIONS_PREFIX = "/v1/combat/sessions/";
+    private static final Map<String, CombatSession> COMBAT_SESSIONS = new LinkedHashMap<>();
+    private static final Map<String, Integer> CR_XP = Map.of(
+            "0", 10,
+            "1/8", 25,
+            "1/4", 50,
+        };
+    }
+
+    private static Map<String, Object> addCondition(CombatSession session, Map<?, ?> request) {
+        String target = stringField(request, "target");
+        if (!session.conditions.containsKey(target)) {
+            throw new BadRequest();
+        }
+        String condition = stringField(request, "condition");
+        int duration = intField(request, "duration_rounds");
+        if (duration <= 0) {
+            throw new BadRequest();
+        }
+
+        session.conditionTargets.add(target);
+        session.conditions.get(target).add(new Condition(condition, duration));
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("target", target);
+        response.put("conditions", conditionList(session.conditions.get(target)));
+        return response;
+    }
+
+    private static Map<String, Object> advanceTurn(CombatSession session) {
+        session.turnIndex++;
+        if (session.turnIndex >= session.order.size()) {
+            session.turnIndex = 0;
+            session.round++;
+        }
+
+        String active = session.order.get(session.turnIndex).name();
+        List<Condition> conditions = session.conditions.get(active);
+        for (int i = conditions.size() - 1; i >= 0; i--) {
+            Condition condition = conditions.get(i);
+            condition.remainingRounds--;
+            if (condition.remainingRounds <= 0) {
+                conditions.remove(i);
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", session.id);
+        response.put("round", session.round);
+        response.put("turn_index", session.turnIndex);
+        response.put("active", activeCombatant(session));
+        response.put("conditions", conditionsResponse(session));
+        return response;
+    }
+
+    private static List<Combatant> combatantsField(Map<?, ?> request) {
+        List<Combatant> combatants = new ArrayList<>();
+        for (Object item : listField(request, "combatants")) {
+            Map<?, ?> map = objectValue(item);
+            String name = stringField(map, "name");
+            int dex = intField(map, "dex");
+            int roll = intField(map, "roll");
+            combatants.add(new Combatant(name, dex, roll, roll + dex));
+        }
+        return combatants;
+    }
+
+    private static Comparator<Combatant> initiativeComparator() {
+        return Comparator
+                .comparingInt(Combatant::score).reversed()
+                .thenComparing(Comparator.comparingInt(Combatant::dex).reversed())
+                .thenComparing(Combatant::name);
+    }
+
+    private static Map<String, Object> sessionResponse(CombatSession session) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", session.id);
+        response.put("round", session.round);
+        response.put("turn_index", session.turnIndex);
+        response.put("active", activeCombatant(session));
+        response.put("order", orderList(session.order));
+        return response;
+    }
+
+    private static Map<String, Object> activeCombatant(CombatSession session) {
+        Combatant combatant = session.order.get(session.turnIndex);
+        Map<String, Object> active = new LinkedHashMap<>();
+        active.put("name", combatant.name());
+        active.put("score", combatant.score());
+        return active;
+    }
+
+    private static List<Object> orderList(List<Combatant> combatants) {
+        List<Object> order = new ArrayList<>();
+        for (Combatant combatant : combatants) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", combatant.name());
+            entry.put("score", combatant.score());
+            order.add(entry);
+        }
+        return order;
+    }
+
+    private static Map<String, Object> conditionsResponse(CombatSession session) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        for (Combatant combatant : session.order) {
+            List<Condition> conditions = session.conditions.get(combatant.name());
+            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                response.put(combatant.name(), conditionList(conditions));
+    private record Combatant(String name, int dex, int roll, int score) {
+    }
+
+    private static final class CombatSession {
+        private final String id;
+        private final List<Combatant> order;
+        private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
+        private final Set<String> conditionTargets = new LinkedHashSet<>();
+        private int round = 1;
+        private int turnIndex = 0;
+
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..a96341510ef0608369752a8344c849611bfee289
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -10,9 +10,11 @@
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashSet;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+codex
+Compilation produced `.class` files in the workspace. Since `run.sh` compiles on launch, I’m removing those generated artifacts and leaving the source plus script ready.
+exec
+/bin/zsh -lc "find . -maxdepth 1 -name '*.class' -delete" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..a96341510ef0608369752a8344c849611bfee289
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -10,9 +10,11 @@
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashSet;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+exec
+/bin/zsh -lc "find . -maxdepth 1 -name '*.class' -print" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "nl -ba Main.java | sed -n '238,338p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+exec
+/bin/zsh -lc "nl -ba Main.java | sed -n '526,536p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+   526	    private record Combatant(String name, int dex, int roll, int score) {
+   527	    }
+   528	
+   529	    private static final class CombatSession {
+   530	        private final String id;
+   531	        private final List<Combatant> order;
+   532	        private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
+   533	        private final Set<String> conditionTargets = new LinkedHashSet<>();
+   534	        private int round = 1;
+   535	        private int turnIndex = 0;
+   536	
+
+ succeeded in 0ms:
+   238	
+   239	    private static Map<String, Object> addCondition(CombatSession session, Map<?, ?> request) {
+   240	        String target = stringField(request, "target");
+   241	        if (!session.conditions.containsKey(target)) {
+   242	            throw new BadRequest();
+   243	        }
+   244	        String condition = stringField(request, "condition");
+   245	        int duration = intField(request, "duration_rounds");
+   246	        if (duration <= 0) {
+   247	            throw new BadRequest();
+   248	        }
+   249	
+   250	        session.conditionTargets.add(target);
+   251	        session.conditions.get(target).add(new Condition(condition, duration));
+   252	
+   253	        Map<String, Object> response = new LinkedHashMap<>();
+   254	        response.put("target", target);
+   255	        response.put("conditions", conditionList(session.conditions.get(target)));
+   256	        return response;
+   257	    }
+   258	
+   259	    private static Map<String, Object> advanceTurn(CombatSession session) {
+   260	        session.turnIndex++;
+   261	        if (session.turnIndex >= session.order.size()) {
+   262	            session.turnIndex = 0;
+   263	            session.round++;
+   264	        }
+   265	
+   266	        String active = session.order.get(session.turnIndex).name();
+   267	        List<Condition> conditions = session.conditions.get(active);
+   268	        for (int i = conditions.size() - 1; i >= 0; i--) {
+   269	            Condition condition = conditions.get(i);
+   270	            condition.remainingRounds--;
+   271	            if (condition.remainingRounds <= 0) {
+   272	                conditions.remove(i);
+   273	            }
+   274	        }
+   275	
+   276	        Map<String, Object> response = new LinkedHashMap<>();
+   277	        response.put("id", session.id);
+   278	        response.put("round", session.round);
+   279	        response.put("turn_index", session.turnIndex);
+   280	        response.put("active", activeCombatant(session));
+   281	        response.put("conditions", conditionsResponse(session));
+   282	        return response;
+   283	    }
+   284	
+   285	    private static List<Combatant> combatantsField(Map<?, ?> request) {
+   286	        List<Combatant> combatants = new ArrayList<>();
+   287	        for (Object item : listField(request, "combatants")) {
+   288	            Map<?, ?> map = objectValue(item);
+   289	            String name = stringField(map, "name");
+   290	            int dex = intField(map, "dex");
+   291	            int roll = intField(map, "roll");
+   292	            combatants.add(new Combatant(name, dex, roll, roll + dex));
+   293	        }
+   294	        return combatants;
+   295	    }
+   296	
+   297	    private static Comparator<Combatant> initiativeComparator() {
+   298	        return Comparator
+   299	                .comparingInt(Combatant::score).reversed()
+   300	                .thenComparing(Comparator.comparingInt(Combatant::dex).reversed())
+   301	                .thenComparing(Combatant::name);
+   302	    }
+   303	
+   304	    private static Map<String, Object> sessionResponse(CombatSession session) {
+   305	        Map<String, Object> response = new LinkedHashMap<>();
+   306	        response.put("id", session.id);
+   307	        response.put("round", session.round);
+   308	        response.put("turn_index", session.turnIndex);
+   309	        response.put("active", activeCombatant(session));
+   310	        response.put("order", orderList(session.order));
+   311	        return response;
+   312	    }
+   313	
+   314	    private static Map<String, Object> activeCombatant(CombatSession session) {
+   315	        Combatant combatant = session.order.get(session.turnIndex);
+   316	        Map<String, Object> active = new LinkedHashMap<>();
+   317	        active.put("name", combatant.name());
+   318	        active.put("score", combatant.score());
+   319	        return active;
+   320	    }
+   321	
+   322	    private static List<Object> orderList(List<Combatant> combatants) {
+   323	        List<Object> order = new ArrayList<>();
+   324	        for (Combatant combatant : combatants) {
+   325	            Map<String, Object> entry = new LinkedHashMap<>();
+   326	            entry.put("name", combatant.name());
+   327	            entry.put("score", combatant.score());
+   328	            order.add(entry);
+   329	        }
+   330	        return order;
+   331	    }
+   332	
+   333	    private static Map<String, Object> conditionsResponse(CombatSession session) {
+   334	        Map<String, Object> response = new LinkedHashMap<>();
+   335	        for (Combatant combatant : session.order) {
+   336	            List<Condition> conditions = session.conditions.get(combatant.name());
+   337	            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+   338	                response.put(combatant.name(), conditionList(conditions));
+
+exec
+/bin/zsh -lc "nl -ba Main.java | sed -n '8,18p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+     8	import java.math.BigDecimal;
+     9	import java.net.InetSocketAddress;
+    10	import java.nio.charset.StandardCharsets;
+    11	import java.util.ArrayList;
+    12	import java.util.Comparator;
+    13	import java.util.LinkedHashSet;
+    14	import java.util.LinkedHashMap;
+    15	import java.util.List;
+    16	import java.util.Map;
+    17	import java.util.Set;
+    18	import java.util.regex.Matcher;
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..a96341510ef0608369752a8344c849611bfee289
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -10,9 +10,11 @@
+ import java.nio.charset.StandardCharsets;
+ import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashSet;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+codex
+The source check confirms no generated class files remain. I’m making one small import-order cleanup, then I’ll compile once more and clean the resulting build artifacts again.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..e91426ec3a19c69e53023341b50ba8da9feb2ab6
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -11,8 +11,10 @@
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..e91426ec3a19c69e53023341b50ba8da9feb2ab6
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -11,8 +11,10 @@
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+exec
+/bin/zsh -lc 'javac Main.java' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..e91426ec3a19c69e53023341b50ba8da9feb2ab6
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -11,8 +11,10 @@
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+ succeeded in 348ms:
+codex
+The second compile succeeds. I’m removing the fresh `.class` files now so the workspace stays source-only and `run.sh` remains the foreground entrypoint.
+exec
+/bin/zsh -lc "find . -maxdepth 1 -name '*.class' -delete" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..e91426ec3a19c69e53023341b50ba8da9feb2ab6
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -11,8 +11,10 @@
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+codex
+Implemented the combat-state bugfix in `Main.java`.
+
+The server now remembers combatants that have ever had conditions and keeps their key in the `conditions` response after the condition expires, returning `"fighter":[]` instead of omitting `"fighter"`.
+
+Verification:
+- `javac Main.java` passes.
+- I did not start the HTTP server, per the benchmark contract.
+- `run.sh` is unchanged and still starts the server in the foreground.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+index d45961163f65cc7a0a3ec5bb5376cbb6d279ef49..e91426ec3a19c69e53023341b50ba8da9feb2ab6
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260709T205729Z_codex_gpt-5.5_java-stdlib/Main.java
+@@ -11,8 +11,10 @@
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+ 
+@@ -245,6 +247,7 @@
+             throw new BadRequest();
+         }
+ 
++        session.conditionTargets.add(target);
+         session.conditions.get(target).add(new Condition(condition, duration));
+ 
+         Map<String, Object> response = new LinkedHashMap<>();
+@@ -331,7 +334,7 @@
+         Map<String, Object> response = new LinkedHashMap<>();
+         for (Combatant combatant : session.order) {
+             List<Condition> conditions = session.conditions.get(combatant.name());
+-            if (!conditions.isEmpty()) {
++            if (!conditions.isEmpty() || session.conditionTargets.contains(combatant.name())) {
+                 response.put(combatant.name(), conditionList(conditions));
+             }
+         }
+@@ -527,6 +530,7 @@
+         private final String id;
+         private final List<Combatant> order;
+         private final Map<String, List<Condition>> conditions = new LinkedHashMap<>();
++        private final Set<String> conditionTargets = new LinkedHashSet<>();
+         private int round = 1;
+         private int turnIndex = 0;
+ 
+
+tokens used
+46,605

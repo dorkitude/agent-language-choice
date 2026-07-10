@@ -1,0 +1,18 @@
+Done, Chef! 🎉 Stage 2 combat state is implemented and verified end-to-end.
+
+## What I added to `index.php`
+
+Three new endpoints, all preserving the existing core + character-rule routes:
+
+- **`POST /v1/combat/sessions`** — creates a session with initiative sorted by `score` desc → `dex` desc → `name` asc. Rejects duplicate/empty IDs and bad combatants with `400`.
+- **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition to a named combatant. `404` for unknown session, `400` for unknown target / non-positive `duration_rounds`.
+- **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index`, wraps to `0` while bumping `round`, and decrements **only** the newly-active combatant's conditions (removing any that hit `0`).
+
+## Key design note 🗂️
+
+PHP's built-in server re-executes the script fresh per request, so in-memory globals don't survive between calls. I back combat state with a small JSON file in the temp dir, **scoped by `PORT`** (`dnd-combat-{port}.json`) with `LOCK_EX` — so state lasts the server-process lifetime and different runs don't collide.
+
+- `run.sh` is unchanged and already correct (foreground, `127.0.0.1:$PORT`).
+- `php -l` clean; verified create → condition → advance (including round-wrap and the "inactive conditions don't decrement" rule), plus `404`/`400` error paths and an existing core endpoint still returning correctly.
+
+Nothing was started that's still running, and no Composer packages were added. Ready for the evaluator! 🎲

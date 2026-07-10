@@ -1,0 +1,19 @@
+Everything is ready, Chef! 🍳
+
+## Summary
+
+**Root cause:** In `POST /v1/combat/sessions/{id}/advance`, when a combatant's last condition expired (duration reached 0), the code did `unset($sess['conditions'][$activeName])` — wiping the combatant's key from the conditions map entirely. The output loop then also filtered out any empty condition lists. So when fighter's `blessed` condition expired on its second turn, the response returned `"conditions":{}` instead of `"conditions":{"fighter":[]}`, and the `combat-advance-expired-removed` test failed with `missing JSON key "fighter"`.
+
+**Fix** (two small edits in `index.php`, advance handler only):
+
+1. Removed the `unset(...)` when a combatant's condition list becomes empty — the key is now retained as an empty array, so the target is still tracked after expiry.
+2. Changed the conditions output to include every combatant that has (or had) conditions, even those whose conditions have all expired (rendered as `[]`).
+
+This is a minimal, deterministic change confined to the advance endpoint — all prior-stage behavior (core, characters, and the other 4 combat advance tests) is preserved.
+
+**Verification:**
+- `combat-state`: 20/20 ✅ (was 19/20)
+- `core`: 8/8 ✅
+- `characters`: 13/13 ✅
+
+`./run.sh` is ready — it wipes `.combat-sessions.json` on start and runs the PHP built-in server in the foreground on `127.0.0.1:$PORT`.

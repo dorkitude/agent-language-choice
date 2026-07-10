@@ -1,0 +1,24 @@
+Done, Chef! 🍳
+
+The bug was in how expired combat conditions were serialized. The old `serialize_conditions` helper skipped empty arrays, so once the `blessed` condition on `fighter` reached `0` and was removed, the `"fighter"` key vanished entirely from the `conditions` object.
+
+The fix in `app.rb`:
+
+1. **Keep the key even when its condition list is empty** — changed `serialize_conditions` to emit every existing combatant entry via `transform_values`, including `[]`.
+2. **Avoid creating stray empty keys** on the active combatant — changed the advance route to use `session[:conditions].fetch(active_name, [])` instead of `session[:conditions][active_name]`, so the default `Hash.new` proc doesn’t create a new empty entry just because a combatant became active.
+
+Now the final advance returns:
+
+```json
+{
+  "id": "enc-1",
+  "round": 2,
+  "turn_index": 2,
+  "active": {"name": "fighter", "score": 14},
+  "conditions": {"fighter": []}
+}
+```
+
+which satisfies the `"missing JSON key \"fighter\""` assertion.
+
+`./run.sh` is already in place and starts the server on `127.0.0.1:$PORT` in the foreground. I syntax-checked the app and manually replayed the failing combat sequence against it — all looks good. 🐉✨

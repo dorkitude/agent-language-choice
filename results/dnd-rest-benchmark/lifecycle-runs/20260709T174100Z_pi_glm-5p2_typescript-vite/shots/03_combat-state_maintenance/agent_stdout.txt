@@ -1,0 +1,28 @@
+The remaining process on port 6077 is a leftover from a prior shot's lifecycle (not one I started — my test server on 6099 is stopped). I'll leave it untouched to avoid disrupting the harness.
+
+## Summary 🎲
+
+Done, Chef! I added the **Stateful Combat** stage to the existing Vite dev-server middleware in `src/api.ts`, preserving all prior core + character-rule endpoints.
+
+### What I added
+
+**In-memory state** — a `Map<string, CombatSession>` keyed by client-supplied id, each holding the sorted initiative `order`, `round`, `turn_index`, and a per-combatant `conditions` map.
+
+**Three new endpoints:**
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Validates `id` + non-empty `combatants`; computes `score = roll + dex`; sorts by **score desc → dex desc → name asc**; starts `round=1, turn_index=0`; returns `active` + `order`. |
+| `POST /v1/combat/sessions/{id}/conditions` | 404 for unknown session; 400 for unknown target / non-string condition / non-positive-integer duration; appends condition; returns the target's full condition list. |
+| `POST /v1/combat/sessions/{id}/advance` | 404 for unknown session; advances `turn_index` (wraps → `round++`); **decrements only the newly-active combatant's conditions** at the start of their turn; removes conditions at 0; returns full non-empty conditions map. |
+
+**Router change** — kept the exact-match `POST_ROUTES` table (now including `/v1/combat/sessions`) and added a small `DYNAMIC_POST_ROUTES` regex list for the `{id}/conditions` and `{id}/advance` path-param routes. Unknown `/v1/*` routes still return 404; non-API paths still fall through to Vite.
+
+### Verified ✅
+- All 3 spec examples reproduce byte-for-byte.
+- Round-wrap increments `round`; condition tick-down only fires on the active combatant's turn; conditions vanish at 0.
+- Tie-breakers (equal score → dex desc → name asc) and single-combatant wrap both correct.
+- Error cases: unknown session → **404**; bad target / bad duration / missing id / empty combatants / malformed JSON → **400**.
+- Regression: `/health`, dice stats, initiative order, derived stats all still 200.
+- `src/api.ts` passes `tsc --noEmit` cleanly (the lone `vite.config.ts` extensionless-import warning is pre-existing and harmless — Vite loads config via esbuild).
+- `run.sh` was already correct (foreground Vite on `127.0.0.1:$PORT`) — left unchanged.

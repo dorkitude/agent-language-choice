@@ -1,0 +1,25 @@
+All done, Chef! 🎲🐉
+
+## Summary
+
+Built the **Core D&D REST Engine** in `index.php` using Symfony HttpFoundation 8.1.1 + Routing 8.1.0, served by PHP 8.5.8's built-in server via `run.sh`.
+
+**Architecture** — Symfony `RouteCollection` + `UrlMatcher` with a `RequestContext` derived from the request. Each route carries a `_handler` key dispatched to a handler function. `ResourceNotFoundException` → 404, `MethodNotAllowedException` → 405.
+
+**Endpoints implemented (all spec examples verified byte-for-byte):**
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✓ |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` ✓ |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` ✓ |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` ✓ |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` ✓ |
+
+**Key correctness details:**
+- **Dice grammar** enforced with strict regex `^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$` + positivity checks → `0d6`, `2d0`, `d6`, `2d6+`, `2d6+3+4`, `abc` all return **400**. `average = (min+max)/2` (natural int/float — `2d6+3`→`10`, `1d6`→`3.5`).
+- **Encounter multipliers** keep int/float type so `multiplier:2` renders as `2` and `1.5` as `1.5`; `adjusted_xp = base_xp * multiplier` follows the literal formula (no rounding).
+- **Initiative tiebreak** verified: score desc → dex desc → name ascending (`alpha` before `zeta` before lower-dex `beta`). 🗡️
+
+One debugging note: the seed's `use Symfony\Component\Routing\UrlMatcher` was a wrong-namespace import — `UrlMatcher` actually lives under `Symfony\Component\Routing\Matcher`, so I corrected it.
+
+`./run.sh` is ready (foreground, `127.0.0.1:$PORT`). No server left running. 🚀

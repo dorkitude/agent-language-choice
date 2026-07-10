@@ -1,0 +1,21 @@
+Everything's wired up and verified, Chef! 🎲✨
+
+## Summary
+
+Added the three **character rules** endpoints to the existing Symfony-component-based PHP API, preserving all prior endpoints (`/health`, `/v1/dice/stats`, `/v1/checks/ability`, `/v1/encounters/adjusted-xp`, `/v1/initiative/order`).
+
+### New endpoints
+
+1. **`POST /v1/characters/ability-modifier`** — validates `score` is an int 1–30, returns `floor((score-10)/2)` (correctly floors negative halves: score 9 → -1).
+2. **`POST /v1/characters/proficiency`** — validates `level` is an int 1–20, returns the tiered bonus (2/3/4/5/6).
+3. **`POST /v1/characters/derived-stats`** — validates `level`, all six abilities (1–30), and `armor` (`base`/`dex_cap` ints, `shield` truthy), then computes proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus`, and all six modifiers.
+
+### Implementation notes
+- Extracted shared `ability_modifier(int)` and `proficiency_bonus(int)` helpers so derived-stats uses the exact same formulas as the standalone endpoints.
+- Strict `is_int` validation rejects floats like `9.5` and out-of-range values with `400`.
+- `./run.sh` is unchanged and already starts the PHP built-in server in the foreground on `127.0.0.1:$PORT`.
+
+The spec example reproduces **exactly**:
+```json
+{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}
+```

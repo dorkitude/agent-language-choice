@@ -1,0 +1,21 @@
+All three suites green ✅:
+- `core`: 8/8
+- `characters`: 13/13
+- `combat-state`: 20/20
+
+## Root cause 🪲
+
+The failing test `combat-advance-expired-removed` expected the `fighter` key to remain present in the `conditions` map (with an empty array) after its `blessed` condition expired and was removed. The previous code did two things that hid the key:
+
+1. In `advance`, it called `session[:conditions].delete(active_name)` once a combatant's condition list became empty.
+2. In `conditions_map`, it skipped any combatant whose list was `nil?` or `empty?`.
+
+So the response came back as `{"conditions":{}}` instead of `{"conditions":{"fighter":[]}}`, and the evaluator reported `missing JSON key "fighter"`.
+
+## Fix 🔧
+
+In `app/controllers/v1/combat_sessions_controller.rb`:
+- Stopped deleting the combatant's key when its condition list empties (expired conditions are removed from the list, but the target entry is retained).
+- Updated `conditions_map` to emit every combatant that has a conditions key, mapping an empty/nil list to `[]`.
+
+`./run.sh` was already correct (foreground `rackup` on `127.0.0.1:$PORT`) and is ready to go, Chef. 🍳

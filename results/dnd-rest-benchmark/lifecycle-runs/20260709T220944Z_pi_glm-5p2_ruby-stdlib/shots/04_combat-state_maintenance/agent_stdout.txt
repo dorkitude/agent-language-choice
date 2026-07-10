@@ -1,0 +1,24 @@
+All done, Chef! 🎲⚔️
+
+## Summary
+
+I added the **Stateful Combat** stage to the existing Ruby stdlib D&D REST API, preserving all 8 prior-stage endpoints (core + characters).
+
+### New endpoints (in `server.rb`)
+
+1. **`POST /v1/combat/sessions`** — creates an in-memory combat session. Computes initiative `score = roll + dex`, sorts by **score desc → dex desc → name asc**, starts at `round=1`, `turn_index=0`, `active` = combatant at current index.
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition (`condition`, `duration_rounds` positive int) to a named combatant. Validates target exists, condition is a string, duration is a positive integer.
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index` (wrapping increments `round`), then at the **start of the new active combatant's turn** decrements only *their* conditions, removing any that hit `0`. Inactive combatants' conditions are untouched.
+
+### Design notes
+- **State**: `SESSIONS = {}` hash keyed by client-supplied id, guarded by a `Mutex` since the server spawns a thread per connection.
+- **Routing**: static routes stay in the `case [method, path]`; combat routes with path params use explicit `Regexp#match` (avoids any `$~` ambiguity from `case`/`===`).
+- **Errors**: `404` for unknown session ids; `400` for malformed input (missing/empty id, non-array combatants, non-integer dex/roll, unknown target, non-string condition, non-positive/non-integer `duration_rounds`, invalid JSON).
+- **Conditions view** in `advance` only includes combatants with non-empty condition lists (matching the spec example exactly).
+
+### Verified
+- All three spec examples produce byte-for-byte matching output.
+- Full advance trace: `blessed` (duration 2) correctly lasts 2 of fighter's own turns.
+- Tie-break (name ascending on equal score+dex), multi-condition decrement/removal, all 404/400 paths, and all prior-stage endpoints (`health`, `dice-stats 1d20-1`→avg 9.5, `initiative-order`, `derived-stats`, etc.) still pass.
+
+`./run.sh` is ready and starts the server in the foreground on `127.0.0.1:$PORT`. 🚀

@@ -1,0 +1,15 @@
+Fixed it, Chef! 🎲
+
+**Root cause:** The dice `average` calculation used `intdiv()` (integer division), which truncated the fractional part. For `1d20-1`, the true average is `(1 × 21) / 2 − 1 = 9.5`, but `intdiv(21, 2) − 1` produced `9`.
+
+**Fix** (one line in `index.php`):
+```php
+// before
+$average = intdiv($count * ($sides + 1), 2) + $modifier;
+// after
+$average = ($count * ($sides + 1)) / 2 + $modifier;
+```
+
+**Why this is safe:** PHP's `/` returns an `int` when evenly divisible and a `float` otherwise. So `2d6+3` → `14/2 + 3` stays `int 10` (passes the existing test), while `1d20-1` → `21/2 − 1` becomes `float 9.5` (now passes). `json_encode(10)` → `10` and `json_encode(9.5)` → `9.5`, both matching the evaluator's expectations.
+
+Verified locally — all four spot checks pass (`health`, `2d6+3`→10, `1d20-1`→9.5, invalid→400). `run.sh` is already correct and starts the server in the foreground on `$PORT`. No prior-stage behavior was touched. ✅

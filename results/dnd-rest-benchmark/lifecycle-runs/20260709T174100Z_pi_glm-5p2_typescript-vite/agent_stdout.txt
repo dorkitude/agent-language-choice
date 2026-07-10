@@ -1,0 +1,9 @@
+All cumulative endpoints behave correctly, the 404 for unknown sessions works, and the test server is stopped. `run.sh` is unchanged and already starts the Vite server in the foreground on `127.0.0.1:$PORT`. ✅
+
+## Summary
+
+**Root cause:** In `handleAdvanceTurn` (in `src/api.ts`), the `conditions` response was built with `if (list && list.length > 0)`, which silently dropped any combatant whose condition list had become empty. When the fighter's `blessed` condition ticked down to 0 and was filtered out, the `fighter` key vanished → `conditions: {}`. The `combat-advance-expired-removed` test expects the key to remain with an empty array so callers can observe the removal.
+
+**Fix (one line of logic):** Changed the guard from `if (list && list.length > 0)` to `if (list)`. The `conditions` Map entry for a combatant is preserved (set to the filtered, possibly-empty list) when their turn is processed, so combatants that ever had conditions now always appear in the response — with `[]` once all their conditions have expired. Combatants who never had conditions (no Map entry) are still omitted, so the spec's example shape and the four already-passing advance tests are unchanged.
+
+Verified end-to-end against the full evaluator flow: advances #1–#4 still return `{fighter:[{...}]}`, and advance #5 now returns `{"fighter":[]}` instead of `{}`. The core + character-rule suites also smoke-test green, Chef 🍳

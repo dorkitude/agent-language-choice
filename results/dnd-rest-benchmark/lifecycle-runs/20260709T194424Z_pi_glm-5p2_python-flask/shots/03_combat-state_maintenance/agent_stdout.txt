@@ -1,0 +1,18 @@
+Done, Chef! 🎲⚔️
+
+## Summary
+
+Added the **combat-state** maintenance stage to the existing Flask D&D API, preserving all prior core + character-rule endpoints.
+
+### New endpoints (in `app.py`)
+
+1. **`POST /v1/combat/sessions`** — creates an in-memory combat session. Initiative score = `roll + dex`, sorted by score desc → dex desc → name asc. Starts at `round=1`, `turn_index=0`, `active` = first in order. Re-create with same id overwrites with fresh state (so reused ids like `enc-1` across tests stay safe).
+
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition `{condition, remaining_rounds}` to a named combatant. Validates target exists in session (400), condition is a string (400), `duration_rounds` is a positive int (400), unknown session → 404. Returns all conditions currently on that target.
+
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index`, wrapping to 0 increments `round`, then decrements conditions on the **newly active** combatant only, removing any that hit 0. Returns `id`, `round`, `turn_index`, `active`, and a `conditions` map (initiative order, only non-empty combatants).
+
+### Verification
+Ran the exact spec trace: create → add `blessed` (2) → advance to mage (stays 2 ✓ matches spec example) → advance to fighter (2→1) → wrap to round 2 → ... → fighter's turn removes it (`conditions: {}`). Also confirmed 404 for unknown session, 400 for bad target/duration, and that the original `/health` and `/v1/dice/stats` endpoints still work.
+
+`./run.sh` is unchanged and starts the server in the foreground on `127.0.0.1:$PORT`. No server left running.

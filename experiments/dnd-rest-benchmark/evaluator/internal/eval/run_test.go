@@ -10,21 +10,20 @@ import (
 )
 
 func TestSuitesPassReferenceServer(t *testing.T) {
-	server := httptest.NewServer(referenceHandler())
-	t.Cleanup(server.Close)
-
-	for _, suiteID := range []string{"core", "characters", "combat-state"} {
+	for _, suite := range Suites() {
+		server := httptest.NewServer(referenceHandler())
 		report, err := Run(context.Background(), RunConfig{
 			BaseURL: server.URL,
-			Suite:   suiteID,
+			Suite:   suite.ID,
 			Timeout: time.Second,
 		})
+		server.Close()
 		if err != nil {
-			t.Fatalf("Run(%s) returned error: %v", suiteID, err)
+			t.Fatalf("Run(%s) returned error: %v", suite.ID, err)
 		}
 		if !report.Passed {
 			payload, _ := json.MarshalIndent(report, "", "  ")
-			t.Fatalf("reference server failed suite %s:\n%s", suiteID, payload)
+			t.Fatalf("reference server failed suite %s:\n%s", suite.ID, payload)
 		}
 	}
 }
@@ -32,6 +31,10 @@ func TestSuitesPassReferenceServer(t *testing.T) {
 func referenceHandler() http.Handler {
 	mux := http.NewServeMux()
 	sessions := map[string]*referenceSession{}
+	users := map[string]referenceUser{}
+	monsters := map[string]map[string]any{}
+	items := map[string]map[string]any{}
+	campaigns := map[string]*referenceCampaign{}
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
@@ -225,7 +228,197 @@ func referenceHandler() http.Handler {
 		session.Conditions[active] = kept
 		writeJSON(w, http.StatusOK, session.snapshot())
 	})
+	mux.HandleFunc("POST /v1/auth/register", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Role     string `json:"role"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" || len(req.Password) < 8 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if _, exists := users[req.Username]; exists {
+			http.Error(w, "duplicate username", http.StatusConflict)
+			return
+		}
+		if req.Role == "" {
+			req.Role = "player"
+		}
+		users[req.Username] = referenceUser{Username: req.Username, Password: req.Password, Role: req.Role}
+		writeJSON(w, http.StatusCreated, map[string]any{"username": req.Username, "role": req.Role})
+	})
+	mux.HandleFunc("POST /v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		user, exists := users[req.Username]
+		if !exists || user.Password != req.Password {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"username": req.Username, "token": "session-" + req.Username})
+	})
+	mux.HandleFunc("GET /v1/storage/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"driver": "sqlite", "schema_version": 1, "initialized": true,
+		})
+	})
+	mux.HandleFunc("POST /v1/storage/reset", func(w http.ResponseWriter, r *http.Request) {
+		monsters = map[string]map[string]any{}
+		items = map[string]map[string]any{}
+		campaigns = map[string]*referenceCampaign{}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "schema_version": 1})
+	})
+	mux.HandleFunc("POST /v1/compendium/monsters", func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["slug"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		slug := req["slug"].(string)
+		monsters[slug] = req
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("GET /v1/compendium/monsters/{slug}", func(w http.ResponseWriter, r *http.Request) {
+		monster, exists := monsters[r.PathValue("slug")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, monster)
+	})
+	mux.HandleFunc("POST /v1/compendium/items", func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["slug"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		slug := req["slug"].(string)
+		items[slug] = req
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("GET /v1/compendium/items/{slug}", func(w http.ResponseWriter, r *http.Request) {
+		item, exists := items[r.PathValue("slug")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	})
+	mux.HandleFunc("POST /v1/campaigns", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			DM   string `json:"dm"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaigns[req.ID] = &referenceCampaign{ID: req.ID, Name: req.Name, DM: req.DM}
+		writeJSON(w, http.StatusCreated, map[string]any{"id": req.ID, "name": req.Name, "dm": req.DM})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/characters", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["id"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.Characters = append(campaign.Characters, req)
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/events", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["id"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.Events = append(campaign.Events, req)
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/state", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id":         campaign.ID,
+			"name":       campaign.Name,
+			"dm":         campaign.DM,
+			"characters": campaign.Characters,
+			"log_count":  len(campaign.Events),
+		})
+	})
+	mux.HandleFunc("POST /v1/phb/spell-slots", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"class": "wizard",
+			"level": 5,
+			"slots": map[string]any{"1": 4, "2": 3, "3": 2},
+		})
+	})
+	mux.HandleFunc("POST /v1/phb/rests/long", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"hp_current": 35, "hit_dice_spent": 1, "exhaustion_level": 0,
+		})
+	})
+	mux.HandleFunc("POST /v1/phb/equipment-load", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"capacity": 180, "weight": 181, "encumbered": true,
+		})
+	})
+	mux.HandleFunc("POST /v1/dm/encounter-builder", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": "camp-1", "base_xp": 150, "adjusted_xp": 300,
+			"difficulty": "easy", "monster_count": 3, "recommendation": "safe warm-up",
+		})
+	})
+	mux.HandleFunc("POST /v1/dm/loot-parcel", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": "camp-1", "coins_gp": 75,
+			"items": []map[string]any{{"slug": "healing-potion", "quantity": 2}},
+		})
+	})
+	mux.HandleFunc("POST /v1/dm/session-recap", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": "camp-1",
+			"summary":     "Nyx scouts the goblin trail.",
+			"open_threads": []any{
+				"Resolve goblin trail ambush",
+			},
+		})
+	})
 	return mux
+}
+
+type referenceUser struct {
+	Username string
+	Password string
+	Role     string
+}
+
+type referenceCampaign struct {
+	ID         string
+	Name       string
+	DM         string
+	Characters []map[string]any
+	Events     []map[string]any
 }
 
 type referenceCombatant struct {

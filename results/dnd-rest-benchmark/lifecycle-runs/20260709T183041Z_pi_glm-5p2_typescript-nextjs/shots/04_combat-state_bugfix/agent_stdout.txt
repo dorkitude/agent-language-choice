@@ -1,0 +1,15 @@
+Build succeeded with no TypeScript errors, and all routes are present. 🎲
+
+## Summary
+
+**Root cause:** The `combat-advance-expired-removed` test failed because the `serializeConditions` helper in `app/v1/combat/sessions/[id]/advance/route.ts` skipped any combatant whose condition list was empty (`if (list.length > 0)`).
+
+When fighter's `blessed` condition decremented from 1 → 0 on its second turn, the advance logic correctly filtered it out, leaving `session.conditions["fighter"] = []`. But serialization then dropped the `"fighter"` key entirely, producing `"conditions":{}` — while the test expects the key to remain with an empty array (`{"fighter": []}`).
+
+**Fix:** Removed the `list.length > 0` guard so every combatant that has ever held a condition stays present in the output, even after all its conditions expire.
+
+I traced the full 5-advance sequence to confirm no regressions:
+- advances #1–#4: fighter's list is non-empty (`blessed/2` → `blessed/1`), so output is unchanged → still `{fighter: [{blessed, N}]}`
+- advance #5 (the failing one): now correctly emits `{fighter: []}` ✅
+
+`./run.sh` is unchanged, executable, and the project builds cleanly. Ready to go, Chef! 🧑‍🍳
