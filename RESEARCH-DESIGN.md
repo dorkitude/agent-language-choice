@@ -6,7 +6,7 @@ citations not yet finalized).
 ## Research question
 
 Why do LLM coding agents appear to perform better in some programming languages
-(e.g. Go) than others (e.g. TypeScript), and which *language design dimensions*
+(e.g. Go) than others (e.g. Ruby), and which *language design dimensions*
 explain the difference?
 
 We do not claim any language is "better." We treat languages as points in a
