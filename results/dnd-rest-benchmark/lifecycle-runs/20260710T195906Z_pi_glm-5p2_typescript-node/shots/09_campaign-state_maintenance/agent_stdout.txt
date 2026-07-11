@@ -1,0 +1,23 @@
+Done, Chef! 🎲 The campaign state APIs are live and all existing endpoints are preserved.
+
+## Summary of changes
+
+**`src/storage.ts`** — Added SQLite-backed campaign storage:
+- 3 new tables: `campaigns`, `campaign_characters`, `campaign_events` (with FK cascade to campaigns)
+- 3 interfaces: `CampaignRecord`, `CampaignCharacterRecord`, `CampaignEventRecord`
+- 9 new functions: `campaignExists`, `insertCampaign`, `getCampaign`, `campaignCharacterExists`, `insertCampaignCharacter`, `getCampaignCharacters`, `campaignEventExists`, `insertCampaignEvent`, `getCampaignEventCount`
+- Updated `resetStorage()` to drop the new tables (children before parents for FK safety)
+
+**`src/server.ts`** — Added 4 handlers + 4 routes:
+- `POST /v1/campaigns` → 201 `{id, name, dm}` (409 dup, 400 malformed)
+- `POST /v1/campaigns/:cid/characters` → 201 `{id, name, level, class}` (404 unknown campaign, 409 dup char, 400 invalid)
+- `POST /v1/campaigns/:cid/events` → 201 `{id, kind}` — note `summary` is dropped from response (404/409/400 as above)
+- `GET /v1/campaigns/:cid/state` → 200 full state with `characters[]` (insertion-ordered) and `log_count` (404 unknown campaign)
+
+## Verified ✅
+- `tsc` compiles clean (exit 0)
+- Full spec example reproduced exactly (camp-1 → char-1 → evt-1 → state)
+- Multiple characters preserve insertion order; `log_count` counts all events
+- Error codes: 400 (malformed/invalid level/invalid json), 404 (unknown campaign), 409 (duplicate campaign/character/event)
+- Regression: health, dice, auth register, compendium, combat sessions, storage status/reset all still work
+- `./run.sh` unchanged — starts server in foreground on `127.0.0.1:$PORT`

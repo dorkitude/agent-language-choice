@@ -1,0 +1,20 @@
+Fixed, Chef! 🛡️✨
+
+The bug was in the `/v1/combat/sessions/{id}/advance` response builder. When a condition expired, the code was rejecting it **and then dropping the combatant key entirely if its condition list became empty**. The evaluator expects the empty `"fighter": []` entry to remain.
+
+Change made in `app.rb`:
+
+```ruby
+response_conditions = {}
+session[:conditions].each do |name, conds|
+  response_conditions[name] = conds.map { |c| { condition: c[:condition], remaining_rounds: c[:remaining_rounds] } }
+end
+```
+
+I verified the fix by starting a test server and running the evaluator:
+
+```text
+suite=combat-state base_url=http://127.0.0.1:54322 passed=true tests=20/20
+```
+
+All 20 tests pass, including `combat-advance-expired-removed`. The test server was stopped after verification, and `./run.sh` is ready to go. 🎲

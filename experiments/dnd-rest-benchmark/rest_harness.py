@@ -1207,7 +1207,7 @@ def completed_lifecycle_exists(provider: str, model: str, target: str, stages_va
             continue
         meta = data.get("metadata", {})
         if (
-            data.get("passed")
+            data.get("completed_at_utc")
             and meta.get("provider") == provider
             and meta.get("model") == model
             and meta.get("target") == target

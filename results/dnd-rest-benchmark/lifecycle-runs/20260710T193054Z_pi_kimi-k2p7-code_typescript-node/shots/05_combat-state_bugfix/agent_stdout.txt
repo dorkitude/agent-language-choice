@@ -1,0 +1,22 @@
+Fixed, Chef! 🎯
+
+**Root cause:** In the `POST /v1/combat/sessions/{id}/advance` handler, when a combatant's last condition expired, the code was deleting the combatant's key from `session.conditions` entirely. The evaluator expects the key to remain in the response with an empty array.
+
+**Fix:** In `src/server.ts`, replaced the `delete session.conditions[active.name]` path with an unconditional assignment of the filtered list:
+
+```typescript
+if (activeConditions) {
+  const next = activeConditions
+    .map((c) => ({ condition: c.condition, remaining_rounds: c.remaining_rounds - 1 }))
+    .filter((c) => c.remaining_rounds > 0);
+  session.conditions[active.name] = next; // was deleting key when next.length === 0
+}
+```
+
+**Verified:** Reproduced the failing scenario and confirmed the response now returns:
+
+```json
+{"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{"fighter":[]}}
+```
+
+`./run.sh` is ready and `npx tsc` passes cleanly. No prior endpoints were changed.

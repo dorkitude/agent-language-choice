@@ -1,0 +1,30 @@
+All set, Chef! 🎲✨
+
+## Summary
+
+Built the **Core D&D REST Engine** in PHP 8.5.8 + Slim 4.15.2 + slim/psr7 1.8.0, all from the seeded starter.
+
+### Deliverables
+- **`./run.sh`** — executable, starts `php -S 127.0.0.1:$PORT index.php` in the foreground (unchanged from starter, already correct).
+- **`index.php`** — Slim 4 app with all 5 endpoints + a JSON error handler (404s/throwables return JSON, not HTML).
+- **`composer.json`** — pins untouched (`slim/slim: 4.15.2`, `slim/psr7: 1.8.0`); `composer.lock` + `vendor/` installed.
+
+### Endpoints implemented
+| Route | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parsed `<count>d<sides>[±<mod>]`; validates count/sides > 0 → 400 on invalid; `min/max/average=(min+max)/2` (true expected value, int when whole, `3.5` for `1d6`) |
+| `POST /v1/checks/ability` | `total`, `success = total >= dc`, `margin` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count-based multiplier (1/1.5/2/2.5/3/4), summed party thresholds (level-3), highest-reached difficulty (trivial→deadly) |
+| `POST /v1/initiative/order` | `score=roll+dex`, sort by score desc → dex desc → name asc |
+
+### Key implementation choices
+- **Robust body parsing**: reads raw body + `json_decode` (works regardless of `Content-Type` header), 400 on invalid JSON.
+- **Clean numeric output**: a `normalizeNumbers` helper converts whole-valued floats to ints (so `850*1.5` → `1275`, not `1275.0`) while preserving genuine fractions like `1.5`, `3.5`, `10.5`. (PHP 8.5's `json_encode` already does this by default, but the helper is a deterministic safety net.)
+- **Difficulty guard**: `> 0` checks on thresholds prevent a 0-XP encounter from being mislabeled "easy" when the party is empty/unknown-level.
+- Deterministic and minimal — single `index.php`, no extra deps.
+
+### One thing worth noting
+While testing, I hit **other benchmark runs' servers** (Django on 8732/8733, a binary on 8123) occupying ports on this shared machine — they made my `php -S` fail to bind silently, and my test curls hit *their* pretty-printed JSON. That was never my code: on any free port, my Slim server emits compact, spec-exact JSON. The evaluator picks its own `PORT`, so this won't affect it. I left those other runs' processes untouched.
+
+`./run.sh` is ready. 🛡️

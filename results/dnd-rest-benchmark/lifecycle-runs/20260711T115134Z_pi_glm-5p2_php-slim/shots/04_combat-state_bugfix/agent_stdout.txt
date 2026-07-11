@@ -1,0 +1,16 @@
+All done, Chef! 🎉✨
+
+## Summary
+
+The bug was in the `combat-advance-expired-removed` test. When a combatant's last condition expired, the advance endpoint was `unset`-ing the combatant's key from the `conditions` map, producing `"conditions":{}` (after my first fix) — but the evaluator expects the combatant's key to **remain** with an empty list: `"conditions":{"fighter":[]}`.
+
+### Root cause
+Two intertwined issues in `index.php`:
+
+1. **`conditionsView`** serialized an empty PHP array as `[]` instead of `{}` (the original reported failure). Fixed by casting the result to `(object)` so `json_encode` always emits a JSON object.
+
+2. **The advance endpoint** deleted the combatant's key when their condition list emptied out. The evaluator wants the key retained (with `[]`) so the expired-condition state is still reported. Fixed by removing the `unset`, and switching `conditionsView` from `!empty(...)` to `array_key_exists(...)` so combatants with empty condition lists are still included (while combatants who never had a condition remain omitted — preserving the earlier passing tests that show only `{"fighter":[...]}`).
+
+### Result
+- `run.sh` is intact and starts the Slim PHP server in the foreground on `127.0.0.1:$PORT`.
+- All cumulative suites green: core 8/8, characters 13/13, combat-state 20/20.

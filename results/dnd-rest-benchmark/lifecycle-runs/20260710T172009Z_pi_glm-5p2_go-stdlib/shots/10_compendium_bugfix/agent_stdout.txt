@@ -1,0 +1,32 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+The previous compendium shot **timed out** before producing any code — so the fix was simply to implement the missing Stage 5 endpoints on top of the working codebase.
+
+### What I added to `main.go`
+
+**New routes** (registered in `main()`):
+- `POST /v1/compendium/monsters` → create monster
+- `GET /v1/compendium/monsters/{slug}` → read monster
+- `POST /v1/compendium/items` → create item
+- `GET /v1/compendium/items/{slug}` → read item
+
+**Key contract details handled:**
+- **Create Monster** returns `201` with `slug/name/cr/armor_class/hit_points` — **tags deliberately omitted** (separate `monsterCreateResp` struct).
+- **Read Monster** returns `200` with the **full record including `tags`** (empty array `[]` when none supplied, never `null`).
+- **Create/Read Item** share the same `{slug,name,type,rarity,cost_gp}` shape, `201` on create.
+- **Error codes**: `400` for invalid JSON / missing slug, `404` for unknown slugs, `409` for duplicate slugs.
+- Slug-keyed in-memory maps (monsters & items separate namespaces), guarded by a mutex — consistent with the existing combat/auth storage pattern.
+
+**Preserved behavior:**
+- All prior endpoints (core, characters, combat-state, auth-users, sqlite-storage) untouched and re-verified.
+- Extended `store.reset()` to also clear compendium data (so `POST /v1/storage/reset` clears benchmark-created compendium records, then re-creation succeeds with `201` instead of `409`).
+- `game.db` remains a valid SQLite-format-3 artifact (stdlib has no SQLite driver, so the established hand-rolled-file + in-memory-state pattern continues).
+
+### Verification
+- `go vet` + `go build` clean.
+- Spec-example requests produce byte-accurate responses for all four endpoints.
+- All error cases return the expected statuses (400/404/409).
+- Full regression smoke test of every prior endpoint passes.
+- `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT` — ready to go. 🚀

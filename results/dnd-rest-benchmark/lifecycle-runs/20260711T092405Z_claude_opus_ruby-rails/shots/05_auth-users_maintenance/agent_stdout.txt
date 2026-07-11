@@ -1,0 +1,27 @@
+All endpoints work and the existing suites are preserved. ✨
+
+Done, Chef! 🎲🔐
+
+## What I added
+
+Inheriting the single-file Rails API (`app.rb`), I added deterministic username/password auth while leaving every existing D&D endpoint untouched:
+
+- **Two routes** wired into the Rails router — `POST /v1/auth/register` and `POST /v1/auth/login`.
+- **`AuthController`** with in-memory user storage (process-lifetime, matching the combat engine's pattern):
+  - Register validates username (`2-32` chars, `[a-z0-9_-]`), password (`≥8`), and role (`dm`/`player`) → **400** on malformed input, **409** on duplicates.
+  - Login returns the benchmark token `session-<username>` on success, **401** on bad credentials.
+- **`PasswordHash` helper** — real hashing via PBKDF2-HMAC-SHA256 (Ruby stdlib OpenSSL, 100k iterations, random salt, constant-time compare). No bcrypt is bundled, so I isolated hashing behind this module so a production hash can drop in cleanly. The plain password is never stored or echoed back.
+
+## Verification 🧪
+All green against a live server on `127.0.0.1:$PORT`:
+
+| Case | Status |
+|------|--------|
+| register `dm` | `200` ✅ |
+| duplicate username | `409` ✅ |
+| bad role / short password | `400` ✅ |
+| login correct → `session-dm` | `200` ✅ |
+| login wrong password | `401` ✅ |
+| `dice/stats` regression | `200` ✅ |
+
+`./run.sh` is unchanged and still starts Puma in the foreground on `127.0.0.1` using `$PORT`. The server is stopped — ready for the evaluator. 🚀

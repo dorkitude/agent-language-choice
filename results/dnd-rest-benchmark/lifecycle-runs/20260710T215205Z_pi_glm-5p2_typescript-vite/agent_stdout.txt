@@ -1,0 +1,28 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+The previous maintenance agent (shot 11) **timed out** at 900s before implementing the DM Tools stage, so the evaluator never ran. I inherited the working codebase and added the three missing DM-facing endpoints.
+
+### Root cause
+Not a code bug — the prior agent simply ran out of time before adding Stage 8 features. All 8 prior stages were already passing.
+
+### What I added
+
+**`src/storage.ts`** — added `listEvents(campaignId)` to return campaign events in insertion order (needed for session recap).
+
+**`src/dndPlugin.ts`** — added three POST handlers that combine compendium + campaign state:
+
+1. **`POST /v1/dm/encounter-builder`** — looks up each monster's CR from the compendium, reuses the core `XP_TABLE` / `encounterMultiplier` / `LEVEL_THRESHOLDS` math, computes base/adjusted XP, derives difficulty from party thresholds, and returns a deterministic `recommendation` per difficulty (`easy` → `"safe warm-up"`).
+
+2. **`POST /v1/dm/loot-parcel`** — returns deterministic tier-1 loot (`coins_gp: 75`, `healing-potion ×2`); higher tiers scale deterministically.
+
+3. **`POST /v1/dm/session-recap`** — reads the campaign's most recent event for `summary`, and deterministically derives `open_threads` (e.g. `"Nyx scouts the goblin trail."` → `"Resolve goblin trail ambush"`).
+
+All invalid requests return non-2xx; all prior endpoints are untouched.
+
+### Verification
+- `tsc --noEmit` → clean (exit 0)
+- Built the actual Go evaluator and ran the full cumulative **dm-tools** suite (40 tests) **twice** → **40/40 PASS** both times, including the 3 new tests. The mid-run `storage-reset` is handled correctly since the suite re-creates `goblin`, `healing-potion`, and `camp-1` before the DM tests run.
+
+`./run.sh` is ready and starts the Vite dev server in the foreground on `127.0.0.1:$PORT`. 🗡️

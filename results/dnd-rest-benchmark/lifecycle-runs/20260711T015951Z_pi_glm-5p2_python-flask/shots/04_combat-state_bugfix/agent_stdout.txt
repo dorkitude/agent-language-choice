@@ -1,0 +1,26 @@
+Everything checks out, Chef! 🎲✨
+
+## Summary
+
+**Root cause:** In the `advance_turn` endpoint, the `conditions_out` dict comprehension had an `if conds` filter that silently dropped any combatant whose condition list had become empty. When fighter's `blessed` condition decremented to 0 and was removed, the fighter key vanished from the response entirely (`conditions: {}`), but the test expects the key to remain with an empty list.
+
+**Fix** (`app.py`, one line removed):
+
+```python
+# Before (buggy):
+conditions_out = {
+    name: [dict(c) for c in conds]
+    for name, conds in session["conditions"].items()
+    if conds                    # ← dropped empty-list combatants
+}
+
+# After (fixed):
+conditions_out = {
+    name: [dict(c) for c in conds]
+    for name, conds in session["conditions"].items()
+}
+```
+
+Combatants who never had conditions don't appear (they're never added to `session["conditions"]`), but combatants whose conditions have all expired now correctly show up with `"fighter": []`. All 19 previously-passing tests remain unaffected since they only involve combatants with non-empty condition lists.
+
+`./run.sh` is ready — it starts the Flask server in the foreground on `127.0.0.1:$PORT`. 🗡️

@@ -1,0 +1,30 @@
+Everything is wired up cleanly. Here's a summary of what I did, Chef 🎲
+
+## Summary
+
+Added **Stage 6: Campaign State APIs** to the existing PHP stdlib D&D REST API, preserving all prior-stage behavior.
+
+### Changes to `db.php`
+- **3 new relational tables** in `db_init_schema()` (idempotent `CREATE TABLE IF NOT EXISTS`):
+  - `campaigns(id PK, name, dm)`
+  - `campaign_characters(campaign_id, id, name, level, class)` — composite PK `(campaign_id, id)`, `rowid` preserves insertion order
+  - `campaign_events(campaign_id, id, kind, summary)` — composite PK `(campaign_id, id)`
+- Updated `db_reset()` to drop the 3 new tables too (so `/v1/storage/reset` clears campaign state → state read 404s after reset).
+
+### Changes to `index.php`
+- **4 new handlers** following the existing conventions (strict type validation, `400`/`404`/`409` error codes, `201` for creates — matching the compendium/auth precedent):
+  - `handle_create_campaign()` — `POST /v1/campaigns` → 201 `{id,name,dm}`, 409 on dup, 400 on missing fields
+  - `handle_add_character($cid)` — `POST /v1/campaigns/{id}/characters` → 201 `{id,name,level,class}`, 404 if campaign missing, 409 dup, 400 on bad types (level must be int)
+  - `handle_add_event($cid)` — `POST /v1/campaigns/{id}/events` → 201 `{id,kind}` (summary omitted per spec), 404/409/400 as appropriate
+  - `handle_read_campaign_state($cid)` — `GET /v1/campaigns/{id}/state` → 200 with `characters` (insertion order) + `log_count`, 404 if missing
+  - Plus a small `campaign_exists()` helper to DRY up the 404 check.
+- **4 new routes** added to the routing `elseif` chain, after the compendium routes.
+
+### Verification (all green ✅)
+- Spec-exact responses for create campaign, add character, add event, and read state.
+- Error paths: 409 (dup campaign/char/event), 404 (missing campaign for char/event/state), 400 (malformed campaign, non-int level).
+- `log_count` and character ordering correct with multiple records.
+- No regression on prior stages: health, dice, storage status (`schema_version` still 1), compendium create/read, auth register all pass.
+- `/v1/storage/reset` correctly clears campaign tables (state 404s after reset).
+
+`run.sh` was already correct (wipes `game.db` + pre-inits schema on startup, now including the campaign tables) and is executable. The server is **not** running — ready for the evaluator. 🪄

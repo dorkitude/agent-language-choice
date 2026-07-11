@@ -1,0 +1,26 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the **SQLite Game Storage** maintenance stage to the Ruby stdlib D&D REST engine while preserving every prior endpoint.
+
+### What changed in `server.rb`
+
+**1. Durable storage layer (stdlib-only, no gems)**
+Ruby's stdlib has no SQLite binding (`dbm`/`sdbm` are unavailable in this build, and the `sqlite3` gem isn't installed). Since the `sqlite3` *binary* is a system tool (not a Ruby gem) and `Open3` is stdlib, I shell out to it — the compliant way to use SQLite here. All DB access is serialized by a `DB_MUTEX` so combat-session read-mutate-write transactions stay atomic.
+
+- **`game.db`** created in the project dir on boot via `init_db`, which wipes any stale file and recreates the schema (`schema_meta`, `users`, `combat_sessions`). This preserves the prior **fresh-per-boot** semantics — critical so a bugfix rerun with leftover `game.db` still yields `register → 201` instead of `409`.
+- All user-supplied strings (session ids, names, conditions, usernames, hashes) are escaped via `sql_quote` (single-quote doubling) — injection-safe.
+
+**2. Migrated durable data behind SQLite**
+- `users` (auth) and `combat_sessions` (stateful combat) now live in SQLite; combat sessions are stored as JSON blobs with read-mutate-write per request, so condition decrement/round-wrap/expiry logic is unchanged.
+
+**3. New endpoints**
+- `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- `POST /v1/storage/reset` → clears `users` + `combat_sessions`, recreates schema → `{"ok":true,"schema_version":1}`
+
+### Verification
+- **`dndeval sqlite-storage` suite: 26/26 PASS** (24 cumulative core/characters/combat-state/auth-users + 2 new storage).
+- Reset clears data (login → 401 after reset, status stays `initialized:true`).
+- Reboot with stale `game.db` → `register → 201` (not 409).
+- `run.sh` starts `ruby server.rb` in the foreground on `127.0.0.1:$PORT`; no server left running; `game.db` created fresh on boot. 🗡️

@@ -1,0 +1,21 @@
+Done, Chef! 🎲🔐 Stage 3 is ready.
+
+## What I added ✨
+
+**Two new endpoints** in `main.go` (routed via the existing `net/http` mux):
+
+- `POST /v1/auth/register` — validates `username` (`^[a-z0-9_-]{2,32}$`), `password` (≥8 chars), and `role` (`dm`|`player`); returns `409` on duplicate, `400` on bad input, `200` with `{"username","role"}` on success.
+- `POST /v1/auth/login` — verifies credentials, returns the deterministic `session-<username>` token, or `401` on bad/unknown creds.
+
+**Real password hashing** 🧂 using pure Go stdlib — no third-party packages:
+- `crypto/pbkdf2` (PBKDF2-HMAC-SHA256, 100k iterations) with a per-user 16-byte salt from `crypto/rand`, isolated in a `hashPassword` helper so a production hash can drop in.
+- `crypto/subtle.ConstantTimeCompare` for timing-safe verification.
+- The plaintext password is never stored or echoed.
+
+## Verification ✅
+- `go vet` + `go build` clean.
+- Smoke-tested every case end-to-end: 200/409/400 on register, 200/401 on login with the correct `session-dm` token, and the prior-stage `/health` still returns `{"ok":true}`.
+
+`run.sh` is unchanged (`go run .`, foreground, honors `PORT` on `127.0.0.1`). All prior core / character / combat endpoints are untouched. 🛡️
+
+*(Heads up: your machine has a pile of stale `dndrest`/`dndrest_test` benchmark servers squatting on ports 8080/8099/8123 — that's why my first two test runs got hijacked. Not from this run, but you may want to reap them.)*

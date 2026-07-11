@@ -1,0 +1,1660 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4f2b-0c66-7de1-aac8-52303327ea1f
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-django
+        Language: python
+        Framework/runtime: django
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Django 6.0.7. Implement the REST API as Django URL routes/views inside the seeded minimal project.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Django project first so the new character routes fit the current URL/view style and don’t disturb prior endpoints.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+shots/02_characters_maintenance/PROMPT.md
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+dndsite/urls.py
+dndsite/settings.py
+dndsite/__init__.py
+manage.py
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+agent_last_message.txt
+requirements.txt
+setup.json
+
+codex
+The repository has a minimal Django app with local changes outside this run directory, so I’ll ignore those and keep edits scoped here. Next I’m reading the route implementation and runner.
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 manage.py runserver 127.0.0.1:"$PORT" --noreload
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndsite/settings.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+SECRET_KEY = "benchmark"
+DEBUG = True
+ROOT_URLCONF = "dndsite.urls"
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+INSTALLED_APPS = []
+MIDDLEWARE = []
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+exec
+/bin/zsh -lc 'cat requirements.txt' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+Django==6.0.7
+
+exec
+/bin/zsh -lc "sed -n '1,240p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+import json
+import re
+
+from django.http import JsonResponse
+from django.urls import path
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+
+def bad_request():
+    return JsonResponse({"error": "bad request"}, status=400)
+
+
+def json_body(request):
+    if request.method != "POST":
+        return None
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def clean_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def require_int(value):
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError
+    return value
+
+
+def health(request):
+    return JsonResponse({"ok": True})
+
+
+def dice_stats(request):
+    data = json_body(request)
+    if data is None or not isinstance(data.get("expression"), str):
+        return bad_request()
+
+    match = DICE_RE.fullmatch(data["expression"])
+    if not match:
+        return bad_request()
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        return bad_request()
+
+    modifier = int(match.group(4) or 0)
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    minimum = count + modifier
+    maximum = count * sides + modifier
+    average = count * (sides + 1) / 2 + modifier
+    return JsonResponse(
+        {
+            "dice_count": count,
+            "sides": sides,
+            "modifier": modifier,
+            "min": minimum,
+            "max": maximum,
+            "average": clean_number(average),
+        }
+    )
+
+
+def ability_check(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        roll = require_int(data["roll"])
+        modifier = require_int(data["modifier"])
+        dc = require_int(data["dc"])
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    total = roll + modifier
+    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
+
+
+def encounter_multiplier(monster_count):
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def adjusted_xp(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+
+    party = data.get("party")
+    monsters = data.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        return bad_request()
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    try:
+        for member in party:
+            levels = LEVEL_THRESHOLDS[require_int(member["level"])]
+            for name in thresholds:
+                thresholds[name] += levels[name]
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            count = require_int(monster["count"])
+            if count <= 0:
+                return bad_request()
+            base_xp += CR_XP[str(monster["cr"])] * count
+            monster_count += count
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    multiplier = encounter_multiplier(monster_count) if monster_count else 1
+    adjusted = base_xp * multiplier
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted >= thresholds[name]:
+            difficulty = name
+
+    return JsonResponse(
+        {
+            "base_xp": base_xp,
+            "monster_count": monster_count,
+            "multiplier": clean_number(multiplier),
+            "adjusted_xp": clean_number(adjusted),
+            "difficulty": difficulty,
+            "thresholds": thresholds,
+        }
+    )
+
+
+def initiative_order(request):
+    data = json_body(request)
+    if data is None or not isinstance(data.get("combatants"), list):
+        return bad_request()
+
+    order = []
+    try:
+        for combatant in data["combatants"]:
+            name = combatant["name"]
+            if not isinstance(name, str):
+                return bad_request()
+            dex = require_int(combatant["dex"])
+            roll = require_int(combatant["roll"])
+            order.append({"name": name, "dex": dex, "score": roll + dex})
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return JsonResponse(
+        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+    )
+
+
+urlpatterns = [
+    path("health", health),
+    path("v1/dice/stats", dice_stats),
+    path("v1/checks/ability", ability_check),
+    path("v1/encounters/adjusted-xp", adjusted_xp),
+    path("v1/initiative/order", initiative_order),
+]
+
+codex
+I found all API behavior concentrated in [dndsite/urls.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py:1). I’m adding small pure helpers for the character math and three POST views, reusing the existing JSON parsing and 400 style.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+codex
+The routes are patched. I’m verifying them through Django’s in-process test client so I don’t start the HTTP server, and I’ll also check the existing core endpoints still respond.
+exec
+/bin/zsh -lc 'python3 manage.py check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import json
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dndsite.settings')
+import django
+django.setup()
+from django.test import Client
+
+client = Client()
+checks = [
+    ('/health', {}, 200, {'ok': True}),
+    ('/v1/characters/ability-modifier', {'score': 9}, 200, {'score': 9, 'modifier': -1}),
+    ('/v1/characters/proficiency', {'level': 9}, 200, {'level': 9, 'proficiency_bonus': 4}),
+    ('/v1/characters/derived-stats', {
+        'level': 5,
+        'abilities': {'str': 16, 'dex': 14, 'con': 13, 'int': 8, 'wis': 12, 'cha': 10},
+        'armor': {'base': 12, 'shield': True, 'dex_cap': 2},
+    }, 200, {
+        'level': 5,
+        'proficiency_bonus': 3,
+        'hp_max': 35,
+        'armor_class': 16,
+        'modifiers': {'str': 3, 'dex': 2, 'con': 1, 'int': -1, 'wis': 1, 'cha': 0},
+    }),
+]
+for path, payload, status, expected in checks:
+    if path == '/health':
+        response = client.get(path)
+    else:
+        response = client.post(path, data=json.dumps(payload), content_type='application/json')
+    body = response.json()
+    assert response.status_code == status, (path, response.status_code, body)
+    assert body == expected, (path, body)
+
+bad_checks = [
+    ('/v1/characters/ability-modifier', {'score': 0}),
+    ('/v1/characters/ability-modifier', {'score': True}),
+    ('/v1/characters/proficiency', {'level': 21}),
+    ('/v1/characters/derived-stats', {'level': 5}),
+]
+for path, payload in bad_checks:
+    response = client.post(path, data=json.dumps(payload), content_type='application/json')
+    assert response.status_code == 400, (path, response.status_code, response.content)
+print('ok')
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/manage.py", line 11, in <module>
+    main()
+    ~~~~^^
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/manage.py", line 7, in main
+    from django.core.management import execute_from_command_line
+ModuleNotFoundError: No module named 'django'
+
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+ModuleNotFoundError: No module named 'django'
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+codex
+The implementation is in place, but direct verification failed because Django is not on the current shell’s Python path. I’m checking whether the benchmark’s dependency directory is present before deciding how much validation can run locally.
+exec
+/bin/zsh -lc 'ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'git diff -- dndsite/urls.py run.sh requirements.txt' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+total 320
+drwxr-xr-x@  18 dorkitude  staff     576 Jul 10 20:14 .
+drwxr-xr-x@ 105 dorkitude  staff    3360 Jul 10 20:11 ..
+drwxr-xr-x@   9 dorkitude  staff     288 Jul 10 20:14 .deps
+-rw-r--r--@   1 dorkitude  staff    3555 Jul 10 20:14 PROMPT.md
+-rw-r--r--@   1 dorkitude  staff     635 Jul 10 20:11 VERSION-PINS.json
+-rw-r--r--@   1 dorkitude  staff     796 Jul 10 20:14 agent_last_message.txt
+-rw-r--r--@   1 dorkitude  staff  114074 Jul 10 20:14 agent_stderr.txt
+-rw-r--r--@   1 dorkitude  staff     797 Jul 10 20:14 agent_stdout.txt
+-rw-r--r--@   1 dorkitude  staff    1422 Jul 10 20:14 dndeval-core-report.json
+drwxr-xr-x@   6 dorkitude  staff     192 Jul 10 20:14 dndsite
+-rw-r--r--@   1 dorkitude  staff    5725 Jul 10 20:14 lifecycle-result.json
+-rw-r--r--@   1 dorkitude  staff     273 Jul 10 20:11 manage.py
+-rw-r--r--@   1 dorkitude  staff      14 Jul 10 20:11 requirements.txt
+-rwxr-xr-x@   1 dorkitude  staff     142 Jul 10 20:11 run.sh
+-rw-r--r--@   1 dorkitude  staff     589 Jul 10 20:14 server_stderr.txt
+-rw-r--r--@   1 dorkitude  staff       0 Jul 10 20:14 server_stdout.txt
+-rw-r--r--@   1 dorkitude  staff     954 Jul 10 20:14 setup.json
+drwxr-xr-x@   4 dorkitude  staff     128 Jul 10 20:14 shots
+
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'python3 -m py_compile manage.py dndsite/urls.py dndsite/settings.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+codex
+The `.deps` directory is present; the failed check was just missing the same `PYTHONPATH` that `run.sh` uses. Syntax compilation passes, and I’m rerunning the Django checks with the runner’s environment.
+exec
+/bin/zsh -lc "sed -n '1,260p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+import json
+import re
+
+from django.http import JsonResponse
+from django.urls import path
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+
+def bad_request():
+    return JsonResponse({"error": "bad request"}, status=400)
+
+
+def json_body(request):
+    if request.method != "POST":
+        return None
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def clean_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def require_int(value):
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError
+    return value
+
+
+def ability_modifier_for_score(score):
+    score = require_int(score)
+    if score < 1 or score > 30:
+        raise ValueError
+    return (score - 10) // 2
+
+
+def proficiency_for_level(level):
+    level = require_int(level)
+    if level < 1 or level > 20:
+        raise ValueError
+    return 2 + (level - 1) // 4
+
+
+def health(request):
+    return JsonResponse({"ok": True})
+
+
+def dice_stats(request):
+    data = json_body(request)
+    if data is None or not isinstance(data.get("expression"), str):
+        return bad_request()
+
+    match = DICE_RE.fullmatch(data["expression"])
+    if not match:
+        return bad_request()
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        return bad_request()
+
+    modifier = int(match.group(4) or 0)
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    minimum = count + modifier
+    maximum = count * sides + modifier
+    average = count * (sides + 1) / 2 + modifier
+    return JsonResponse(
+        {
+            "dice_count": count,
+            "sides": sides,
+            "modifier": modifier,
+            "min": minimum,
+            "max": maximum,
+            "average": clean_number(average),
+        }
+    )
+
+
+def ability_check(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        roll = require_int(data["roll"])
+        modifier = require_int(data["modifier"])
+        dc = require_int(data["dc"])
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    total = roll + modifier
+    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
+
+
+def encounter_multiplier(monster_count):
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def adjusted_xp(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+
+    party = data.get("party")
+    monsters = data.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        return bad_request()
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    try:
+        for member in party:
+            levels = LEVEL_THRESHOLDS[require_int(member["level"])]
+            for name in thresholds:
+                thresholds[name] += levels[name]
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            count = require_int(monster["count"])
+            if count <= 0:
+                return bad_request()
+            base_xp += CR_XP[str(monster["cr"])] * count
+            monster_count += count
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    multiplier = encounter_multiplier(monster_count) if monster_count else 1
+    adjusted = base_xp * multiplier
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted >= thresholds[name]:
+            difficulty = name
+
+    return JsonResponse(
+        {
+            "base_xp": base_xp,
+            "monster_count": monster_count,
+            "multiplier": clean_number(multiplier),
+            "adjusted_xp": clean_number(adjusted),
+            "difficulty": difficulty,
+            "thresholds": thresholds,
+        }
+    )
+
+
+def initiative_order(request):
+    data = json_body(request)
+    if data is None or not isinstance(data.get("combatants"), list):
+        return bad_request()
+
+    order = []
+    try:
+        for combatant in data["combatants"]:
+            name = combatant["name"]
+            if not isinstance(name, str):
+                return bad_request()
+            dex = require_int(combatant["dex"])
+            roll = require_int(combatant["roll"])
+            order.append({"name": name, "dex": dex, "score": roll + dex})
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return JsonResponse(
+        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+    )
+
+
+def ability_modifier(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        score = require_int(data["score"])
+        modifier = ability_modifier_for_score(score)
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    return JsonResponse({"score": score, "modifier": modifier})
+
+
+def proficiency(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        level = require_int(data["level"])
+        bonus = proficiency_for_level(level)
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    return JsonResponse({"level": level, "proficiency_bonus": bonus})
+
+
+def derived_stats(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+
+    abilities = data.get("abilities")
+    armor = data.get("armor")
+    if not isinstance(abilities, dict) or not isinstance(armor, dict):
+        return bad_request()
+
+    try:
+        level = require_int(data["level"])
+        proficiency_bonus = proficiency_for_level(level)
+        modifiers = {
+            ability: ability_modifier_for_score(abilities[ability])
+            for ability in ("str", "dex", "con", "int", "wis", "cha")
+        }
+        armor_base = require_int(armor["base"])
+        dex_cap = require_int(armor["dex_cap"])
+        shield = armor["shield"]
+        if not isinstance(shield, bool):
+            return bad_request()
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    hp_max = level * (6 + modifiers["con"])
+    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+    return JsonResponse(
+        {
+            "level": level,
+            "proficiency_bonus": proficiency_bonus,
+            "hp_max": hp_max,
+
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 manage.py check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+import json
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dndsite.settings')
+import django
+django.setup()
+from django.test import Client
+
+client = Client()
+checks = [
+    ('GET', '/health', None, 200, {'ok': True}),
+    ('POST', '/v1/dice/stats', {'expression': '2d6+3'}, 200, {'dice_count': 2, 'sides': 6, 'modifier': 3, 'min': 5, 'max': 15, 'average': 10}),
+    ('POST', '/v1/checks/ability', {'roll': 12, 'modifier': 3, 'dc': 15}, 200, {'total': 15, 'success': True, 'margin': 0}),
+    ('POST', '/v1/characters/ability-modifier', {'score': 9}, 200, {'score': 9, 'modifier': -1}),
+    ('POST', '/v1/characters/proficiency', {'level': 9}, 200, {'level': 9, 'proficiency_bonus': 4}),
+    ('POST', '/v1/characters/derived-stats', {
+        'level': 5,
+        'abilities': {'str': 16, 'dex': 14, 'con': 13, 'int': 8, 'wis': 12, 'cha': 10},
+        'armor': {'base': 12, 'shield': True, 'dex_cap': 2},
+    }, 200, {
+        'level': 5,
+        'proficiency_bonus': 3,
+        'hp_max': 35,
+        'armor_class': 16,
+        'modifiers': {'str': 3, 'dex': 2, 'con': 1, 'int': -1, 'wis': 1, 'cha': 0},
+    }),
+]
+for method, path, payload, status, expected in checks:
+    if method == 'GET':
+        response = client.get(path)
+    else:
+        response = client.post(path, data=json.dumps(payload), content_type='application/json')
+    body = response.json()
+    assert response.status_code == status, (path, response.status_code, body)
+    assert body == expected, (path, body)
+
+bad_checks = [
+    ('/v1/characters/ability-modifier', {'score': 0}),
+    ('/v1/characters/ability-modifier', {'score': True}),
+    ('/v1/characters/proficiency', {'level': 21}),
+    ('/v1/characters/derived-stats', {'level': 5}),
+]
+for path, payload in bad_checks:
+    response = client.post(path, data=json.dumps(payload), content_type='application/json')
+    assert response.status_code == 400, (path, response.status_code, response.content)
+print('ok')
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+ succeeded in 113ms:
+ succeeded in 115ms:
+exec
+/bin/zsh -lc "sed -n '260,340p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+            "hp_max": hp_max,
+            "armor_class": armor_class,
+            "modifiers": modifiers,
+        }
+    )
+
+
+urlpatterns = [
+    path("health", health),
+    path("v1/dice/stats", dice_stats),
+    path("v1/checks/ability", ability_check),
+    path("v1/encounters/adjusted-xp", adjusted_xp),
+    path("v1/initiative/order", initiative_order),
+    path("v1/characters/ability-modifier", ability_modifier),
+    path("v1/characters/proficiency", proficiency),
+    path("v1/characters/derived-stats", derived_stats),
+]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+codex
+Implemented the character rules in [dndsite/urls.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py:1):
+
+- `POST /v1/characters/ability-modifier`
+- `POST /v1/characters/proficiency`
+- `POST /v1/characters/derived-stats`
+
+Validation returns `400` for invalid payloads, booleans are rejected where integers are required, and negative ability modifier flooring uses Python integer floor division.
+
+Verification run:
+
+- `python3 -m py_compile manage.py dndsite/urls.py dndsite/settings.py`
+- `PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 manage.py check`
+- In-process Django client checks for existing core endpoints plus the three new character endpoints.
+
+`run.sh` was already correct and remains ready to start the foreground server on `127.0.0.1:$PORT`.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index 4fcb644c790c7d5abd2a3379df5d85833de3459e..cb55070422190dbac4abd1a28a4b10057c8fcb0e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -50,6 +50,20 @@
+     return value
+ 
+ 
++def ability_modifier_for_score(score):
++    score = require_int(score)
++    if score < 1 or score > 30:
++        raise ValueError
++    return (score - 10) // 2
++
++
++def proficiency_for_level(level):
++    level = require_int(level)
++    if level < 1 or level > 20:
++        raise ValueError
++    return 2 + (level - 1) // 4
++
++
+ def health(request):
+     return JsonResponse({"ok": True})
+ 
+@@ -186,10 +200,77 @@
+     )
+ 
+ 
++def ability_modifier(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        score = require_int(data["score"])
++        modifier = ability_modifier_for_score(score)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"score": score, "modifier": modifier})
++
++
++def proficiency(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++    try:
++        level = require_int(data["level"])
++        bonus = proficiency_for_level(level)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    return JsonResponse({"level": level, "proficiency_bonus": bonus})
++
++
++def derived_stats(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    abilities = data.get("abilities")
++    armor = data.get("armor")
++    if not isinstance(abilities, dict) or not isinstance(armor, dict):
++        return bad_request()
++
++    try:
++        level = require_int(data["level"])
++        proficiency_bonus = proficiency_for_level(level)
++        modifiers = {
++            ability: ability_modifier_for_score(abilities[ability])
++            for ability in ("str", "dex", "con", "int", "wis", "cha")
++        }
++        armor_base = require_int(armor["base"])
++        dex_cap = require_int(armor["dex_cap"])
++        shield = armor["shield"]
++        if not isinstance(shield, bool):
++            return bad_request()
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    hp_max = level * (6 + modifiers["con"])
++    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
++    return JsonResponse(
++        {
++            "level": level,
++            "proficiency_bonus": proficiency_bonus,
++            "hp_max": hp_max,
++            "armor_class": armor_class,
++            "modifiers": modifiers,
++        }
++    )
++
++
+ urlpatterns = [
+     path("health", health),
+     path("v1/dice/stats", dice_stats),
+     path("v1/checks/ability", ability_check),
+     path("v1/encounters/adjusted-xp", adjusted_xp),
+     path("v1/initiative/order", initiative_order),
++    path("v1/characters/ability-modifier", ability_modifier),
++    path("v1/characters/proficiency", proficiency),
++    path("v1/characters/derived-stats", derived_stats),
+ ]
+
+tokens used
+27,912

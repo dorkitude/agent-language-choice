@@ -1,0 +1,31 @@
+Everything is working. Here's the summary, Chef 🎲
+
+## What I added
+
+Three stateful combat endpoints to `index.php`, preserving all prior core + character-rule behavior:
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Builds initiative order (score = roll+dex, sorted score↓ → dex↓ → name↑), stores session at `round=1, turn_index=0`, returns `{id, round, turn_index, active, order}` |
+| `POST /v1/combat/sessions/{id}/conditions` | Validates target ∈ combatants, condition is string, `duration_rounds` is positive int; appends condition to that combatant |
+| `POST /v1/combat/sessions/{id}/advance` | Increments `turn_index` (wrapping → `round++`), then decrements conditions on the **newly active** combatant, removing any that hit 0 |
+
+## The key gotcha 🔑
+
+PHP's built-in server (`php -S`) **resets static state between requests** — I confirmed this empirically (a static counter stayed at 1 across 3 requests). So a plain in-memory `static array` store would lose the session immediately after creation.
+
+The fix: `CombatStore` is backed by a **per-process temp file** keyed by `getmypid()` (stable across requests in the single-process dev server). This gives:
+- Fresh state per server start (unique PID → no stale data between evaluator runs)
+- No cross-run collisions (parallel lifecycle runs get distinct PIDs)
+- Persistence across requests within one server process
+- A per-request static cache to avoid re-reading the file multiple times in a single request
+
+## Validation verified
+- ✅ Create/condition/advance match the spec examples byte-for-byte
+- ✅ Condition lifecycle: stays at 2 while mage/rogue active → 1 on fighter's turn → 0 (removed) on fighter's next turn
+- ✅ 404 for unknown session IDs (advance + conditions)
+- ✅ 400 for bad target, non-positive `duration_rounds`, missing/empty `id`, empty `combatants`, invalid JSON
+- ✅ Round-wrap increments `round` correctly
+- ✅ All prior-stage endpoints (dice, ability-check, initiative, modifier, proficiency, derived-stats, encounter-XP, health) still pass
+
+`run.sh` is unchanged and executable — `php -S 127.0.0.1:"$PORT" index.php` in the foreground. Ready to evaluate! 🚀

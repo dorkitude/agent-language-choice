@@ -1,0 +1,29 @@
+Done, Chef! 🎲 The D&D REST engine is built on Next.js 16 App Router route handlers and all spec examples verified byte-for-byte.
+
+## What I built
+
+**Route handlers** (all under `app/`):
+- `app/health/route.ts` — `GET /health` → `{"ok":true}`
+- `app/v1/dice/stats/route.ts` — parses `<count>d<sides>[±<modifier>]`, validates positivity, returns `dice_count/sides/modifier/min/max/average`; 400 on invalid
+- `app/v1/checks/ability/route.ts` — `total/modifier/dc` → `total/success/margin`
+- `app/v1/encounters/adjusted-xp/route.ts` — XP-by-CR table, monster-count multipliers, per-level thresholds (level 3 required; full canonical DMG 1–20 included for robustness), summed party thresholds, difficulty classification
+- `app/v1/initiative/order/route.ts` — sorts by score desc → dex desc → name asc
+
+**Infrastructure fixes:**
+- `app/layout.tsx` — added root layout (App Router needs it)
+- `next.config.js` — converted `module.exports` → `export default {}` because `package.json` has `"type": "module"` (the seeded CommonJS config crashed on startup)
+- `run.sh` — robust: ensures `node_modules/.bin/next` exists, defaults `PORT` to 3000, binds `127.0.0.1` via `exec` in foreground
+
+## Verification (server started, tested, then stopped)
+
+| Endpoint | Result |
+|---|---|
+| `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` ✅ exact |
+| `0d6`/`2d0`/`banana`/`2d6+3+2`/`{}` | all `400` ✅ |
+| ability `9+5 vs dc15` | `{"total":14,"success":false,"margin":-1}` ✅ exact |
+| encounter sample | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` ✅ exact |
+| 2 monsters | `multiplier:1.5`, `adjusted_xp:600` ✅ |
+| initiative sample | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` ✅ exact |
+| name tie-break | `alpha, beta, zeta` ✅ |
+
+No lingering listeners; `./run.sh` is ready to start the server in the foreground on `127.0.0.1:$PORT`. 🐉

@@ -1,0 +1,24 @@
+The implementation is complete and verified, Chef 🍳
+
+## Summary
+
+I added the **DM Tools** stage to the existing PHP/Slim D&D REST API in `index.php`, preserving all prior endpoints.
+
+### Changes to `index.php`
+
+1. **`CampaignEventStore::listByCampaign()`** — new method exposing stored event summaries (in insertion order) so session-recap can combine campaign state.
+
+2. **Three new routes** (inserted before the error-handling section):
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/dm/encounter-builder` | Looks up each `monster_slugs` entry's CR via `MonsterStore` (compendium), then **reuses the core suite's adjusted-XP math** verbatim — same CR→XP table, `encounterMultiplier()`, level-3 thresholds, and difficulty cascade. Maps difficulty → deterministic `recommendation` (`easy`→`"safe warm-up"`). |
+| `POST /v1/dm/loot-parcel` | Validates `campaign_id`/`tier`(1-4)/`seed`, returns deterministic tier-graded loot (tier 1 → `75 gp` + `2 healing-potions`). |
+| `POST /v1/dm/session-recap` | Reads stored campaign events; `summary` = latest event summary (`"Nyx scouts the goblin trail."`); `open_threads` derived deterministically from scout-style notes (`"Resolve goblin trail ambush"`). |
+
+All three reuse the existing `parseJson`/`asInt`/`json`/`normalizeNumbers` helpers, so validation and integer-clean output match the rest of the API. Invalid requests (bad JSON, missing/wrong-type fields, unknown monster slug, bad tier/seed) return **400**.
+
+### Verification
+- `php -l index.php` → no syntax errors.
+- Ran the **actual `dndeval` evaluator** for the cumulative `dm-tools` suite → **40/40 PASS** (all 37 prior-stage tests + the 3 new DM-tools tests), `rc=0`.
+- `run.sh` is unchanged, executable, and starts the server in the foreground on `127.0.0.1:$PORT`. No server is currently running. 🎲

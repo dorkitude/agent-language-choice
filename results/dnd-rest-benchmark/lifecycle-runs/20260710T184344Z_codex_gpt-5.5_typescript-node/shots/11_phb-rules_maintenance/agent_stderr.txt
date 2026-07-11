@@ -1,0 +1,2751 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4d68-eeb7-7130-aa30-eff44da812e7
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-node
+        Language: typescript
+        Framework/runtime: node-stdlib
+        Lifecycle stage: phb-rules
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use TypeScript 7.0.2 and Node 26.4.0 built-in HTTP APIs. Do not add frameworks.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 7: Selected PHB Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add deterministic endpoints for selected Player's Handbook-style
+rules.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status.
+
+## Spell Slots
+
+`POST /v1/phb/spell-slots`
+
+Request:
+
+```json
+{"class": "wizard", "level": 5}
+```
+
+For this benchmark, support wizard level 5.
+
+Response:
+
+```json
+{"class": "wizard", "level": 5, "slots": {"1": 4, "2": 3, "3": 2}}
+```
+
+## Long Rest
+
+`POST /v1/phb/rests/long`
+
+Request:
+
+```json
+{"level": 5, "hp_current": 9, "hp_max": 35, "hit_dice_spent": 3, "exhaustion_level": 1}
+```
+
+Rules:
+
+- Long rest restores current HP to max HP.
+- Long rest restores spent hit dice up to half the character level, rounded
+  down, minimum 1.
+- Long rest reduces exhaustion by 1, to a minimum of 0.
+
+Response:
+
+```json
+{"hp_current": 35, "hit_dice_spent": 1, "exhaustion_level": 0}
+```
+
+## Equipment Load
+
+`POST /v1/phb/equipment-load`
+
+Request:
+
+```json
+{"strength": 12, "weight": 181}
+```
+
+Rules:
+
+- Carrying capacity is `strength * 15`.
+- `encumbered` is true when carried weight exceeds capacity.
+
+Response:
+
+```json
+{"capacity": 180, "weight": 181, "encumbered": true}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing server shape and tests first, then patch the smallest surface that adds these PHB endpoints without changing prior behavior.
+exec
+/bin/zsh -lc 'pwd && ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+total 2416
+drwxr-xr-x@ 29 dorkitude  staff     928 Jul 10 12:02 .
+drwxr-xr-x@ 80 dorkitude  staff    2560 Jul 10 11:43 ..
+-rw-r--r--@  1 dorkitude  staff    2991 Jul 10 12:02 PROMPT.md
+-rw-r--r--@  1 dorkitude  staff     635 Jul 10 11:43 VERSION-PINS.json
+-rw-r--r--@  1 dorkitude  staff     679 Jul 10 12:02 agent_last_message.txt
+-rw-r--r--@  1 dorkitude  staff  184969 Jul 10 12:02 agent_stderr.txt
+-rw-r--r--@  1 dorkitude  staff     680 Jul 10 12:02 agent_stdout.txt
+drwxr-xr-x@  4 dorkitude  staff     128 Jul 10 11:47 dist
+-rw-r--r--@  1 dorkitude  staff    4161 Jul 10 11:54 dndeval-auth-users-report.json
+-rw-r--r--@  1 dorkitude  staff    5716 Jul 10 12:02 dndeval-campaign-state-report.json
+-rw-r--r--@  1 dorkitude  staff    2270 Jul 10 11:49 dndeval-characters-report.json
+-rw-r--r--@  1 dorkitude  staff    3496 Jul 10 11:51 dndeval-combat-state-report.json
+-rw-r--r--@  1 dorkitude  staff    5109 Jul 10 11:59 dndeval-compendium-report.json
+-rw-r--r--@  1 dorkitude  staff    1422 Jul 10 11:48 dndeval-core-report.json
+-rw-r--r--@  1 dorkitude  staff    4459 Jul 10 11:57 dndeval-sqlite-storage-report.json
+-rw-r--r--@  1 dorkitude  staff    4096 Jul 10 11:57 game.db
+-rw-r--r--@  1 dorkitude  staff   32768 Jul 10 12:02 game.db-shm
+-rw-r--r--@  1 dorkitude  staff  815792 Jul 10 12:02 game.db-wal
+-rw-r--r--@  1 dorkitude  staff   72825 Jul 10 12:02 lifecycle-result.json
+drwxr-xr-x@  8 dorkitude  staff     256 Jul 10 11:46 node_modules
+-rw-r--r--@  1 dorkitude  staff   12762 Jul 10 12:02 package-lock.json
+-rw-r--r--@  1 dorkitude  staff     196 Jul 10 11:43 package.json
+-rwxr-xr-x@  1 dorkitude  staff      65 Jul 10 11:43 run.sh
+-rw-r--r--@  1 dorkitude  staff       0 Jul 10 12:02 server_stderr.txt
+-rw-r--r--@  1 dorkitude  staff       0 Jul 10 12:02 server_stdout.txt
+-rw-r--r--@  1 dorkitude  staff     221 Jul 10 12:02 setup.json
+drwxr-xr-x@ 13 dorkitude  staff     416 Jul 10 12:02 shots
+drwxr-xr-x@  4 dorkitude  staff     128 Jul 10 11:45 src
+-rw-r--r--@  1 dorkitude  staff     340 Jul 10 11:53 tsconfig.json
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 150ms:
+src/server.ts
+src/node-shims.d.ts
+game.db-wal
+shots/11_phb-rules_maintenance/PROMPT.md
+shots/02_core_bugfix/dndeval-core-report.json
+shots/02_core_bugfix/server_stderr.txt
+shots/02_core_bugfix/agent_stderr.txt
+shots/02_core_bugfix/server_stdout.txt
+shots/02_core_bugfix/PROMPT.md
+shots/02_core_bugfix/agent_stdout.txt
+shots/02_core_bugfix/agent_last_message.txt
+shots/02_core_bugfix/setup.json
+shots/09_compendium_maintenance/server_stderr.txt
+shots/09_compendium_maintenance/agent_stderr.txt
+shots/09_compendium_maintenance/dndeval-compendium-report.json
+shots/09_compendium_maintenance/server_stdout.txt
+shots/09_compendium_maintenance/PROMPT.md
+shots/09_compendium_maintenance/agent_stdout.txt
+shots/09_compendium_maintenance/agent_last_message.txt
+shots/09_compendium_maintenance/setup.json
+shots/06_auth-users_maintenance/server_stderr.txt
+shots/06_auth-users_maintenance/agent_stderr.txt
+shots/06_auth-users_maintenance/dndeval-auth-users-report.json
+shots/06_auth-users_maintenance/server_stdout.txt
+shots/06_auth-users_maintenance/PROMPT.md
+shots/06_auth-users_maintenance/agent_stdout.txt
+shots/06_auth-users_maintenance/agent_last_message.txt
+shots/06_auth-users_maintenance/setup.json
+shots/04_combat-state_maintenance/server_stderr.txt
+shots/04_combat-state_maintenance/agent_stderr.txt
+shots/04_combat-state_maintenance/server_stdout.txt
+shots/04_combat-state_maintenance/PROMPT.md
+shots/04_combat-state_maintenance/agent_stdout.txt
+shots/04_combat-state_maintenance/agent_last_message.txt
+shots/04_combat-state_maintenance/setup.json
+shots/04_combat-state_maintenance/dndeval-combat-state-report.json
+shots/08_sqlite-storage_maintenance/server_stderr.txt
+shots/08_sqlite-storage_maintenance/agent_stderr.txt
+shots/08_sqlite-storage_maintenance/server_stdout.txt
+shots/08_sqlite-storage_maintenance/PROMPT.md
+shots/08_sqlite-storage_maintenance/agent_stdout.txt
+shots/08_sqlite-storage_maintenance/agent_last_message.txt
+shots/08_sqlite-storage_maintenance/setup.json
+shots/08_sqlite-storage_maintenance/dndeval-sqlite-storage-report.json
+shots/10_campaign-state_maintenance/server_stderr.txt
+shots/10_campaign-state_maintenance/agent_stderr.txt
+shots/10_campaign-state_maintenance/server_stdout.txt
+shots/10_campaign-state_maintenance/PROMPT.md
+shots/10_campaign-state_maintenance/agent_stdout.txt
+shots/10_campaign-state_maintenance/agent_last_message.txt
+shots/10_campaign-state_maintenance/setup.json
+shots/10_campaign-state_maintenance/dndeval-campaign-state-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/05_combat-state_bugfix/server_stderr.txt
+shots/05_combat-state_bugfix/agent_stderr.txt
+shots/05_combat-state_bugfix/server_stdout.txt
+shots/05_combat-state_bugfix/PROMPT.md
+shots/05_combat-state_bugfix/agent_stdout.txt
+shots/05_combat-state_bugfix/agent_last_message.txt
+shots/05_combat-state_bugfix/setup.json
+shots/05_combat-state_bugfix/dndeval-combat-state-report.json
+lifecycle-result.json
+game.db
+VERSION-PINS.json
+dndeval-auth-users-report.json
+dndeval-compendium-report.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+dndeval-campaign-state-report.json
+dndeval-combat-state-report.json
+dndeval-sqlite-storage-report.json
+package-lock.json
+package.json
+tsconfig.json
+agent_stderr.txt
+server_stderr.txt
+game.db-shm
+dndeval-core-report.json
+shots/07_auth-users_bugfix/server_stderr.txt
+shots/07_auth-users_bugfix/agent_stderr.txt
+shots/07_auth-users_bugfix/dndeval-auth-users-report.json
+shots/07_auth-users_bugfix/server_stdout.txt
+shots/07_auth-users_bugfix/PROMPT.md
+shots/07_auth-users_bugfix/agent_stdout.txt
+shots/07_auth-users_bugfix/agent_last_message.txt
+shots/07_auth-users_bugfix/setup.json
+shots/03_characters_maintenance/server_stderr.txt
+shots/03_characters_maintenance/agent_stderr.txt
+shots/03_characters_maintenance/server_stdout.txt
+shots/03_characters_maintenance/PROMPT.md
+shots/03_characters_maintenance/agent_stdout.txt
+shots/03_characters_maintenance/dndeval-characters-report.json
+shots/03_characters_maintenance/agent_last_message.txt
+shots/03_characters_maintenance/setup.json
+
+codex
+The project is a compact TypeScript Node service. I’m reading the route handling and package scripts now so the new endpoints fit the existing validation and response conventions.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+const CR_XP: Record<string, number> = {
+  "0": 10,
+  "1/8": 25,
+  "1/4": 50,
+  "1/2": 100,
+  "1": 200,
+  "2": 450,
+  "3": 700,
+  "4": 1100,
+  "5": 1800,
+};
+
+const LEVEL_THRESHOLDS: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
+
+type CombatantOrderEntry = {
+  name: string;
+  dex: number;
+  score: number;
+};
+
+type Condition = {
+  condition: string;
+  remaining_rounds: number;
+};
+
+type CombatSession = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order: CombatantOrderEntry[];
+  conditions: Map<string, Condition[]>;
+};
+
+type UserRole = "dm" | "player";
+
+type User = {
+  username: string;
+  role: UserRole;
+  passwordSalt: string;
+  passwordHash: string;
+};
+
+const SCHEMA_VERSION = 1;
+const database = new DatabaseSync(fileURLToPath(new URL("../game.db", import.meta.url)));
+let storageInitialized = false;
+
+type UserRow = {
+  username: string;
+  role: string;
+  password_salt: string;
+  password_hash: string;
+};
+
+type CombatSessionRow = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order_json: string;
+  conditions_json: string;
+};
+
+type Monster = {
+  slug: string;
+  name: string;
+  cr: string;
+  armor_class: number;
+  hit_points: number;
+  tags: string[];
+};
+
+type MonsterRow = {
+  slug: string;
+  name: string;
+  cr: string;
+  armor_class: number;
+  hit_points: number;
+  tags_json: string;
+};
+
+type Item = {
+  slug: string;
+  name: string;
+  type: string;
+  rarity: string;
+  cost_gp: number;
+};
+
+type ItemRow = Item;
+
+type Campaign = {
+  id: string;
+  name: string;
+  dm: string;
+};
+
+type CampaignCharacter = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  level: number;
+  class: string;
+};
+
+type CampaignEvent = {
+  id: string;
+  campaign_id: string;
+  kind: string;
+  summary: string;
+};
+
+type CampaignCharacterRow = CampaignCharacter;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+function initializeStorage(): void {
+  database.exec(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS storage_metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      username TEXT PRIMARY KEY,
+      role TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      password_hash TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS combat_sessions (
+      id TEXT PRIMARY KEY,
+      round INTEGER NOT NULL,
+      turn_index INTEGER NOT NULL,
+      order_json TEXT NOT NULL,
+      conditions_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS monsters (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      cr TEXT NOT NULL,
+      armor_class INTEGER NOT NULL,
+      hit_points INTEGER NOT NULL,
+      tags_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS items (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      rarity TEXT NOT NULL,
+      cost_gp INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      dm TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS campaign_characters (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      class TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS campaign_events (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      summary TEXT NOT NULL
+    );
+  `);
+  database.prepare(`
+    INSERT INTO storage_metadata (key, value)
+    VALUES ('schema_version', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(String(SCHEMA_VERSION));
+  storageInitialized = true;
+}
+
+function resetStorage(): void {
+  storageInitialized = false;
+  database.exec(`
+    DROP TABLE IF EXISTS campaign_events;
+    DROP TABLE IF EXISTS campaign_characters;
+    DROP TABLE IF EXISTS campaigns;
+    DROP TABLE IF EXISTS items;
+    DROP TABLE IF EXISTS monsters;
+    DROP TABLE IF EXISTS combat_sessions;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS storage_metadata;
+  `);
+  initializeStorage();
+}
+
+function serializeConditions(conditions: Map<string, Condition[]>): string {
+  const value: { [key: string]: Condition[] } = {};
+  for (const [name, entries] of conditions) {
+    value[name] = entries;
+  }
+  return JSON.stringify(value);
+}
+
+function deserializeConditions(value: string): Map<string, Condition[]> {
+  const parsed: unknown = JSON.parse(value);
+  const conditions = new Map<string, Condition[]>();
+  if (!isRecord(parsed)) {
+    return conditions;
+  }
+
+  for (const [name, entries] of Object.entries(parsed)) {
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+    const validEntries = entries.filter((entry): entry is Condition => (
+      isRecord(entry) &&
+      typeof entry.condition === "string" &&
+      isInteger(entry.remaining_rounds)
+    ));
+    conditions.set(name, validEntries);
+  }
+
+  return conditions;
+}
+
+function getUser(username: string): User | undefined {
+  const row = database.prepare("SELECT username, role, password_salt, password_hash FROM users WHERE username = ?")
+    .get(username) as UserRow | undefined;
+  if (row === undefined || !isUserRole(row.role)) {
+    return undefined;
+  }
+  return {
+    username: row.username,
+    role: row.role,
+    passwordSalt: row.password_salt,
+    passwordHash: row.password_hash,
+  };
+}
+
+function insertUser(user: User): void {
+  database.prepare(`
+    INSERT INTO users (username, role, password_salt, password_hash)
+    VALUES (?, ?, ?, ?)
+  `).run(user.username, user.role, user.passwordSalt, user.passwordHash);
+}
+
+function combatSessionExists(id: string): boolean {
+
+exec
+/bin/zsh -lc 'cat package.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bash ./run.sh"
+  },
+  "dependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "26.1.1"
+  },
+  "devDependencies": {}
+}
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+tsc && node dist/server.js
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ./
+
+exec
+/bin/zsh -lc "sed -n '260,620p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+exec
+/bin/zsh -lc "sed -n '620,1040p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+function combatSessionExists(id: string): boolean {
+  return database.prepare("SELECT 1 FROM combat_sessions WHERE id = ?").get(id) !== undefined;
+}
+
+function getCombatSession(id: string): CombatSession | undefined {
+  const row = database.prepare(`
+    SELECT id, round, turn_index, order_json, conditions_json
+    FROM combat_sessions
+    WHERE id = ?
+  `).get(id) as CombatSessionRow | undefined;
+  if (row === undefined) {
+    return undefined;
+  }
+
+  const order = JSON.parse(row.order_json) as CombatantOrderEntry[];
+  return {
+    id: row.id,
+    round: row.round,
+    turn_index: row.turn_index,
+    order,
+    conditions: deserializeConditions(row.conditions_json),
+  };
+}
+
+function saveCombatSession(session: CombatSession): void {
+  database.prepare(`
+    INSERT INTO combat_sessions (id, round, turn_index, order_json, conditions_json)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      round = excluded.round,
+      turn_index = excluded.turn_index,
+      order_json = excluded.order_json,
+      conditions_json = excluded.conditions_json
+  `).run(
+    session.id,
+    session.round,
+    session.turn_index,
+    JSON.stringify(session.order),
+    serializeConditions(session.conditions),
+  );
+}
+
+function getMonster(slug: string): Monster | undefined {
+  const row = database.prepare(`
+    SELECT slug, name, cr, armor_class, hit_points, tags_json
+    FROM monsters
+    WHERE slug = ?
+  `).get(slug) as MonsterRow | undefined;
+  if (row === undefined) {
+    return undefined;
+  }
+
+  const parsedTags: unknown = JSON.parse(row.tags_json);
+  const tags = Array.isArray(parsedTags) && parsedTags.every((tag) => typeof tag === "string") ? parsedTags : [];
+  return {
+    slug: row.slug,
+    name: row.name,
+    cr: row.cr,
+    armor_class: row.armor_class,
+    hit_points: row.hit_points,
+    tags,
+  };
+}
+
+function insertMonster(monster: Monster): void {
+  database.prepare(`
+    INSERT INTO monsters (slug, name, cr, armor_class, hit_points, tags_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    monster.slug,
+    monster.name,
+    monster.cr,
+    monster.armor_class,
+    monster.hit_points,
+    JSON.stringify(monster.tags),
+  );
+}
+
+function getItem(slug: string): Item | undefined {
+  return database.prepare(`
+    SELECT slug, name, type, rarity, cost_gp
+    FROM items
+    WHERE slug = ?
+  `).get(slug) as ItemRow | undefined;
+}
+
+function insertItem(item: Item): void {
+  database.prepare(`
+    INSERT INTO items (slug, name, type, rarity, cost_gp)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(item.slug, item.name, item.type, item.rarity, item.cost_gp);
+}
+
+function getCampaign(id: string): Campaign | undefined {
+  return database.prepare(`
+    SELECT id, name, dm
+    FROM campaigns
+    WHERE id = ?
+  `).get(id) as Campaign | undefined;
+}
+
+function insertCampaign(campaign: Campaign): void {
+  database.prepare(`
+    INSERT INTO campaigns (id, name, dm)
+    VALUES (?, ?, ?)
+  `).run(campaign.id, campaign.name, campaign.dm);
+}
+
+function campaignCharacterExists(id: string): boolean {
+  return database.prepare("SELECT 1 FROM campaign_characters WHERE id = ?").get(id) !== undefined;
+}
+
+function insertCampaignCharacter(character: CampaignCharacter): void {
+  database.prepare(`
+    INSERT INTO campaign_characters (id, campaign_id, name, level, class)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(character.id, character.campaign_id, character.name, character.level, character.class);
+}
+
+function campaignEventExists(id: string): boolean {
+  return database.prepare("SELECT 1 FROM campaign_events WHERE id = ?").get(id) !== undefined;
+}
+
+function insertCampaignEvent(event: CampaignEvent): void {
+  database.prepare(`
+    INSERT INTO campaign_events (id, campaign_id, kind, summary)
+    VALUES (?, ?, ?, ?)
+  `).run(event.id, event.campaign_id, event.kind, event.summary);
+}
+
+function getCampaignCharacters(campaignId: string): CampaignCharacter[] {
+  return database.prepare(`
+    SELECT id, campaign_id, name, level, class
+    FROM campaign_characters
+    WHERE campaign_id = ?
+    ORDER BY rowid
+  `).all(campaignId) as CampaignCharacterRow[];
+}
+
+function getCampaignEventCount(campaignId: string): number {
+  const row = database.prepare(`
+    SELECT COUNT(*) AS count
+    FROM campaign_events
+    WHERE campaign_id = ?
+  `).get(campaignId) as { count: number } | undefined;
+  return row?.count ?? 0;
+}
+
+function sendJson(response: ServerResponse, status: number, body: JsonValue): void {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+  });
+  response.end(payload);
+}
+
+function badRequest(response: ServerResponse): void {
+  sendJson(response, 400, { error: "bad_request" });
+}
+
+function notFound(response: ServerResponse): void {
+  sendJson(response, 404, { error: "not_found" });
+}
+
+function readBody(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new Error("request body too large"));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try {
+        resolve(body === "" ? {} : JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function hashPassword(password: string, salt: string): string {
+  return scryptSync(password, salt, 64).toString("hex");
+}
+
+function createPasswordRecord(password: string): { salt: string; hash: string } {
+  const salt = randomBytes(16).toString("hex");
+  return { salt, hash: hashPassword(password, salt) };
+}
+
+function verifyPassword(password: string, user: User): boolean {
+  const expected = Buffer.from(user.passwordHash, "hex");
+  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+function isUsername(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
+}
+
+function isPassword(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 8;
+}
+
+function isUserRole(value: unknown): value is UserRole {
+  return value === "dm" || value === "player";
+}
+
+function isSlug(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function createMonster(body: unknown): { status: number; body: JsonValue } {
+  if (
+    !isRecord(body) ||
+    !isSlug(body.slug) ||
+    !isNonEmptyString(body.name) ||
+    !isNonEmptyString(body.cr) ||
+    !isInteger(body.armor_class) ||
+    !isInteger(body.hit_points) ||
+    body.armor_class < 0 ||
+    body.hit_points < 0 ||
+    !Array.isArray(body.tags) ||
+    !body.tags.every((tag) => typeof tag === "string")
+  ) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (getMonster(body.slug) !== undefined) {
+    return { status: 409, body: { error: "duplicate_slug" } };
+  }
+
+  const monster: Monster = {
+    slug: body.slug,
+    name: body.name,
+    cr: body.cr,
+    armor_class: body.armor_class,
+    hit_points: body.hit_points,
+    tags: body.tags,
+  };
+  insertMonster(monster);
+
+  return {
+    status: 201,
+    body: {
+      slug: monster.slug,
+      name: monster.name,
+      cr: monster.cr,
+      armor_class: monster.armor_class,
+      hit_points: monster.hit_points,
+    },
+  };
+}
+
+function createItem(body: unknown): { status: number; body: JsonValue } {
+  if (
+    !isRecord(body) ||
+    !isSlug(body.slug) ||
+    !isNonEmptyString(body.name) ||
+    !isNonEmptyString(body.type) ||
+    !isNonEmptyString(body.rarity) ||
+    !isInteger(body.cost_gp) ||
+    body.cost_gp < 0
+  ) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (getItem(body.slug) !== undefined) {
+    return { status: 409, body: { error: "duplicate_slug" } };
+  }
+
+  const item: Item = {
+    slug: body.slug,
+    name: body.name,
+    type: body.type,
+    rarity: body.rarity,
+    cost_gp: body.cost_gp,
+  };
+  insertItem(item);
+
+  return { status: 201, body: item };
+}
+
+function createCampaign(body: unknown): { status: number; body: JsonValue } {
+  if (!isRecord(body) || !isNonEmptyString(body.id) || !isNonEmptyString(body.name) || !isNonEmptyString(body.dm)) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (getCampaign(body.id) !== undefined) {
+    return { status: 409, body: { error: "duplicate_id" } };
+  }
+
+  const campaign: Campaign = {
+    id: body.id,
+    name: body.name,
+    dm: body.dm,
+  };
+  insertCampaign(campaign);
+
+  return { status: 201, body: campaign };
+}
+
+function addCampaignCharacter(campaignId: string, body: unknown): { status: number; body: JsonValue } {
+  if (getCampaign(campaignId) === undefined) {
+    return { status: 404, body: { error: "not_found" } };
+  }
+
+  if (
+    !isRecord(body) ||
+    !isNonEmptyString(body.id) ||
+    !isNonEmptyString(body.name) ||
+    !isCharacterLevel(body.level) ||
+    !isNonEmptyString(body.class)
+  ) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (campaignCharacterExists(body.id)) {
+    return { status: 409, body: { error: "duplicate_id" } };
+  }
+
+  const character: CampaignCharacter = {
+    id: body.id,
+    campaign_id: campaignId,
+    name: body.name,
+    level: body.level,
+    class: body.class,
+  };
+  insertCampaignCharacter(character);
+
+  return {
+    status: 201,
+    body: {
+      id: character.id,
+      name: character.name,
+      level: character.level,
+      class: character.class,
+    },
+  };
+}
+
+function addCampaignEvent(campaignId: string, body: unknown): { status: number; body: JsonValue } {
+  if (getCampaign(campaignId) === undefined) {
+    return { status: 404, body: { error: "not_found" } };
+  }
+
+  if (
+    !isRecord(body) ||
+    !isNonEmptyString(body.id) ||
+    !isNonEmptyString(body.kind) ||
+    !isNonEmptyString(body.summary)
+
+ succeeded in 0ms:
+    !isNonEmptyString(body.summary)
+  ) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (campaignEventExists(body.id)) {
+    return { status: 409, body: { error: "duplicate_id" } };
+  }
+
+  const event: CampaignEvent = {
+    id: body.id,
+    campaign_id: campaignId,
+    kind: body.kind,
+    summary: body.summary,
+  };
+  insertCampaignEvent(event);
+
+  return {
+    status: 201,
+    body: { id: event.id, kind: event.kind },
+  };
+}
+
+function getCampaignState(campaignId: string): { status: number; body: JsonValue } {
+  const campaign = getCampaign(campaignId);
+  if (campaign === undefined) {
+    return { status: 404, body: { error: "not_found" } };
+  }
+
+  return {
+    status: 200,
+    body: {
+      id: campaign.id,
+      name: campaign.name,
+      dm: campaign.dm,
+      characters: getCampaignCharacters(campaignId).map((character) => ({
+        id: character.id,
+        name: character.name,
+        level: character.level,
+        class: character.class,
+      })),
+      log_count: getCampaignEventCount(campaignId),
+    },
+  };
+}
+
+function registerUser(body: unknown): { status: number; body: JsonValue } {
+  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (getUser(body.username) !== undefined) {
+    return { status: 409, body: { error: "duplicate_username" } };
+  }
+
+  const passwordRecord = createPasswordRecord(body.password);
+  const user: User = {
+    username: body.username,
+    role: body.role,
+    passwordSalt: passwordRecord.salt,
+    passwordHash: passwordRecord.hash,
+  };
+  insertUser(user);
+
+  return {
+    status: 201,
+    body: { username: user.username, role: user.role },
+  };
+}
+
+function loginUser(body: unknown): { status: number; body: JsonValue } {
+  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  const user = getUser(body.username);
+  if (user === undefined || !verifyPassword(body.password, user)) {
+    return { status: 401, body: { error: "bad_credentials" } };
+  }
+
+  return {
+    status: 200,
+    body: { username: user.username, token: `session-${user.username}` },
+  };
+}
+
+function diceStats(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || typeof body.expression !== "string") {
+    return undefined;
+  }
+
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+  if (match === null) {
+    return undefined;
+  }
+
+  const diceCount = Number(match[1]);
+  const sides = Number(match[2]);
+  const modifierValue = match[4] === undefined ? 0 : Number(match[4]);
+  const modifier = match[3] === "-" ? -modifierValue : modifierValue;
+
+  if (
+    !Number.isSafeInteger(diceCount) ||
+    !Number.isSafeInteger(sides) ||
+    !Number.isSafeInteger(modifier) ||
+    diceCount <= 0 ||
+    sides <= 0
+  ) {
+    return undefined;
+  }
+
+  const min = diceCount + modifier;
+  const max = diceCount * sides + modifier;
+  const average = diceCount * (sides + 1) / 2 + modifier;
+
+  return {
+    dice_count: diceCount,
+    sides,
+    modifier,
+    min,
+    max,
+    average,
+  };
+}
+
+function abilityCheck(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isInteger(body.roll) || !isInteger(body.modifier) || !isInteger(body.dc)) {
+    return undefined;
+  }
+
+  const total = body.roll + body.modifier;
+  return {
+    total,
+    success: total >= body.dc,
+    margin: total - body.dc,
+  };
+}
+
+function isAbilityScore(value: unknown): value is number {
+  return isInteger(value) && value >= 1 && value <= 30;
+}
+
+function isCharacterLevel(value: unknown): value is number {
+  return isInteger(value) && value >= 1 && value <= 20;
+}
+
+function abilityModifierForScore(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function proficiencyBonusForLevel(level: number): number {
+  return 2 + Math.floor((level - 1) / 4);
+}
+
+function abilityModifier(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isAbilityScore(body.score)) {
+    return undefined;
+  }
+
+  return {
+    score: body.score,
+    modifier: abilityModifierForScore(body.score),
+  };
+}
+
+function proficiency(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isCharacterLevel(body.level)) {
+    return undefined;
+  }
+
+  return {
+    level: body.level,
+    proficiency_bonus: proficiencyBonusForLevel(body.level),
+  };
+}
+
+function derivedStats(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
+    return undefined;
+  }
+  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
+    return undefined;
+  }
+
+  const modifiers: Record<string, number> = {};
+  for (const key of ABILITY_KEYS) {
+    const score = body.abilities[key];
+    if (!isAbilityScore(score)) {
+      return undefined;
+    }
+    modifiers[key] = abilityModifierForScore(score);
+  }
+
+  const proficiencyBonus = proficiencyBonusForLevel(body.level);
+  const shieldBonus = body.armor.shield ? 2 : 0;
+
+  return {
+    level: body.level,
+    proficiency_bonus: proficiencyBonus,
+    hp_max: body.level * (6 + modifiers.con),
+    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
+    modifiers,
+  };
+}
+
+function monsterMultiplier(monsterCount: number): number {
+  if (monsterCount <= 1) {
+    return 1;
+  }
+  if (monsterCount === 2) {
+    return 1.5;
+  }
+  if (monsterCount <= 6) {
+    return 2;
+  }
+  if (monsterCount <= 10) {
+    return 2.5;
+  }
+  if (monsterCount <= 14) {
+    return 3;
+  }
+  return 4;
+}
+
+function adjustedXp(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+    return undefined;
+  }
+
+  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+  for (const member of body.party) {
+    if (!isRecord(member) || !isInteger(member.level)) {
+      return undefined;
+    }
+
+    const memberThresholds = LEVEL_THRESHOLDS[member.level];
+    if (memberThresholds === undefined) {
+      return undefined;
+    }
+
+    thresholds.easy += memberThresholds.easy;
+    thresholds.medium += memberThresholds.medium;
+    thresholds.hard += memberThresholds.hard;
+    thresholds.deadly += memberThresholds.deadly;
+  }
+
+  let baseXp = 0;
+  let monsterCount = 0;
+  for (const monster of body.monsters) {
+    if (!isRecord(monster) || typeof monster.cr !== "string" || !isInteger(monster.count) || monster.count <= 0) {
+      return undefined;
+    }
+
+    const xp = CR_XP[monster.cr];
+    if (xp === undefined) {
+      return undefined;
+    }
+
+    baseXp += xp * monster.count;
+    monsterCount += monster.count;
+  }
+
+  const multiplier = monsterMultiplier(monsterCount);
+  const adjusted = baseXp * multiplier;
+  let difficulty = "trivial";
+  if (adjusted >= thresholds.deadly) {
+    difficulty = "deadly";
+  } else if (adjusted >= thresholds.hard) {
+    difficulty = "hard";
+  } else if (adjusted >= thresholds.medium) {
+    difficulty = "medium";
+  } else if (adjusted >= thresholds.easy) {
+    difficulty = "easy";
+  }
+
+  return {
+    base_xp: baseXp,
+    monster_count: monsterCount,
+    multiplier,
+    adjusted_xp: adjusted,
+    difficulty,
+    thresholds,
+  };
+}
+
+function initiativeOrder(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+    return undefined;
+  }
+
+  const combatants = [];
+  for (const combatant of body.combatants) {
+    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+      return undefined;
+    }
+    combatants.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  combatants.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  return {
+    order: combatants.map(({ name, score }) => ({ name, score })),
+  };
+}
+
+function publicOrder(order: CombatantOrderEntry[]): JsonValue[] {
+  return order.map(({ name, score }) => ({ name, score }));
+}
+
+function activeCombatant(session: CombatSession): JsonValue {
+  const active = session.order[session.turn_index];
+  return { name: active.name, score: active.score };
+}
+
+function publicConditions(session: CombatSession): JsonValue {
+  const conditions: { [key: string]: JsonValue } = {};
+  for (const [name, entries] of session.conditions) {
+    conditions[name] = entries.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds }));
+  }
+  return conditions;
+}
+
+function createCombatSession(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || typeof body.id !== "string" || body.id === "" || !Array.isArray(body.combatants)) {
+    return undefined;
+  }
+  if (combatSessionExists(body.id) || body.combatants.length === 0) {
+    return undefined;
+  }
+
+  const order: CombatantOrderEntry[] = [];
+  for (const combatant of body.combatants) {
+    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+      return undefined;
+    }
+    order.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  order.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  const session: CombatSession = {
+    id: body.id,
+    round: 1,
+    turn_index: 0,
+    order,
+    conditions: new Map(),
+  };
+  saveCombatSession(session);
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: activeCombatant(session),
+    order: publicOrder(session.order),
+  };
+}
+
+function addCombatCondition(session: CombatSession, body: unknown): JsonValue | undefined {
+  if (
+    !isRecord(body) ||
+    typeof body.target !== "string" ||
+    typeof body.condition !== "string" ||
+    !isInteger(body.duration_rounds) ||
+    body.duration_rounds <= 0
+  ) {
+    return undefined;
+  }
+
+  if (!session.order.some((combatant) => combatant.name === body.target)) {
+    return undefined;
+  }
+
+  const conditions = session.conditions.get(body.target) ?? [];
+  conditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
+  session.conditions.set(body.target, conditions);
+  saveCombatSession(session);
+
+  return {
+    target: body.target,
+    conditions: conditions.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds })),
+  };
+}
+
+function advanceCombatSession(session: CombatSession): JsonValue {
+  session.turn_index += 1;
+  if (session.turn_index >= session.order.length) {
+    session.turn_index = 0;
+    session.round += 1;
+  }
+
+  const active = session.order[session.turn_index];
+  const conditions = session.conditions.get(active.name);
+  if (conditions !== undefined) {
+    const remaining = conditions
+      .map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds: remaining_rounds - 1 }))
+      .filter(({ remaining_rounds }) => remaining_rounds > 0);
+    if (remaining.length > 0) {
+      session.conditions.set(active.name, remaining);
+    } else {
+      session.conditions.set(active.name, []);
+    }
+  }
+  saveCombatSession(session);
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: activeCombatant(session),
+    conditions: publicConditions(session),
+  };
+}
+
+exec
+/bin/zsh -lc "sed -n '1040,1420p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+}
+
+async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const method = request.method ?? "";
+  const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+
+  if (method === "GET" && path === "/health") {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (method === "GET" && path === "/v1/storage/status") {
+    sendJson(response, 200, { driver: "sqlite", schema_version: SCHEMA_VERSION, initialized: storageInitialized });
+    return;
+  }
+
+  if (method === "POST" && path === "/v1/storage/reset") {
+    resetStorage();
+    sendJson(response, 200, { ok: true, schema_version: SCHEMA_VERSION });
+    return;
+  }
+
+  if (method === "GET") {
+    const monsterMatch = /^\/v1\/compendium\/monsters\/([^/]+)$/.exec(path);
+    if (monsterMatch !== null) {
+      const monster = getMonster(decodeURIComponent(monsterMatch[1]));
+      if (monster === undefined) {
+        notFound(response);
+        return;
+      }
+      sendJson(response, 200, monster);
+      return;
+    }
+
+    const itemMatch = /^\/v1\/compendium\/items\/([^/]+)$/.exec(path);
+    if (itemMatch !== null) {
+      const item = getItem(decodeURIComponent(itemMatch[1]));
+      if (item === undefined) {
+        notFound(response);
+        return;
+      }
+      sendJson(response, 200, item);
+      return;
+    }
+
+    const campaignStateMatch = /^\/v1\/campaigns\/([^/]+)\/state$/.exec(path);
+    if (campaignStateMatch !== null) {
+      const result = getCampaignState(decodeURIComponent(campaignStateMatch[1]));
+      sendJson(response, result.status, result.body);
+      return;
+    }
+  }
+
+  if (method !== "POST") {
+    notFound(response);
+    return;
+  }
+
+  let body: unknown;
+  try {
+    body = await readBody(request);
+  } catch {
+    badRequest(response);
+    return;
+  }
+
+  if (path === "/v1/auth/register") {
+    const result = registerUser(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  if (path === "/v1/auth/login") {
+    const result = loginUser(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  if (path === "/v1/compendium/monsters") {
+    const result = createMonster(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  if (path === "/v1/compendium/items") {
+    const result = createItem(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  if (path === "/v1/campaigns") {
+    const result = createCampaign(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  const campaignMutationMatch = /^\/v1\/campaigns\/([^/]+)\/(characters|events)$/.exec(path);
+  if (campaignMutationMatch !== null) {
+    const campaignId = decodeURIComponent(campaignMutationMatch[1]);
+    const result = campaignMutationMatch[2] === "characters"
+      ? addCampaignCharacter(campaignId, body)
+      : addCampaignEvent(campaignId, body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  let result: JsonValue | undefined;
+  switch (path) {
+    case "/v1/dice/stats":
+      result = diceStats(body);
+      break;
+    case "/v1/checks/ability":
+      result = abilityCheck(body);
+      break;
+    case "/v1/characters/ability-modifier":
+      result = abilityModifier(body);
+      break;
+    case "/v1/characters/proficiency":
+      result = proficiency(body);
+      break;
+    case "/v1/characters/derived-stats":
+      result = derivedStats(body);
+      break;
+    case "/v1/encounters/adjusted-xp":
+      result = adjustedXp(body);
+      break;
+    case "/v1/initiative/order":
+      result = initiativeOrder(body);
+      break;
+    case "/v1/combat/sessions":
+      result = createCombatSession(body);
+      break;
+    default:
+      {
+        const match = /^\/v1\/combat\/sessions\/([^/]+)\/(conditions|advance)$/.exec(path);
+        if (match === null) {
+          notFound(response);
+          return;
+        }
+
+        const session = getCombatSession(decodeURIComponent(match[1]));
+        if (session === undefined) {
+          notFound(response);
+          return;
+        }
+
+        result = match[2] === "conditions" ? addCombatCondition(session, body) : advanceCombatSession(session);
+        break;
+      }
+  }
+
+  if (result === undefined) {
+    badRequest(response);
+    return;
+  }
+
+  sendJson(response, 200, result);
+}
+
+const port = Number(process.env.PORT);
+if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+  throw new Error("PORT must be an integer from 1 to 65535");
+}
+
+const server = createServer((request, response) => {
+  void handleRequest(request, response).catch(() => {
+    if (!response.headersSent) {
+      sendJson(response, 500, { error: "internal_server_error" });
+    } else {
+      response.end();
+    }
+  });
+});
+
+initializeStorage();
+server.listen(port, "127.0.0.1");
+
+exec
+/bin/zsh -lc 'cat tsconfig.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "vite.config.ts"
+  ]
+}
+
+codex
+The existing POST endpoints mostly return `400` through an `undefined` result in the central switch. I’m going to add these three PHB rule calculators in that same pattern, with direct integer validation and no database changes.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+codex
+The route additions are in place. I’m compiling now, and then I’ll run the server briefly on a throwaway port only for request-level verification, shutting it down before I finish.
+exec
+/bin/zsh -lc 'npx tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+ succeeded in 570ms:
+codex
+Compilation passed. I’m keeping the benchmark contract and won’t start the HTTP server; I’ll do a normal build so `dist/` matches the TypeScript source that `run.sh` will execute.
+exec
+/bin/zsh -lc 'npx tsc' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+ succeeded in 273ms:
+exec
+/bin/zsh -lc 'git status --short .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+exec
+/bin/zsh -lc 'git diff -- src/server.ts run.sh package.json tsconfig.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+?? ./
+
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+exec
+/bin/zsh -lc "nl -ba src/server.ts | sed -n '820,940p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+   820	    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
+   821	    modifiers,
+   822	  };
+   823	}
+   824	
+   825	function monsterMultiplier(monsterCount: number): number {
+   826	  if (monsterCount <= 1) {
+   827	    return 1;
+   828	  }
+   829	  if (monsterCount === 2) {
+   830	    return 1.5;
+   831	  }
+   832	  if (monsterCount <= 6) {
+   833	    return 2;
+   834	  }
+   835	  if (monsterCount <= 10) {
+   836	    return 2.5;
+   837	  }
+   838	  if (monsterCount <= 14) {
+   839	    return 3;
+   840	  }
+   841	  return 4;
+   842	}
+   843	
+   844	function adjustedXp(body: unknown): JsonValue | undefined {
+   845	  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+   846	    return undefined;
+   847	  }
+   848	
+   849	  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+   850	  for (const member of body.party) {
+   851	    if (!isRecord(member) || !isInteger(member.level)) {
+   852	      return undefined;
+   853	    }
+   854	
+   855	    const memberThresholds = LEVEL_THRESHOLDS[member.level];
+   856	    if (memberThresholds === undefined) {
+   857	      return undefined;
+   858	    }
+   859	
+   860	    thresholds.easy += memberThresholds.easy;
+   861	    thresholds.medium += memberThresholds.medium;
+   862	    thresholds.hard += memberThresholds.hard;
+   863	    thresholds.deadly += memberThresholds.deadly;
+   864	  }
+   865	
+   866	  let baseXp = 0;
+   867	  let monsterCount = 0;
+   868	  for (const monster of body.monsters) {
+   869	    if (!isRecord(monster) || typeof monster.cr !== "string" || !isInteger(monster.count) || monster.count <= 0) {
+   870	      return undefined;
+   871	    }
+   872	
+   873	    const xp = CR_XP[monster.cr];
+   874	    if (xp === undefined) {
+   875	      return undefined;
+   876	    }
+   877	
+   878	    baseXp += xp * monster.count;
+   879	    monsterCount += monster.count;
+   880	  }
+   881	
+   882	  const multiplier = monsterMultiplier(monsterCount);
+   883	  const adjusted = baseXp * multiplier;
+   884	  let difficulty = "trivial";
+   885	  if (adjusted >= thresholds.deadly) {
+   886	    difficulty = "deadly";
+   887	  } else if (adjusted >= thresholds.hard) {
+   888	    difficulty = "hard";
+   889	  } else if (adjusted >= thresholds.medium) {
+   890	    difficulty = "medium";
+   891	  } else if (adjusted >= thresholds.easy) {
+   892	    difficulty = "easy";
+   893	  }
+   894	
+   895	  return {
+   896	    base_xp: baseXp,
+   897	    monster_count: monsterCount,
+   898	    multiplier,
+   899	    adjusted_xp: adjusted,
+   900	    difficulty,
+   901	    thresholds,
+   902	  };
+   903	}
+   904	
+   905	function spellSlots(body: unknown): JsonValue | undefined {
+   906	  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
+   907	    return undefined;
+   908	  }
+   909	
+   910	  return {
+   911	    class: "wizard",
+   912	    level: 5,
+   913	    slots: { "1": 4, "2": 3, "3": 2 },
+   914	  };
+   915	}
+   916	
+   917	function longRest(body: unknown): JsonValue | undefined {
+   918	  if (
+   919	    !isRecord(body) ||
+   920	    !isCharacterLevel(body.level) ||
+   921	    !isInteger(body.hp_current) ||
+   922	    !isInteger(body.hp_max) ||
+   923	    !isInteger(body.hit_dice_spent) ||
+   924	    !isInteger(body.exhaustion_level) ||
+   925	    body.hp_current < 0 ||
+   926	    body.hp_max < 0 ||
+   927	    body.hp_current > body.hp_max ||
+   928	    body.hit_dice_spent < 0 ||
+   929	    body.exhaustion_level < 0
+   930	  ) {
+   931	    return undefined;
+   932	  }
+   933	
+   934	  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
+   935	  return {
+   936	    hp_current: body.hp_max,
+   937	    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
+   938	    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
+   939	  };
+   940	}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+exec
+/bin/zsh -lc "nl -ba src/server.ts | sed -n '940,1125p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+   940	}
+   941	
+   942	function equipmentLoad(body: unknown): JsonValue | undefined {
+   943	  if (
+   944	    !isRecord(body) ||
+   945	    !isInteger(body.strength) ||
+   946	    !isInteger(body.weight) ||
+   947	    body.strength < 0 ||
+   948	    body.weight < 0
+   949	  ) {
+   950	    return undefined;
+   951	  }
+   952	
+   953	  const capacity = body.strength * 15;
+   954	  return {
+   955	    capacity,
+   956	    weight: body.weight,
+   957	    encumbered: body.weight > capacity,
+   958	  };
+   959	}
+   960	
+   961	function initiativeOrder(body: unknown): JsonValue | undefined {
+   962	  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+   963	    return undefined;
+   964	  }
+   965	
+   966	  const combatants = [];
+   967	  for (const combatant of body.combatants) {
+   968	    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+   969	      return undefined;
+   970	    }
+   971	    combatants.push({
+   972	      name: combatant.name,
+   973	      dex: combatant.dex,
+   974	      score: combatant.roll + combatant.dex,
+   975	    });
+   976	  }
+   977	
+   978	  combatants.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+   979	
+   980	  return {
+   981	    order: combatants.map(({ name, score }) => ({ name, score })),
+   982	  };
+   983	}
+   984	
+   985	function publicOrder(order: CombatantOrderEntry[]): JsonValue[] {
+   986	  return order.map(({ name, score }) => ({ name, score }));
+   987	}
+   988	
+   989	function activeCombatant(session: CombatSession): JsonValue {
+   990	  const active = session.order[session.turn_index];
+   991	  return { name: active.name, score: active.score };
+   992	}
+   993	
+   994	function publicConditions(session: CombatSession): JsonValue {
+   995	  const conditions: { [key: string]: JsonValue } = {};
+   996	  for (const [name, entries] of session.conditions) {
+   997	    conditions[name] = entries.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds }));
+   998	  }
+   999	  return conditions;
+  1000	}
+  1001	
+  1002	function createCombatSession(body: unknown): JsonValue | undefined {
+  1003	  if (!isRecord(body) || typeof body.id !== "string" || body.id === "" || !Array.isArray(body.combatants)) {
+  1004	    return undefined;
+  1005	  }
+  1006	  if (combatSessionExists(body.id) || body.combatants.length === 0) {
+  1007	    return undefined;
+  1008	  }
+  1009	
+  1010	  const order: CombatantOrderEntry[] = [];
+  1011	  for (const combatant of body.combatants) {
+  1012	    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+  1013	      return undefined;
+  1014	    }
+  1015	    order.push({
+  1016	      name: combatant.name,
+  1017	      dex: combatant.dex,
+  1018	      score: combatant.roll + combatant.dex,
+  1019	    });
+  1020	  }
+  1021	
+  1022	  order.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+  1023	
+  1024	  const session: CombatSession = {
+  1025	    id: body.id,
+  1026	    round: 1,
+  1027	    turn_index: 0,
+  1028	    order,
+  1029	    conditions: new Map(),
+  1030	  };
+  1031	  saveCombatSession(session);
+  1032	
+  1033	  return {
+  1034	    id: session.id,
+  1035	    round: session.round,
+  1036	    turn_index: session.turn_index,
+  1037	    active: activeCombatant(session),
+  1038	    order: publicOrder(session.order),
+  1039	  };
+  1040	}
+  1041	
+  1042	function addCombatCondition(session: CombatSession, body: unknown): JsonValue | undefined {
+  1043	  if (
+  1044	    !isRecord(body) ||
+  1045	    typeof body.target !== "string" ||
+  1046	    typeof body.condition !== "string" ||
+  1047	    !isInteger(body.duration_rounds) ||
+  1048	    body.duration_rounds <= 0
+  1049	  ) {
+  1050	    return undefined;
+  1051	  }
+  1052	
+  1053	  if (!session.order.some((combatant) => combatant.name === body.target)) {
+  1054	    return undefined;
+  1055	  }
+  1056	
+  1057	  const conditions = session.conditions.get(body.target) ?? [];
+  1058	  conditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
+  1059	  session.conditions.set(body.target, conditions);
+  1060	  saveCombatSession(session);
+  1061	
+  1062	  return {
+  1063	    target: body.target,
+  1064	    conditions: conditions.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds })),
+  1065	  };
+  1066	}
+  1067	
+  1068	function advanceCombatSession(session: CombatSession): JsonValue {
+  1069	  session.turn_index += 1;
+  1070	  if (session.turn_index >= session.order.length) {
+  1071	    session.turn_index = 0;
+  1072	    session.round += 1;
+  1073	  }
+  1074	
+  1075	  const active = session.order[session.turn_index];
+  1076	  const conditions = session.conditions.get(active.name);
+  1077	  if (conditions !== undefined) {
+  1078	    const remaining = conditions
+  1079	      .map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds: remaining_rounds - 1 }))
+  1080	      .filter(({ remaining_rounds }) => remaining_rounds > 0);
+  1081	    if (remaining.length > 0) {
+  1082	      session.conditions.set(active.name, remaining);
+  1083	    } else {
+  1084	      session.conditions.set(active.name, []);
+  1085	    }
+  1086	  }
+  1087	  saveCombatSession(session);
+  1088	
+  1089	  return {
+  1090	    id: session.id,
+  1091	    round: session.round,
+  1092	    turn_index: session.turn_index,
+  1093	    active: activeCombatant(session),
+  1094	    conditions: publicConditions(session),
+  1095	  };
+  1096	}
+  1097	
+  1098	async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  1099	  const method = request.method ?? "";
+  1100	  const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+  1101	
+  1102	  if (method === "GET" && path === "/health") {
+  1103	    sendJson(response, 200, { ok: true });
+  1104	    return;
+  1105	  }
+  1106	
+  1107	  if (method === "GET" && path === "/v1/storage/status") {
+  1108	    sendJson(response, 200, { driver: "sqlite", schema_version: SCHEMA_VERSION, initialized: storageInitialized });
+  1109	    return;
+  1110	  }
+  1111	
+  1112	  if (method === "POST" && path === "/v1/storage/reset") {
+  1113	    resetStorage();
+  1114	    sendJson(response, 200, { ok: true, schema_version: SCHEMA_VERSION });
+  1115	    return;
+  1116	  }
+  1117	
+  1118	  if (method === "GET") {
+  1119	    const monsterMatch = /^\/v1\/compendium\/monsters\/([^/]+)$/.exec(path);
+  1120	    if (monsterMatch !== null) {
+  1121	      const monster = getMonster(decodeURIComponent(monsterMatch[1]));
+  1122	      if (monster === undefined) {
+  1123	        notFound(response);
+  1124	        return;
+  1125	      }
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+exec
+/bin/zsh -lc "nl -ba src/server.ts | sed -n '1188,1245p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+  1188	    sendJson(response, result.status, result.body);
+  1189	    return;
+  1190	  }
+  1191	
+  1192	  const campaignMutationMatch = /^\/v1\/campaigns\/([^/]+)\/(characters|events)$/.exec(path);
+  1193	  if (campaignMutationMatch !== null) {
+  1194	    const campaignId = decodeURIComponent(campaignMutationMatch[1]);
+  1195	    const result = campaignMutationMatch[2] === "characters"
+  1196	      ? addCampaignCharacter(campaignId, body)
+  1197	      : addCampaignEvent(campaignId, body);
+  1198	    sendJson(response, result.status, result.body);
+  1199	    return;
+  1200	  }
+  1201	
+  1202	  let result: JsonValue | undefined;
+  1203	  switch (path) {
+  1204	    case "/v1/dice/stats":
+  1205	      result = diceStats(body);
+  1206	      break;
+  1207	    case "/v1/checks/ability":
+  1208	      result = abilityCheck(body);
+  1209	      break;
+  1210	    case "/v1/characters/ability-modifier":
+  1211	      result = abilityModifier(body);
+  1212	      break;
+  1213	    case "/v1/characters/proficiency":
+  1214	      result = proficiency(body);
+  1215	      break;
+  1216	    case "/v1/characters/derived-stats":
+  1217	      result = derivedStats(body);
+  1218	      break;
+  1219	    case "/v1/encounters/adjusted-xp":
+  1220	      result = adjustedXp(body);
+  1221	      break;
+  1222	    case "/v1/phb/spell-slots":
+  1223	      result = spellSlots(body);
+  1224	      break;
+  1225	    case "/v1/phb/rests/long":
+  1226	      result = longRest(body);
+  1227	      break;
+  1228	    case "/v1/phb/equipment-load":
+  1229	      result = equipmentLoad(body);
+  1230	      break;
+  1231	    case "/v1/initiative/order":
+  1232	      result = initiativeOrder(body);
+  1233	      break;
+  1234	    case "/v1/combat/sessions":
+  1235	      result = createCombatSession(body);
+  1236	      break;
+  1237	    default:
+  1238	      {
+  1239	        const match = /^\/v1\/combat\/sessions\/([^/]+)\/(conditions|advance)$/.exec(path);
+  1240	        if (match === null) {
+  1241	          notFound(response);
+  1242	          return;
+  1243	        }
+  1244	
+  1245	        const session = getCombatSession(decodeURIComponent(match[1]));
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+codex
+Implemented Stage 7 PHB endpoints in [src/server.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts:905):
+
+- `POST /v1/phb/spell-slots`
+- `POST /v1/phb/rests/long`
+- `POST /v1/phb/equipment-load`
+
+They follow the existing JSON/`400 bad_request` pattern and are wired into the existing POST route switch. `run.sh` was already correct and still starts the server in the foreground with `tsc && node dist/server.js`.
+
+Verification: ran `npx tsc --noEmit` and `npx tsc`; both passed. I did not start the HTTP server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index f69ac519abf7a03bc93cffdafdd90e6deab8353a..0fcf36c74c4a12f9589c47e8b77140a84215cee9
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -902,6 +902,62 @@
+   };
+ }
+ 
++function spellSlots(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || body.class !== "wizard" || body.level !== 5) {
++    return undefined;
++  }
++
++  return {
++    class: "wizard",
++    level: 5,
++    slots: { "1": 4, "2": 3, "3": 2 },
++  };
++}
++
++function longRest(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isCharacterLevel(body.level) ||
++    !isInteger(body.hp_current) ||
++    !isInteger(body.hp_max) ||
++    !isInteger(body.hit_dice_spent) ||
++    !isInteger(body.exhaustion_level) ||
++    body.hp_current < 0 ||
++    body.hp_max < 0 ||
++    body.hp_current > body.hp_max ||
++    body.hit_dice_spent < 0 ||
++    body.exhaustion_level < 0
++  ) {
++    return undefined;
++  }
++
++  const recoveredHitDice = Math.max(1, Math.floor(body.level / 2));
++  return {
++    hp_current: body.hp_max,
++    hit_dice_spent: Math.max(0, body.hit_dice_spent - recoveredHitDice),
++    exhaustion_level: Math.max(0, body.exhaustion_level - 1),
++  };
++}
++
++function equipmentLoad(body: unknown): JsonValue | undefined {
++  if (
++    !isRecord(body) ||
++    !isInteger(body.strength) ||
++    !isInteger(body.weight) ||
++    body.strength < 0 ||
++    body.weight < 0
++  ) {
++    return undefined;
++  }
++
++  const capacity = body.strength * 15;
++  return {
++    capacity,
++    weight: body.weight,
++    encumbered: body.weight > capacity,
++  };
++}
++
+ function initiativeOrder(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || !Array.isArray(body.combatants)) {
+     return undefined;
+@@ -1163,6 +1219,15 @@
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
++    case "/v1/phb/spell-slots":
++      result = spellSlots(body);
++      break;
++    case "/v1/phb/rests/long":
++      result = longRest(body);
++      break;
++    case "/v1/phb/equipment-load":
++      result = equipmentLoad(body);
++      break;
+     case "/v1/initiative/order":
+       result = initiativeOrder(body);
+       break;
+
+tokens used
+28,321

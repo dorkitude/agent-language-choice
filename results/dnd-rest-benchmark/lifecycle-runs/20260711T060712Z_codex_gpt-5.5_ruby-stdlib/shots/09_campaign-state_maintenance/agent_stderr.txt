@@ -1,0 +1,3809 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4fd4-e8bf-78a0-8d4a-9de9cb26be75
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: campaign-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 6: Campaign State APIs
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add SQLite-backed APIs for campaign state.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input, `404` for unknown records, and
+`409` for duplicate IDs.
+
+## Create Campaign
+
+`POST /v1/campaigns`
+
+Request:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+Response:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+## Add Character
+
+`POST /v1/campaigns/camp-1/characters`
+
+Request:
+
+```json
+{
+  "id": "char-1",
+  "name": "Nyx",
+  "level": 3,
+  "class": "rogue"
+}
+```
+
+Response:
+
+```json
+{"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+```
+
+## Add Session Log Event
+
+`POST /v1/campaigns/camp-1/events`
+
+Request:
+
+```json
+{"id": "evt-1", "kind": "note", "summary": "Nyx scouts the goblin trail."}
+```
+
+Response:
+
+```json
+{"id": "evt-1", "kind": "note"}
+```
+
+## Read Campaign State
+
+`GET /v1/campaigns/camp-1/state`
+
+Response:
+
+```json
+{
+  "id": "camp-1",
+  "name": "Lost Mine",
+  "dm": "dm",
+  "characters": [
+    {"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+  ],
+  "log_count": 1
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing stdlib Ruby server and tests/config first, then patch the smallest surface needed for the new campaign state endpoints while keeping previous behavior intact.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 108ms:
+shots/09_campaign-state_maintenance/PROMPT.md
+shots/08_compendium_maintenance/server_stderr.txt
+shots/08_compendium_maintenance/agent_stderr.txt
+shots/08_compendium_maintenance/dndeval-compendium-report.json
+shots/08_compendium_maintenance/server_stdout.txt
+shots/08_compendium_maintenance/PROMPT.md
+shots/08_compendium_maintenance/agent_stdout.txt
+shots/08_compendium_maintenance/agent_last_message.txt
+shots/08_compendium_maintenance/setup.json
+shots/05_auth-users_maintenance/server_stderr.txt
+shots/05_auth-users_maintenance/agent_stderr.txt
+shots/05_auth-users_maintenance/dndeval-auth-users-report.json
+shots/05_auth-users_maintenance/server_stdout.txt
+shots/05_auth-users_maintenance/PROMPT.md
+shots/05_auth-users_maintenance/agent_stdout.txt
+shots/05_auth-users_maintenance/agent_last_message.txt
+shots/05_auth-users_maintenance/setup.json
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/06_auth-users_bugfix/server_stderr.txt
+shots/06_auth-users_bugfix/agent_stderr.txt
+shots/06_auth-users_bugfix/dndeval-auth-users-report.json
+shots/06_auth-users_bugfix/server_stdout.txt
+shots/06_auth-users_bugfix/PROMPT.md
+shots/06_auth-users_bugfix/agent_stdout.txt
+shots/06_auth-users_bugfix/agent_last_message.txt
+shots/06_auth-users_bugfix/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/server_stderr.txt
+shots/04_combat-state_bugfix/agent_stderr.txt
+shots/04_combat-state_bugfix/server_stdout.txt
+shots/04_combat-state_bugfix/PROMPT.md
+shots/04_combat-state_bugfix/agent_stdout.txt
+shots/04_combat-state_bugfix/agent_last_message.txt
+shots/04_combat-state_bugfix/setup.json
+shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+shots/07_sqlite-storage_maintenance/server_stderr.txt
+shots/07_sqlite-storage_maintenance/agent_stderr.txt
+shots/07_sqlite-storage_maintenance/server_stdout.txt
+shots/07_sqlite-storage_maintenance/PROMPT.md
+shots/07_sqlite-storage_maintenance/agent_stdout.txt
+shots/07_sqlite-storage_maintenance/agent_last_message.txt
+shots/07_sqlite-storage_maintenance/setup.json
+shots/07_sqlite-storage_maintenance/dndeval-sqlite-storage-report.json
+server.rb
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+game.db
+agent_stderr.txt
+dndeval-auth-users-report.json
+lifecycle-result.json
+dndeval-compendium-report.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+dndeval-combat-state-report.json
+dndeval-sqlite-storage-report.json
+
+codex
+The worktree has unrelated changes outside this run directory, so I’m leaving them alone. I found a compact Ruby server with an existing `game.db`; next I’m reading the routing/storage code and prior evaluator reports to match the established behavior.
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-sqlite-storage-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,260p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+{
+  "suite": "sqlite-storage",
+  "base_url": "http://127.0.0.1:61909",
+  "passed": true,
+  "passed_count": 26,
+  "total_count": 26,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "auth-register-user",
+      "name": "Register deterministic user",
+      "passed": true,
+      "status": 201,
+      "duration_ms": 12
+    },
+    {
+      "id": "auth-register-duplicate",
+      "name": "Duplicate username returns conflict",
+      "passed": true,
+      "status": 409,
+      "duration_ms": 0
+    },
+    {
+      "id": "auth-login-user",
+      "name": "Login returns deterministic session token",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 11
+    },
+    {
+      "id": "auth-login-bad-password",
+      "name": "Bad login returns unauthorized",
+      "passed": true,
+      "status": 401,
+      "duration_ms": 10
+    },
+    {
+      "id": "storage-status",
+      "name": "SQLite storage status",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "storage-reset",
+      "name": "SQLite storage reset",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 2
+    }
+  ]
+}
+
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "openssl"
+require "socket"
+require "fiddle"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+ABILITY_NAMES = %w[str dex con int wis cha].freeze
+COMBAT_SESSIONS = {}
+USERS = {}
+MONSTERS = {}
+ITEMS = {}
+DB_PATH = File.expand_path("game.db", __dir__)
+SCHEMA_VERSION = 1
+
+class DuplicateUsernameError < StandardError; end
+class DuplicateSlugError < StandardError; end
+class BadCredentialsError < StandardError; end
+
+class SQLiteStorage
+  SQLITE_OK = 0
+  POINTER_FORMAT = Fiddle::SIZEOF_VOIDP == 8 ? "Q!" : "L!"
+
+  def initialize(path)
+    @path = path
+    @handle = sqlite_handle
+    @db_pointer = Fiddle::Pointer.malloc(Fiddle::SIZEOF_VOIDP)
+
+    open = Fiddle::Function.new(@handle["sqlite3_open"], [Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP], Fiddle::TYPE_INT)
+    result = open.call(@path, @db_pointer)
+    raise "sqlite open failed" unless result == SQLITE_OK
+
+    @db = Fiddle::Pointer.new(pointer_value(@db_pointer))
+    @exec = Fiddle::Function.new(
+      @handle["sqlite3_exec"],
+      [Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP],
+      Fiddle::TYPE_INT
+    )
+    @close = Fiddle::Function.new(@handle["sqlite3_close"], [Fiddle::TYPE_VOIDP], Fiddle::TYPE_INT)
+    initialize_schema
+  end
+
+  def initialize_schema
+    execute(<<~SQL)
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS combat_sessions (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS monsters (
+        slug TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS items (
+        slug TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+    SQL
+  end
+
+  def initialized?
+    rows = select("SELECT value FROM metadata WHERE key = 'schema_version'")
+    rows.first && rows.first["value"] == SCHEMA_VERSION.to_s
+  end
+
+  def reset!
+    execute(<<~SQL)
+      DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS combat_sessions;
+      DROP TABLE IF EXISTS monsters;
+      DROP TABLE IF EXISTS items;
+      DROP TABLE IF EXISTS metadata;
+    SQL
+    initialize_schema
+  end
+
+  def load_users
+    select("SELECT username, data FROM users").each_with_object({}) do |row, users|
+      users[row["username"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_user(user)
+    execute("INSERT OR REPLACE INTO users (username, data) VALUES (#{quote(user["username"])}, #{quote(JSON.generate(user))})")
+  end
+
+  def load_combat_sessions
+    select("SELECT id, data FROM combat_sessions").each_with_object({}) do |row, sessions|
+      sessions[row["id"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_combat_session(session)
+    execute("INSERT OR REPLACE INTO combat_sessions (id, data) VALUES (#{quote(session["id"])}, #{quote(JSON.generate(session))})")
+  end
+
+  def load_monsters
+    select("SELECT slug, data FROM monsters").each_with_object({}) do |row, monsters|
+      monsters[row["slug"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_monster(monster)
+    execute("INSERT OR REPLACE INTO monsters (slug, data) VALUES (#{quote(monster["slug"])}, #{quote(JSON.generate(monster))})")
+  end
+
+  def load_items
+    select("SELECT slug, data FROM items").each_with_object({}) do |row, items|
+      items[row["slug"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_item(item)
+    execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+  end
+
+  def close
+    @close.call(@db) if @close && @db
+  end
+
+  private
+
+  def sqlite_handle
+    ["libsqlite3.dylib", "libsqlite3.so.0", "libsqlite3.so"].each do |name|
+      return Fiddle.dlopen(name)
+    rescue Fiddle::DLError
+      next
+    end
+    raise "sqlite library not found"
+  end
+
+  def execute(sql)
+    result = @exec.call(@db, sql, nil, nil, nil)
+    raise "sqlite exec failed" unless result == SQLITE_OK
+  end
+
+  def select(sql)
+    rows = []
+    callback = Fiddle::Closure::BlockCaller.new(
+      Fiddle::TYPE_INT,
+      [Fiddle::TYPE_VOIDP, Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP]
+    ) do |_unused, count, values_ptr, names_ptr|
+      row = {}
+      count.times do |index|
+        name_pointer = pointer_from_array(names_ptr, index)
+        value_pointer = pointer_from_array(values_ptr, index)
+        row[name_pointer.to_s] = value_pointer.null? ? nil : value_pointer.to_s
+      end
+      rows << row
+      0
+    end
+
+    result = @exec.call(@db, sql, callback, nil, nil)
+    raise "sqlite select failed" unless result == SQLITE_OK
+
+    rows
+  end
+
+  def quote(value)
+    "'#{value.to_s.gsub("'", "''")}'"
+  end
+
+  def pointer_from_array(array_pointer, index)
+    Fiddle::Pointer.new(pointer_value(array_pointer + (index * Fiddle::SIZEOF_VOIDP)))
+  end
+
+  def pointer_value(pointer)
+    pointer[0, Fiddle::SIZEOF_VOIDP].unpack1(POINTER_FORMAT)
+  end
+end
+
+def json_response(status, body)
+  payload = JSON.generate(body)
+  reason = {
+    200 => "OK",
+    201 => "Created",
+    400 => "Bad Request",
+    401 => "Unauthorized",
+    404 => "Not Found",
+    405 => "Method Not Allowed",
+    409 => "Conflict"
+  }.fetch(status, "OK")
+
+  [
+    "HTTP/1.1 #{status} #{reason}",
+    "Content-Type: application/json",
+    "Content-Length: #{payload.bytesize}",
+    "Connection: close",
+    "",
+    payload
+  ].join("\r\n")
+end
+
+def integer_value?(value)
+  value.is_a?(Integer)
+end
+
+def integer_in_range?(value, range)
+  integer_value?(value) && range.cover?(value)
+end
+
+def parse_json_body(body)
+  parsed = JSON.parse(body)
+  raise ArgumentError unless parsed.is_a?(Hash)
+
+  parsed
+rescue JSON::ParserError
+  raise ArgumentError
+end
+
+def valid_username?(username)
+  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
+end
+
+def valid_slug?(slug)
+  slug.is_a?(String) && slug.match?(/\A[a-z0-9][a-z0-9-]{0,63}\z/)
+end
+
+def non_empty_string?(value)
+  value.is_a?(String) && !value.empty?
+end
+
+def password_record(password)
+  raise ArgumentError unless password.is_a?(String) && password.length >= 8
+
+  salt = OpenSSL::Random.random_bytes(16)
+  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
+  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
+end
+
+def password_matches?(password, record)
+  return false unless password.is_a?(String)
+
+  salt = [record["salt"]].pack("H*")
+  expected = [record["hash"]].pack("H*")
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-compendium-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+{
+  "suite": "compendium",
+  "base_url": "http://127.0.0.1:62126",
+  "passed": true,
+  "passed_count": 30,
+  "total_count": 30,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "auth-register-user",
+      "name": "Register deterministic user",
+      "passed": true,
+      "status": 201,
+      "duration_ms": 13
+    },
+    {
+      "id": "auth-register-duplicate",
+      "name": "Duplicate username returns conflict",
+      "passed": true,
+      "status": 409,
+      "duration_ms": 0
+    },
+    {
+      "id": "auth-login-user",
+      "name": "Login returns deterministic session token",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 10
+    },
+    {
+      "id": "auth-login-bad-password",
+      "name": "Bad login returns unauthorized",
+      "passed": true,
+      "status": 401,
+      "duration_ms": 9
+    },
+    {
+      "id": "storage-status",
+      "name": "SQLite storage status",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "storage-reset",
+      "name": "SQLite storage reset",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 3
+    },
+    {
+      "id": "compendium-create-monster",
+      "name": "Create monster compendium entry",
+      "passed": true,
+      "status": 201,
+      "duration_ms": 0
+    },
+    {
+      "id": "compendium-get-monster",
+      "name": "Read monster compendium entry",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "compendium-create-item",
+      "name": "Create item compendium entry",
+      "passed": true,
+      "status": 201,
+      "duration_ms": 0
+    },
+    {
+      "id": "compendium-get-item",
+      "name": "Read item compendium entry",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '260,620p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,220p' shots/09_campaign-state_maintenance/PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: campaign-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 6: Campaign State APIs
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add SQLite-backed APIs for campaign state.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input, `404` for unknown records, and
+`409` for duplicate IDs.
+
+## Create Campaign
+
+`POST /v1/campaigns`
+
+Request:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+Response:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+## Add Character
+
+`POST /v1/campaigns/camp-1/characters`
+
+Request:
+
+```json
+{
+  "id": "char-1",
+  "name": "Nyx",
+  "level": 3,
+  "class": "rogue"
+}
+```
+
+Response:
+
+```json
+{"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+```
+
+## Add Session Log Event
+
+`POST /v1/campaigns/camp-1/events`
+
+Request:
+
+```json
+{"id": "evt-1", "kind": "note", "summary": "Nyx scouts the goblin trail."}
+```
+
+Response:
+
+```json
+{"id": "evt-1", "kind": "note"}
+```
+
+## Read Campaign State
+
+`GET /v1/campaigns/camp-1/state`
+
+Response:
+
+```json
+{
+  "id": "camp-1",
+  "name": "Lost Mine",
+  "dm": "dm",
+  "characters": [
+    {"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+  ],
+  "log_count": 1
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+ succeeded in 0ms:
+  expected = [record["hash"]].pack("H*")
+  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
+  secure_compare(actual, expected)
+end
+
+def secure_compare(left, right)
+  return false unless left.bytesize == right.bytesize
+
+  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
+end
+
+def register_user(params)
+  username = params["username"]
+  password = params["password"]
+  role = params["role"]
+  raise ArgumentError unless valid_username?(username)
+  raise ArgumentError unless password.is_a?(String) && password.length >= 8
+  raise ArgumentError unless %w[dm player].include?(role)
+  raise DuplicateUsernameError if USERS.key?(username)
+
+  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
+  $storage.save_user(USERS[username])
+  { "username" => username, "role" => role }
+end
+
+def login_user(params)
+  username = params["username"]
+  password = params["password"]
+  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
+
+  user = USERS[username]
+  raise BadCredentialsError unless user && password_matches?(password, user["password"])
+
+  { "username" => username, "token" => "session-#{username}" }
+end
+
+def create_monster(params)
+  slug = params["slug"]
+  name = params["name"]
+  cr = params["cr"]
+  armor_class = params["armor_class"]
+  hit_points = params["hit_points"]
+  tags = params["tags"]
+  raise ArgumentError unless valid_slug?(slug)
+  raise ArgumentError unless non_empty_string?(name) && non_empty_string?(cr)
+  raise ArgumentError unless integer_value?(armor_class) && integer_value?(hit_points)
+  raise ArgumentError unless tags.is_a?(Array) && tags.all? { |tag| non_empty_string?(tag) }
+  raise DuplicateSlugError if MONSTERS.key?(slug)
+
+  monster = {
+    "slug" => slug,
+    "name" => name,
+    "cr" => cr,
+    "armor_class" => armor_class,
+    "hit_points" => hit_points,
+    "tags" => tags
+  }
+  MONSTERS[slug] = monster
+  $storage.save_monster(monster)
+  monster_response(monster)
+end
+
+def monster_response(monster)
+  {
+    "slug" => monster["slug"],
+    "name" => monster["name"],
+    "cr" => monster["cr"],
+    "armor_class" => monster["armor_class"],
+    "hit_points" => monster["hit_points"]
+  }
+end
+
+def create_item(params)
+  slug = params["slug"]
+  name = params["name"]
+  type = params["type"]
+  rarity = params["rarity"]
+  cost_gp = params["cost_gp"]
+  raise ArgumentError unless valid_slug?(slug)
+  raise ArgumentError unless [name, type, rarity].all? { |value| non_empty_string?(value) }
+  raise ArgumentError unless integer_value?(cost_gp)
+  raise DuplicateSlugError if ITEMS.key?(slug)
+
+  item = {
+    "slug" => slug,
+    "name" => name,
+    "type" => type,
+    "rarity" => rarity,
+    "cost_gp" => cost_gp
+  }
+  ITEMS[slug] = item
+  $storage.save_item(item)
+  item
+end
+
+def dice_stats(params)
+  expression = params["expression"]
+  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+  raise ArgumentError unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  average = (count * (sides + 1) / 2.0) + modifier
+  average = average.to_i if average == average.to_i
+
+  {
+    "dice_count" => count,
+    "sides" => sides,
+    "modifier" => modifier,
+    "min" => count + modifier,
+    "max" => (count * sides) + modifier,
+    "average" => average
+  }
+end
+
+def ability_check(params)
+  roll = params["roll"]
+  modifier = params["modifier"]
+  dc = params["dc"]
+  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
+
+  total = roll + modifier
+  {
+    "total" => total,
+    "success" => total >= dc,
+    "margin" => total - dc
+  }
+end
+
+def ability_modifier_for(score)
+  raise ArgumentError unless integer_in_range?(score, 1..30)
+
+  (score - 10) / 2
+end
+
+def character_ability_modifier(params)
+  score = params["score"]
+  {
+    "score" => score,
+    "modifier" => ability_modifier_for(score)
+  }
+end
+
+def proficiency_bonus_for(level)
+  raise ArgumentError unless integer_in_range?(level, 1..20)
+
+  2 + ((level - 1) / 4)
+end
+
+def character_proficiency(params)
+  level = params["level"]
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus_for(level)
+  }
+end
+
+def character_derived_stats(params)
+  level = params["level"]
+  abilities = params["abilities"]
+  armor = params["armor"]
+  raise ArgumentError unless abilities.is_a?(Hash) && armor.is_a?(Hash)
+
+  modifiers = {}
+  ABILITY_NAMES.each do |name|
+    modifiers[name] = ability_modifier_for(abilities[name])
+  end
+
+  armor_base = armor["base"]
+  shield = armor["shield"]
+  dex_cap = armor["dex_cap"]
+  raise ArgumentError unless integer_value?(armor_base) && [true, false].include?(shield) && integer_value?(dex_cap)
+
+  proficiency_bonus = proficiency_bonus_for(level)
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus,
+    "hp_max" => level * (6 + modifiers["con"]),
+    "armor_class" => armor_base + [modifiers["dex"], dex_cap].min + (shield ? 2 : 0),
+    "modifiers" => modifiers
+  }
+end
+
+def monster_multiplier(count)
+  case count
+  when 1 then 1
+  when 2 then 1.5
+  when 3..6 then 2
+  when 7..10 then 2.5
+  when 11..14 then 3
+  else 4
+  end
+end
+
+def adjusted_xp(params)
+  party = params["party"]
+  monsters = params["monsters"]
+  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
+
+  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
+  party.each do |member|
+    level = member.is_a?(Hash) && member["level"]
+    level_thresholds = LEVEL_THRESHOLDS[level]
+    raise ArgumentError unless level_thresholds
+
+    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
+  end
+
+  base_xp = 0
+  monster_count = 0
+  monsters.each do |monster|
+    raise ArgumentError unless monster.is_a?(Hash)
+
+    cr = monster["cr"]
+    count = monster["count"]
+    xp = CR_XP[cr]
+    raise ArgumentError unless xp && integer_value?(count) && count.positive?
+
+    base_xp += xp * count
+    monster_count += count
+  end
+
+  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
+  adjusted = base_xp * multiplier
+  adjusted = adjusted.to_i if adjusted == adjusted.to_i
+  difficulty = "trivial"
+  %w[easy medium hard deadly].each do |name|
+    difficulty = name if adjusted >= thresholds[name]
+  end
+
+  {
+    "base_xp" => base_xp,
+    "monster_count" => monster_count,
+    "multiplier" => multiplier,
+    "adjusted_xp" => adjusted,
+    "difficulty" => difficulty,
+    "thresholds" => thresholds
+  }
+end
+
+def initiative_order(params)
+  combatants = params["combatants"]
+  raise ArgumentError unless combatants.is_a?(Array)
+
+  order = combatants.map do |combatant|
+    raise ArgumentError unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  {
+    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+  }
+end
+
+def combat_order(combatants)
+  raise ArgumentError unless combatants.is_a?(Array) && !combatants.empty?
+
+  order = combatants.map do |combatant|
+    raise ArgumentError unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+       .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+end
+
+def serialize_combat_session(session)
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "order" => session["order"]
+  }
+end
+
+def create_combat_session(params)
+  id = params["id"]
+  raise ArgumentError unless id.is_a?(String) && !COMBAT_SESSIONS.key?(id)
+
+  order = combat_order(params["combatants"])
+  conditions = {}
+  order.each { |combatant| conditions[combatant["name"]] ||= [] }
+
+  session = {
+    "id" => id,
+    "round" => 1,
+    "turn_index" => 0,
+    "order" => order,
+    "conditions" => conditions
+  }
+  COMBAT_SESSIONS[id] = session
+  $storage.save_combat_session(session)
+  serialize_combat_session(session)
+end
+
+def combat_conditions_payload(session, include_empty: [])
+  session["conditions"].each_with_object({}) do |(name, conditions), payload|
+    payload[name] = conditions if !conditions.empty? || include_empty.include?(name)
+  end
+end
+
+def add_combat_condition(session, params)
+  target = params["target"]
+  condition = params["condition"]
+  duration = params["duration_rounds"]
+  raise ArgumentError unless session["conditions"].key?(target)
+  raise ArgumentError unless condition.is_a?(String) && integer_value?(duration) && duration.positive?
+
+  session["conditions"][target] << { "condition" => condition, "remaining_rounds" => duration }
+  $storage.save_combat_session(session)
+  {
+    "target" => target,
+    "conditions" => session["conditions"][target]
+  }
+end
+
+def advance_combat_session(session)
+  session["turn_index"] += 1
+  if session["turn_index"] >= session["order"].length
+    session["turn_index"] = 0
+    session["round"] += 1
+  end
+
+  active_name = session["order"][session["turn_index"]]["name"]
+  active_had_conditions = !session["conditions"][active_name].empty?
+  session["conditions"][active_name].each do |condition|
+    condition["remaining_rounds"] -= 1
+  end
+  session["conditions"][active_name].reject! { |condition| condition["remaining_rounds"].zero? }
+  $storage.save_combat_session(session)
+
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "conditions" => combat_conditions_payload(session, include_empty: active_had_conditions ? [active_name] : [])
+  }
+end
+
+def route(method, path, body)
+
+exec
+/bin/zsh -lc 'rg -n "storage|reset|campaign|compendium|post" server.rb shots/*/PROMPT.md' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+server.rb:91:  def reset!
+server.rb:281:  $storage.save_user(USERS[username])
+server.rb:318:  $storage.save_monster(monster)
+server.rb:351:  $storage.save_item(item)
+server.rb:570:  $storage.save_combat_session(session)
+server.rb:588:  $storage.save_combat_session(session)
+server.rb:608:  $storage.save_combat_session(session)
+server.rb:622:  return json_response(200, { "driver" => "sqlite", "schema_version" => SCHEMA_VERSION, "initialized" => $storage.initialized? }) if method == "GET" && path == "/v1/storage/status"
+server.rb:624:  if method == "GET" && (match = path.match(%r{\A/v1/compendium/monsters/([^/]+)\z}))
+server.rb:631:  if method == "GET" && (match = path.match(%r{\A/v1/compendium/items/([^/]+)\z}))
+server.rb:642:  if path == "/v1/storage/reset"
+server.rb:643:    $storage.reset!
+server.rb:651:  if path == "/v1/compendium/monsters"
+server.rb:655:  if path == "/v1/compendium/items"
+server.rb:729:$storage = SQLiteStorage.new(DB_PATH)
+server.rb:730:USERS.replace($storage.load_users)
+server.rb:731:COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+server.rb:732:MONSTERS.replace($storage.load_monsters)
+server.rb:733:ITEMS.replace($storage.load_items)
+server.rb:739:  $storage.close
+server.rb:743:  $storage.close
+shots/09_campaign-state_maintenance/PROMPT.md:7:        Lifecycle stage: campaign-state
+shots/09_campaign-state_maintenance/PROMPT.md:61:endpoint and add SQLite-backed APIs for campaign state.
+shots/09_campaign-state_maintenance/PROMPT.md:69:`POST /v1/campaigns`
+shots/09_campaign-state_maintenance/PROMPT.md:85:`POST /v1/campaigns/camp-1/characters`
+shots/09_campaign-state_maintenance/PROMPT.md:106:`POST /v1/campaigns/camp-1/events`
+shots/09_campaign-state_maintenance/PROMPT.md:122:`GET /v1/campaigns/camp-1/state`
+shots/08_compendium_maintenance/PROMPT.md:7:        Lifecycle stage: compendium
+shots/08_compendium_maintenance/PROMPT.md:61:endpoint and add SQLite-backed game-world compendium APIs for monsters and
+shots/08_compendium_maintenance/PROMPT.md:70:`POST /v1/compendium/monsters`
+shots/08_compendium_maintenance/PROMPT.md:99:`GET /v1/compendium/monsters/goblin`
+shots/08_compendium_maintenance/PROMPT.md:116:`POST /v1/compendium/items`
+shots/08_compendium_maintenance/PROMPT.md:144:`GET /v1/compendium/items/healing-potion`
+shots/07_sqlite-storage_maintenance/PROMPT.md:7:        Lifecycle stage: sqlite-storage
+shots/07_sqlite-storage_maintenance/PROMPT.md:62:storage.
+shots/07_sqlite-storage_maintenance/PROMPT.md:73:`GET /v1/storage/status`
+shots/07_sqlite-storage_maintenance/PROMPT.md:77:- Report the durable storage driver.
+shots/07_sqlite-storage_maintenance/PROMPT.md:89:`POST /v1/storage/reset`
+
+exec
+/bin/zsh -lc "sed -n '620,780p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,180p' shots/08_compendium_maintenance/PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: compendium
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 5: Monster and Item Compendium
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add SQLite-backed game-world compendium APIs for monsters and
+items.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input, `404` for unknown records, and
+`409` for duplicate slugs.
+
+## Create Monster
+
+`POST /v1/compendium/monsters`
+
+Request:
+
+```json
+{
+  "slug": "goblin",
+  "name": "Goblin",
+  "cr": "1/4",
+  "armor_class": 15,
+  "hit_points": 7,
+  "tags": ["humanoid", "goblinoid"]
+}
+```
+
+Response:
+
+```json
+{
+  "slug": "goblin",
+  "name": "Goblin",
+  "cr": "1/4",
+  "armor_class": 15,
+  "hit_points": 7
+}
+```
+
+## Read Monster
+
+`GET /v1/compendium/monsters/goblin`
+
+Response:
+
+```json
+{
+  "slug": "goblin",
+  "name": "Goblin",
+  "cr": "1/4",
+  "armor_class": 15,
+  "hit_points": 7,
+  "tags": ["humanoid", "goblinoid"]
+}
+```
+
+## Create Item
+
+`POST /v1/compendium/items`
+
+Request:
+
+```json
+{
+  "slug": "healing-potion",
+  "name": "Potion of Healing",
+  "type": "potion",
+  "rarity": "common",
+  "cost_gp": 50
+}
+```
+
+Response:
+
+```json
+{
+  "slug": "healing-potion",
+  "name": "Potion of Healing",
+  "type": "potion",
+  "rarity": "common",
+  "cost_gp": 50
+}
+```
+
+## Read Item
+
+`GET /v1/compendium/items/healing-potion`
+
+Response:
+
+```json
+{
+  "slug": "healing-potion",
+  "name": "Potion of Healing",
+  "type": "potion",
+  "rarity": "common",
+  "cost_gp": 50
+}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+ succeeded in 0ms:
+def route(method, path, body)
+  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+  return json_response(200, { "driver" => "sqlite", "schema_version" => SCHEMA_VERSION, "initialized" => $storage.initialized? }) if method == "GET" && path == "/v1/storage/status"
+
+  if method == "GET" && (match = path.match(%r{\A/v1/compendium/monsters/([^/]+)\z}))
+    monster = MONSTERS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless monster
+
+    return json_response(200, monster)
+  end
+
+  if method == "GET" && (match = path.match(%r{\A/v1/compendium/items/([^/]+)\z}))
+    item = ITEMS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless item
+
+    return json_response(200, item)
+  end
+
+  unless method == "POST"
+    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+  end
+
+  if path == "/v1/storage/reset"
+    $storage.reset!
+    USERS.clear
+    COMBAT_SESSIONS.clear
+    MONSTERS.clear
+    ITEMS.clear
+    return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+  end
+
+  if path == "/v1/compendium/monsters"
+    return json_response(201, create_monster(parse_json_body(body)))
+  end
+
+  if path == "/v1/compendium/items"
+    return json_response(201, create_item(parse_json_body(body)))
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/register"
+    return json_response(201, register_user(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/login"
+    return json_response(200, login_user(parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/advance\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, advance_combat_session(session))
+  end
+
+  params = parse_json_body(body)
+  response = case path
+             when "/v1/dice/stats" then dice_stats(params)
+             when "/v1/checks/ability" then ability_check(params)
+             when "/v1/characters/ability-modifier" then character_ability_modifier(params)
+             when "/v1/characters/proficiency" then character_proficiency(params)
+             when "/v1/characters/derived-stats" then character_derived_stats(params)
+             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
+             when "/v1/initiative/order" then initiative_order(params)
+             else
+               return json_response(404, { "error" => "not found" })
+             end
+
+  json_response(200, response)
+rescue BadCredentialsError
+  json_response(401, { "error" => "bad credentials" })
+rescue DuplicateUsernameError
+  json_response(409, { "error" => "duplicate username" })
+rescue DuplicateSlugError
+  json_response(409, { "error" => "duplicate slug" })
+rescue ArgumentError
+  json_response(400, { "error" => "bad request" })
+end
+
+def read_request(client)
+  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
+  return unless request_line
+
+  method, raw_path, = request_line.split(" ", 3)
+  headers = {}
+  while (line = client.gets)
+    line = line.delete_suffix("\n").delete_suffix("\r")
+    break if line.empty?
+
+    key, value = line.split(":", 2)
+    headers[key.downcase] = value.strip if key && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? client.read(length) : ""
+  path = raw_path.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+$storage = SQLiteStorage.new(DB_PATH)
+USERS.replace($storage.load_users)
+COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+MONSTERS.replace($storage.load_monsters)
+ITEMS.replace($storage.load_items)
+
+port = Integer(ENV.fetch("PORT"))
+server = TCPServer.new("127.0.0.1", port)
+
+trap("INT") do
+  $storage.close
+  server.close
+end
+trap("TERM") do
+  $storage.close
+  server.close
+end
+
+loop do
+  client = server.accept
+  request = read_request(client)
+  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
+rescue IOError, Errno::EBADF
+  break
+rescue StandardError
+  client&.write(json_response(400, { "error" => "bad request" }))
+ensure
+  client&.close
+end
+
+exec
+/bin/zsh -lc "sed -n '1,150p' shots/07_sqlite-storage_maintenance/PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: sqlite-storage
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 4: SQLite Game Storage
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and move durable game-world and game-state data behind SQLite-backed
+storage.
+
+For this stage, the evaluator checks the API contract. The implementation
+should also create a SQLite database file in the project directory, preferably
+`game.db`, and should initialize schema on server startup.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status.
+
+## Storage Status
+
+`GET /v1/storage/status`
+
+Rules:
+
+- Report the durable storage driver.
+- Report schema version `1`.
+- Report whether the database has been initialized.
+
+Response:
+
+```json
+{"driver": "sqlite", "schema_version": 1, "initialized": true}
+```
+
+## Reset Storage
+
+`POST /v1/storage/reset`
+
+Rules:
+
+- Clear benchmark-created durable data.
+- Recreate the schema.
+- Preserve process health.
+
+Response:
+
+```json
+{"ok": true, "schema_version": 1}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+codex
+The current storage layer already uses `Fiddle` to call SQLite directly and caches JSON records in memory. I’m going to extend that same pattern: add campaign records to the SQLite schema, load/save them at startup and mutation time, and route the four new endpoints without changing the existing response shapes.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index f8c99f9be632081f9fad5d371700328b23dfea3b..de9a4b8c8779ff26e6e6eaa966efcaa0df561007
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -27,11 +27,13 @@
+ USERS = {}
+ MONSTERS = {}
+ ITEMS = {}
++CAMPAIGNS = {}
+ DB_PATH = File.expand_path("game.db", __dir__)
+ SCHEMA_VERSION = 1
+ 
+ class DuplicateUsernameError < StandardError; end
+ class DuplicateSlugError < StandardError; end
++class DuplicateIdError < StandardError; end
+ class BadCredentialsError < StandardError; end
+ 
+ class SQLiteStorage
+@@ -79,6 +81,10 @@
+         slug TEXT PRIMARY KEY,
+         data TEXT NOT NULL
+       );
++      CREATE TABLE IF NOT EXISTS campaigns (
++        id TEXT PRIMARY KEY,
++        data TEXT NOT NULL
++      );
+       INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+     SQL
+   end
+@@ -94,6 +100,7 @@
+       DROP TABLE IF EXISTS combat_sessions;
+       DROP TABLE IF EXISTS monsters;
+       DROP TABLE IF EXISTS items;
++      DROP TABLE IF EXISTS campaigns;
+       DROP TABLE IF EXISTS metadata;
+     SQL
+     initialize_schema
+@@ -139,6 +146,16 @@
+     execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+   end
+ 
++  def load_campaigns
++    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
++      campaigns[row["id"]] = JSON.parse(row["data"])
++    end
++  end
++
++  def save_campaign(campaign)
++    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
++  end
++
+   def close
+     @close.call(@db) if @close && @db
+   end
+@@ -352,6 +369,80 @@
+   item
+ end
+ 
++def create_campaign(params)
++  id = params["id"]
++  name = params["name"]
++  dm = params["dm"]
++  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if CAMPAIGNS.key?(id)
++
++  campaign = {
++    "id" => id,
++    "name" => name,
++    "dm" => dm,
++    "characters" => [],
++    "events" => []
++  }
++  CAMPAIGNS[id] = campaign
++  $storage.save_campaign(campaign)
++  campaign_response(campaign)
++end
++
++def campaign_response(campaign)
++  {
++    "id" => campaign["id"],
++    "name" => campaign["name"],
++    "dm" => campaign["dm"]
++  }
++end
++
++def add_campaign_character(campaign, params)
++  id = params["id"]
++  name = params["name"]
++  level = params["level"]
++  character_class = params["class"]
++  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
++  raise ArgumentError unless integer_value?(level)
++  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
++
++  character = {
++    "id" => id,
++    "name" => name,
++    "level" => level,
++    "class" => character_class
++  }
++  campaign["characters"] << character
++  $storage.save_campaign(campaign)
++  character
++end
++
++def add_campaign_event(campaign, params)
++  id = params["id"]
++  kind = params["kind"]
++  summary = params["summary"]
++  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
++
++  event = {
++    "id" => id,
++    "kind" => kind,
++    "summary" => summary
++  }
++  campaign["events"] << event
++  $storage.save_campaign(campaign)
++  {
++    "id" => id,
++    "kind" => kind
++  }
++end
++
++def campaign_state(campaign)
++  campaign_response(campaign).merge(
++    "characters" => campaign["characters"],
++    "log_count" => campaign["events"].length
++  )
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -635,6 +726,13 @@
+     return json_response(200, item)
+   end
+ 
++  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(200, campaign_state(campaign))
++  end
++
+   unless method == "POST"
+     return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+   end
+@@ -645,9 +743,14 @@
+     COMBAT_SESSIONS.clear
+     MONSTERS.clear
+     ITEMS.clear
++    CAMPAIGNS.clear
+     return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+   end
+ 
++  if path == "/v1/campaigns"
++    return json_response(201, create_campaign(parse_json_body(body)))
++  end
++
+   if path == "/v1/compendium/monsters"
+     return json_response(201, create_monster(parse_json_body(body)))
+   end
+@@ -682,6 +785,20 @@
+     return json_response(200, advance_combat_session(session))
+   end
+ 
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
++  end
++
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
++  end
++
+   params = parse_json_body(body)
+   response = case path
+              when "/v1/dice/stats" then dice_stats(params)
+@@ -702,6 +819,8 @@
+   json_response(409, { "error" => "duplicate username" })
+ rescue DuplicateSlugError
+   json_response(409, { "error" => "duplicate slug" })
++rescue DuplicateIdError
++  json_response(409, { "error" => "duplicate id" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+@@ -731,6 +850,7 @@
+ COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+ MONSTERS.replace($storage.load_monsters)
+ ITEMS.replace($storage.load_items)
++CAMPAIGNS.replace($storage.load_campaigns)
+ 
+ port = Integer(ENV.fetch("PORT"))
+ server = TCPServer.new("127.0.0.1", port)
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index f8c99f9be632081f9fad5d371700328b23dfea3b..de9a4b8c8779ff26e6e6eaa966efcaa0df561007
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -27,11 +27,13 @@
+ USERS = {}
+ MONSTERS = {}
+ ITEMS = {}
++CAMPAIGNS = {}
+ DB_PATH = File.expand_path("game.db", __dir__)
+ SCHEMA_VERSION = 1
+ 
+ class DuplicateUsernameError < StandardError; end
+ class DuplicateSlugError < StandardError; end
++class DuplicateIdError < StandardError; end
+ class BadCredentialsError < StandardError; end
+ 
+ class SQLiteStorage
+@@ -79,6 +81,10 @@
+         slug TEXT PRIMARY KEY,
+         data TEXT NOT NULL
+       );
++      CREATE TABLE IF NOT EXISTS campaigns (
++        id TEXT PRIMARY KEY,
++        data TEXT NOT NULL
++      );
+       INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+     SQL
+   end
+@@ -94,6 +100,7 @@
+       DROP TABLE IF EXISTS combat_sessions;
+       DROP TABLE IF EXISTS monsters;
+       DROP TABLE IF EXISTS items;
++      DROP TABLE IF EXISTS campaigns;
+       DROP TABLE IF EXISTS metadata;
+     SQL
+     initialize_schema
+@@ -139,6 +146,16 @@
+     execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+   end
+ 
++  def load_campaigns
++    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
++      campaigns[row["id"]] = JSON.parse(row["data"])
++    end
++  end
++
++  def save_campaign(campaign)
++    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
++  end
++
+   def close
+     @close.call(@db) if @close && @db
+   end
+@@ -352,6 +369,80 @@
+   item
+ end
+ 
++def create_campaign(params)
++  id = params["id"]
++  name = params["name"]
++  dm = params["dm"]
++  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if CAMPAIGNS.key?(id)
++
++  campaign = {
++    "id" => id,
++    "name" => name,
++    "dm" => dm,
++    "characters" => [],
++    "events" => []
++  }
++  CAMPAIGNS[id] = campaign
++  $storage.save_campaign(campaign)
++  campaign_response(campaign)
++end
++
++def campaign_response(campaign)
++  {
++    "id" => campaign["id"],
++    "name" => campaign["name"],
++    "dm" => campaign["dm"]
++  }
++end
++
++def add_campaign_character(campaign, params)
++  id = params["id"]
++  name = params["name"]
++  level = params["level"]
++  character_class = params["class"]
++  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
++  raise ArgumentError unless integer_value?(level)
++  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
++
++  character = {
++    "id" => id,
++    "name" => name,
++    "level" => level,
++    "class" => character_class
++  }
++  campaign["characters"] << character
++  $storage.save_campaign(campaign)
++  character
++end
++
++def add_campaign_event(campaign, params)
++  id = params["id"]
++  kind = params["kind"]
++  summary = params["summary"]
++  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
++
++  event = {
++    "id" => id,
++    "kind" => kind,
++    "summary" => summary
++  }
++  campaign["events"] << event
++  $storage.save_campaign(campaign)
++  {
++    "id" => id,
++    "kind" => kind
++  }
++end
++
++def campaign_state(campaign)
++  campaign_response(campaign).merge(
++    "characters" => campaign["characters"],
++    "log_count" => campaign["events"].length
++  )
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -635,6 +726,13 @@
+     return json_response(200, item)
+   end
+ 
++  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(200, campaign_state(campaign))
++  end
++
+   unless method == "POST"
+     return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+   end
+@@ -645,9 +743,14 @@
+     COMBAT_SESSIONS.clear
+     MONSTERS.clear
+     ITEMS.clear
++    CAMPAIGNS.clear
+     return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+   end
+ 
++  if path == "/v1/campaigns"
++    return json_response(201, create_campaign(parse_json_body(body)))
++  end
++
+   if path == "/v1/compendium/monsters"
+     return json_response(201, create_monster(parse_json_body(body)))
+   end
+@@ -682,6 +785,20 @@
+     return json_response(200, advance_combat_session(session))
+   end
+ 
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
++  end
++
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
++  end
++
+   params = parse_json_body(body)
+   response = case path
+              when "/v1/dice/stats" then dice_stats(params)
+@@ -702,6 +819,8 @@
+   json_response(409, { "error" => "duplicate username" })
+ rescue DuplicateSlugError
+   json_response(409, { "error" => "duplicate slug" })
++rescue DuplicateIdError
++  json_response(409, { "error" => "duplicate id" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+@@ -731,6 +850,7 @@
+ COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+ MONSTERS.replace($storage.load_monsters)
+ ITEMS.replace($storage.load_items)
++CAMPAIGNS.replace($storage.load_campaigns)
+ 
+ port = Integer(ENV.fetch("PORT"))
+ server = TCPServer.new("127.0.0.1", port)
+
+codex
+The campaign endpoints are now wired into the same SQLite-backed record flow as compendium data. I’m checking syntax and reviewing the diff for accidental behavior changes before I stop.
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc 'git diff -- server.rb run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index f8c99f9be632081f9fad5d371700328b23dfea3b..de9a4b8c8779ff26e6e6eaa966efcaa0df561007
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -27,11 +27,13 @@
+ USERS = {}
+ MONSTERS = {}
+ ITEMS = {}
++CAMPAIGNS = {}
+ DB_PATH = File.expand_path("game.db", __dir__)
+ SCHEMA_VERSION = 1
+ 
+ class DuplicateUsernameError < StandardError; end
+ class DuplicateSlugError < StandardError; end
++class DuplicateIdError < StandardError; end
+ class BadCredentialsError < StandardError; end
+ 
+ class SQLiteStorage
+@@ -79,6 +81,10 @@
+         slug TEXT PRIMARY KEY,
+         data TEXT NOT NULL
+       );
++      CREATE TABLE IF NOT EXISTS campaigns (
++        id TEXT PRIMARY KEY,
++        data TEXT NOT NULL
++      );
+       INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+     SQL
+   end
+@@ -94,6 +100,7 @@
+       DROP TABLE IF EXISTS combat_sessions;
+       DROP TABLE IF EXISTS monsters;
+       DROP TABLE IF EXISTS items;
++      DROP TABLE IF EXISTS campaigns;
+       DROP TABLE IF EXISTS metadata;
+     SQL
+     initialize_schema
+@@ -139,6 +146,16 @@
+     execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+   end
+ 
++  def load_campaigns
++    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
++      campaigns[row["id"]] = JSON.parse(row["data"])
++    end
++  end
++
++  def save_campaign(campaign)
++    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
++  end
++
+   def close
+     @close.call(@db) if @close && @db
+   end
+@@ -352,6 +369,80 @@
+   item
+ end
+ 
++def create_campaign(params)
++  id = params["id"]
++  name = params["name"]
++  dm = params["dm"]
++  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if CAMPAIGNS.key?(id)
++
++  campaign = {
++    "id" => id,
++    "name" => name,
++    "dm" => dm,
++    "characters" => [],
++    "events" => []
++  }
++  CAMPAIGNS[id] = campaign
++  $storage.save_campaign(campaign)
++  campaign_response(campaign)
++end
++
++def campaign_response(campaign)
++  {
++    "id" => campaign["id"],
++    "name" => campaign["name"],
++    "dm" => campaign["dm"]
++  }
++end
++
++def add_campaign_character(campaign, params)
++  id = params["id"]
++  name = params["name"]
++  level = params["level"]
++  character_class = params["class"]
++  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
++  raise ArgumentError unless integer_value?(level)
++  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
++
++  character = {
++    "id" => id,
++    "name" => name,
++    "level" => level,
++    "class" => character_class
++  }
++  campaign["characters"] << character
++  $storage.save_campaign(campaign)
++  character
++end
++
++def add_campaign_event(campaign, params)
++  id = params["id"]
++  kind = params["kind"]
++  summary = params["summary"]
++  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
++
++  event = {
++    "id" => id,
++    "kind" => kind,
++    "summary" => summary
++  }
++  campaign["events"] << event
++  $storage.save_campaign(campaign)
++  {
++    "id" => id,
++    "kind" => kind
++  }
++end
++
++def campaign_state(campaign)
++  campaign_response(campaign).merge(
++    "characters" => campaign["characters"],
++    "log_count" => campaign["events"].length
++  )
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -635,6 +726,13 @@
+     return json_response(200, item)
+   end
+ 
++  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(200, campaign_state(campaign))
++  end
++
+   unless method == "POST"
+     return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+   end
+@@ -645,9 +743,14 @@
+     COMBAT_SESSIONS.clear
+     MONSTERS.clear
+     ITEMS.clear
++    CAMPAIGNS.clear
+     return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+   end
+ 
++  if path == "/v1/campaigns"
++    return json_response(201, create_campaign(parse_json_body(body)))
++  end
++
+   if path == "/v1/compendium/monsters"
+     return json_response(201, create_monster(parse_json_body(body)))
+   end
+@@ -682,6 +785,20 @@
+     return json_response(200, advance_combat_session(session))
+   end
+ 
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
++  end
++
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
++  end
++
+   params = parse_json_body(body)
+   response = case path
+              when "/v1/dice/stats" then dice_stats(params)
+@@ -702,6 +819,8 @@
+   json_response(409, { "error" => "duplicate username" })
+ rescue DuplicateSlugError
+   json_response(409, { "error" => "duplicate slug" })
++rescue DuplicateIdError
++  json_response(409, { "error" => "duplicate id" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+@@ -731,6 +850,7 @@
+ COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+ MONSTERS.replace($storage.load_monsters)
+ ITEMS.replace($storage.load_items)
++CAMPAIGNS.replace($storage.load_campaigns)
+ 
+ port = Integer(ENV.fetch("PORT"))
+ server = TCPServer.new("127.0.0.1", port)
+
+codex
+`ruby -c` passes. This run directory is untracked from the parent repository’s perspective, so `git diff` does not show file-level changes; I’m doing a direct file read around the added sections instead.
+exec
+/bin/zsh -lc "sed -n '1,150p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "openssl"
+require "socket"
+require "fiddle"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+ABILITY_NAMES = %w[str dex con int wis cha].freeze
+COMBAT_SESSIONS = {}
+USERS = {}
+MONSTERS = {}
+ITEMS = {}
+CAMPAIGNS = {}
+DB_PATH = File.expand_path("game.db", __dir__)
+SCHEMA_VERSION = 1
+
+class DuplicateUsernameError < StandardError; end
+class DuplicateSlugError < StandardError; end
+class DuplicateIdError < StandardError; end
+class BadCredentialsError < StandardError; end
+
+class SQLiteStorage
+  SQLITE_OK = 0
+  POINTER_FORMAT = Fiddle::SIZEOF_VOIDP == 8 ? "Q!" : "L!"
+
+  def initialize(path)
+    @path = path
+    @handle = sqlite_handle
+    @db_pointer = Fiddle::Pointer.malloc(Fiddle::SIZEOF_VOIDP)
+
+    open = Fiddle::Function.new(@handle["sqlite3_open"], [Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP], Fiddle::TYPE_INT)
+    result = open.call(@path, @db_pointer)
+    raise "sqlite open failed" unless result == SQLITE_OK
+
+    @db = Fiddle::Pointer.new(pointer_value(@db_pointer))
+    @exec = Fiddle::Function.new(
+      @handle["sqlite3_exec"],
+      [Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP, Fiddle::TYPE_VOIDP],
+      Fiddle::TYPE_INT
+    )
+    @close = Fiddle::Function.new(@handle["sqlite3_close"], [Fiddle::TYPE_VOIDP], Fiddle::TYPE_INT)
+    initialize_schema
+  end
+
+  def initialize_schema
+    execute(<<~SQL)
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS combat_sessions (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS monsters (
+        slug TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS items (
+        slug TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+    SQL
+  end
+
+  def initialized?
+    rows = select("SELECT value FROM metadata WHERE key = 'schema_version'")
+    rows.first && rows.first["value"] == SCHEMA_VERSION.to_s
+  end
+
+  def reset!
+    execute(<<~SQL)
+      DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS combat_sessions;
+      DROP TABLE IF EXISTS monsters;
+      DROP TABLE IF EXISTS items;
+      DROP TABLE IF EXISTS campaigns;
+      DROP TABLE IF EXISTS metadata;
+    SQL
+    initialize_schema
+  end
+
+  def load_users
+    select("SELECT username, data FROM users").each_with_object({}) do |row, users|
+      users[row["username"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_user(user)
+    execute("INSERT OR REPLACE INTO users (username, data) VALUES (#{quote(user["username"])}, #{quote(JSON.generate(user))})")
+  end
+
+  def load_combat_sessions
+    select("SELECT id, data FROM combat_sessions").each_with_object({}) do |row, sessions|
+      sessions[row["id"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_combat_session(session)
+    execute("INSERT OR REPLACE INTO combat_sessions (id, data) VALUES (#{quote(session["id"])}, #{quote(JSON.generate(session))})")
+  end
+
+  def load_monsters
+    select("SELECT slug, data FROM monsters").each_with_object({}) do |row, monsters|
+      monsters[row["slug"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_monster(monster)
+    execute("INSERT OR REPLACE INTO monsters (slug, data) VALUES (#{quote(monster["slug"])}, #{quote(JSON.generate(monster))})")
+  end
+
+  def load_items
+    select("SELECT slug, data FROM items").each_with_object({}) do |row, items|
+      items[row["slug"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_item(item)
+    execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+  end
+
+  def load_campaigns
+    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
+
+exec
+/bin/zsh -lc "sed -n '330,460p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+    "armor_class" => armor_class,
+    "hit_points" => hit_points,
+    "tags" => tags
+  }
+  MONSTERS[slug] = monster
+  $storage.save_monster(monster)
+  monster_response(monster)
+end
+
+def monster_response(monster)
+  {
+    "slug" => monster["slug"],
+    "name" => monster["name"],
+    "cr" => monster["cr"],
+    "armor_class" => monster["armor_class"],
+    "hit_points" => monster["hit_points"]
+  }
+end
+
+def create_item(params)
+  slug = params["slug"]
+  name = params["name"]
+  type = params["type"]
+  rarity = params["rarity"]
+  cost_gp = params["cost_gp"]
+  raise ArgumentError unless valid_slug?(slug)
+  raise ArgumentError unless [name, type, rarity].all? { |value| non_empty_string?(value) }
+  raise ArgumentError unless integer_value?(cost_gp)
+  raise DuplicateSlugError if ITEMS.key?(slug)
+
+  item = {
+    "slug" => slug,
+    "name" => name,
+    "type" => type,
+    "rarity" => rarity,
+    "cost_gp" => cost_gp
+  }
+  ITEMS[slug] = item
+  $storage.save_item(item)
+  item
+end
+
+def create_campaign(params)
+  id = params["id"]
+  name = params["name"]
+  dm = params["dm"]
+  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
+  raise DuplicateIdError if CAMPAIGNS.key?(id)
+
+  campaign = {
+    "id" => id,
+    "name" => name,
+    "dm" => dm,
+    "characters" => [],
+    "events" => []
+  }
+  CAMPAIGNS[id] = campaign
+  $storage.save_campaign(campaign)
+  campaign_response(campaign)
+end
+
+def campaign_response(campaign)
+  {
+    "id" => campaign["id"],
+    "name" => campaign["name"],
+    "dm" => campaign["dm"]
+  }
+end
+
+def add_campaign_character(campaign, params)
+  id = params["id"]
+  name = params["name"]
+  level = params["level"]
+  character_class = params["class"]
+  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
+  raise ArgumentError unless integer_value?(level)
+  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
+
+  character = {
+    "id" => id,
+    "name" => name,
+    "level" => level,
+    "class" => character_class
+  }
+  campaign["characters"] << character
+  $storage.save_campaign(campaign)
+  character
+end
+
+def add_campaign_event(campaign, params)
+  id = params["id"]
+  kind = params["kind"]
+  summary = params["summary"]
+  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
+  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
+
+  event = {
+    "id" => id,
+    "kind" => kind,
+    "summary" => summary
+  }
+  campaign["events"] << event
+  $storage.save_campaign(campaign)
+  {
+    "id" => id,
+    "kind" => kind
+  }
+end
+
+def campaign_state(campaign)
+  campaign_response(campaign).merge(
+    "characters" => campaign["characters"],
+    "log_count" => campaign["events"].length
+  )
+end
+
+def dice_stats(params)
+  expression = params["expression"]
+  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+  raise ArgumentError unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  average = (count * (sides + 1) / 2.0) + modifier
+  average = average.to_i if average == average.to_i
+
+  {
+
+exec
+/bin/zsh -lc "sed -n '620,750p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+    raise ArgumentError unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+       .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+end
+
+def serialize_combat_session(session)
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "order" => session["order"]
+  }
+end
+
+def create_combat_session(params)
+  id = params["id"]
+  raise ArgumentError unless id.is_a?(String) && !COMBAT_SESSIONS.key?(id)
+
+  order = combat_order(params["combatants"])
+  conditions = {}
+  order.each { |combatant| conditions[combatant["name"]] ||= [] }
+
+  session = {
+    "id" => id,
+    "round" => 1,
+    "turn_index" => 0,
+    "order" => order,
+    "conditions" => conditions
+  }
+  COMBAT_SESSIONS[id] = session
+  $storage.save_combat_session(session)
+  serialize_combat_session(session)
+end
+
+def combat_conditions_payload(session, include_empty: [])
+  session["conditions"].each_with_object({}) do |(name, conditions), payload|
+    payload[name] = conditions if !conditions.empty? || include_empty.include?(name)
+  end
+end
+
+def add_combat_condition(session, params)
+  target = params["target"]
+  condition = params["condition"]
+  duration = params["duration_rounds"]
+  raise ArgumentError unless session["conditions"].key?(target)
+  raise ArgumentError unless condition.is_a?(String) && integer_value?(duration) && duration.positive?
+
+  session["conditions"][target] << { "condition" => condition, "remaining_rounds" => duration }
+  $storage.save_combat_session(session)
+  {
+    "target" => target,
+    "conditions" => session["conditions"][target]
+  }
+end
+
+def advance_combat_session(session)
+  session["turn_index"] += 1
+  if session["turn_index"] >= session["order"].length
+    session["turn_index"] = 0
+    session["round"] += 1
+  end
+
+  active_name = session["order"][session["turn_index"]]["name"]
+  active_had_conditions = !session["conditions"][active_name].empty?
+  session["conditions"][active_name].each do |condition|
+    condition["remaining_rounds"] -= 1
+  end
+  session["conditions"][active_name].reject! { |condition| condition["remaining_rounds"].zero? }
+  $storage.save_combat_session(session)
+
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "conditions" => combat_conditions_payload(session, include_empty: active_had_conditions ? [active_name] : [])
+  }
+end
+
+def route(method, path, body)
+  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+  return json_response(200, { "driver" => "sqlite", "schema_version" => SCHEMA_VERSION, "initialized" => $storage.initialized? }) if method == "GET" && path == "/v1/storage/status"
+
+  if method == "GET" && (match = path.match(%r{\A/v1/compendium/monsters/([^/]+)\z}))
+    monster = MONSTERS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless monster
+
+    return json_response(200, monster)
+  end
+
+  if method == "GET" && (match = path.match(%r{\A/v1/compendium/items/([^/]+)\z}))
+    item = ITEMS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless item
+
+    return json_response(200, item)
+  end
+
+  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
+    campaign = CAMPAIGNS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless campaign
+
+    return json_response(200, campaign_state(campaign))
+  end
+
+  unless method == "POST"
+    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+  end
+
+  if path == "/v1/storage/reset"
+    $storage.reset!
+    USERS.clear
+    COMBAT_SESSIONS.clear
+    MONSTERS.clear
+    ITEMS.clear
+    CAMPAIGNS.clear
+    return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+  end
+
+  if path == "/v1/campaigns"
+
+exec
+/bin/zsh -lc "sed -n '750,790p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+  if path == "/v1/campaigns"
+    return json_response(201, create_campaign(parse_json_body(body)))
+  end
+
+  if path == "/v1/compendium/monsters"
+    return json_response(201, create_monster(parse_json_body(body)))
+  end
+
+  if path == "/v1/compendium/items"
+    return json_response(201, create_item(parse_json_body(body)))
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/register"
+    return json_response(201, register_user(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/login"
+    return json_response(200, login_user(parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/advance\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, advance_combat_session(session))
+  end
+
+  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
+    campaign = CAMPAIGNS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless campaign
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index f8c99f9be632081f9fad5d371700328b23dfea3b..de9a4b8c8779ff26e6e6eaa966efcaa0df561007
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -27,11 +27,13 @@
+ USERS = {}
+ MONSTERS = {}
+ ITEMS = {}
++CAMPAIGNS = {}
+ DB_PATH = File.expand_path("game.db", __dir__)
+ SCHEMA_VERSION = 1
+ 
+ class DuplicateUsernameError < StandardError; end
+ class DuplicateSlugError < StandardError; end
++class DuplicateIdError < StandardError; end
+ class BadCredentialsError < StandardError; end
+ 
+ class SQLiteStorage
+@@ -79,6 +81,10 @@
+         slug TEXT PRIMARY KEY,
+         data TEXT NOT NULL
+       );
++      CREATE TABLE IF NOT EXISTS campaigns (
++        id TEXT PRIMARY KEY,
++        data TEXT NOT NULL
++      );
+       INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+     SQL
+   end
+@@ -94,6 +100,7 @@
+       DROP TABLE IF EXISTS combat_sessions;
+       DROP TABLE IF EXISTS monsters;
+       DROP TABLE IF EXISTS items;
++      DROP TABLE IF EXISTS campaigns;
+       DROP TABLE IF EXISTS metadata;
+     SQL
+     initialize_schema
+@@ -139,6 +146,16 @@
+     execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+   end
+ 
++  def load_campaigns
++    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
++      campaigns[row["id"]] = JSON.parse(row["data"])
++    end
++  end
++
++  def save_campaign(campaign)
++    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
++  end
++
+   def close
+     @close.call(@db) if @close && @db
+   end
+@@ -352,6 +369,80 @@
+   item
+ end
+ 
++def create_campaign(params)
++  id = params["id"]
++  name = params["name"]
++  dm = params["dm"]
++  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if CAMPAIGNS.key?(id)
++
++  campaign = {
++    "id" => id,
++    "name" => name,
++    "dm" => dm,
++    "characters" => [],
++    "events" => []
++  }
++  CAMPAIGNS[id] = campaign
++  $storage.save_campaign(campaign)
++  campaign_response(campaign)
++end
++
++def campaign_response(campaign)
++  {
++    "id" => campaign["id"],
++    "name" => campaign["name"],
++    "dm" => campaign["dm"]
++  }
++end
++
++def add_campaign_character(campaign, params)
++  id = params["id"]
++  name = params["name"]
++  level = params["level"]
++  character_class = params["class"]
++  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
++  raise ArgumentError unless integer_value?(level)
++  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
++
++  character = {
++    "id" => id,
++    "name" => name,
++    "level" => level,
++    "class" => character_class
++  }
++  campaign["characters"] << character
++  $storage.save_campaign(campaign)
++  character
++end
++
++def add_campaign_event(campaign, params)
++  id = params["id"]
++  kind = params["kind"]
++  summary = params["summary"]
++  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
++
++  event = {
++    "id" => id,
++    "kind" => kind,
++    "summary" => summary
++  }
++  campaign["events"] << event
++  $storage.save_campaign(campaign)
++  {
++    "id" => id,
++    "kind" => kind
++  }
++end
++
++def campaign_state(campaign)
++  campaign_response(campaign).merge(
++    "characters" => campaign["characters"],
++    "log_count" => campaign["events"].length
++  )
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -635,6 +726,13 @@
+     return json_response(200, item)
+   end
+ 
++  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(200, campaign_state(campaign))
++  end
++
+   unless method == "POST"
+     return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+   end
+@@ -645,9 +743,14 @@
+     COMBAT_SESSIONS.clear
+     MONSTERS.clear
+     ITEMS.clear
++    CAMPAIGNS.clear
+     return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+   end
+ 
++  if path == "/v1/campaigns"
++    return json_response(201, create_campaign(parse_json_body(body)))
++  end
++
+   if path == "/v1/compendium/monsters"
+     return json_response(201, create_monster(parse_json_body(body)))
+   end
+@@ -682,6 +785,20 @@
+     return json_response(200, advance_combat_session(session))
+   end
+ 
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
++  end
++
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
++  end
++
+   params = parse_json_body(body)
+   response = case path
+              when "/v1/dice/stats" then dice_stats(params)
+@@ -702,6 +819,8 @@
+   json_response(409, { "error" => "duplicate username" })
+ rescue DuplicateSlugError
+   json_response(409, { "error" => "duplicate slug" })
++rescue DuplicateIdError
++  json_response(409, { "error" => "duplicate id" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+@@ -731,6 +850,7 @@
+ COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+ MONSTERS.replace($storage.load_monsters)
+ ITEMS.replace($storage.load_items)
++CAMPAIGNS.replace($storage.load_campaigns)
+ 
+ port = Integer(ENV.fetch("PORT"))
+ server = TCPServer.new("127.0.0.1", port)
+
+exec
+/bin/zsh -lc "sed -n '130,180p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+    select("SELECT slug, data FROM monsters").each_with_object({}) do |row, monsters|
+      monsters[row["slug"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_monster(monster)
+    execute("INSERT OR REPLACE INTO monsters (slug, data) VALUES (#{quote(monster["slug"])}, #{quote(JSON.generate(monster))})")
+  end
+
+  def load_items
+    select("SELECT slug, data FROM items").each_with_object({}) do |row, items|
+      items[row["slug"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_item(item)
+    execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+  end
+
+  def load_campaigns
+    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
+      campaigns[row["id"]] = JSON.parse(row["data"])
+    end
+  end
+
+  def save_campaign(campaign)
+    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
+  end
+
+  def close
+    @close.call(@db) if @close && @db
+  end
+
+  private
+
+  def sqlite_handle
+    ["libsqlite3.dylib", "libsqlite3.so.0", "libsqlite3.so"].each do |name|
+      return Fiddle.dlopen(name)
+    rescue Fiddle::DLError
+      next
+    end
+    raise "sqlite library not found"
+  end
+
+  def execute(sql)
+    result = @exec.call(@db, sql, nil, nil, nil)
+    raise "sqlite exec failed" unless result == SQLITE_OK
+  end
+
+  def select(sql)
+    rows = []
+
+exec
+/bin/zsh -lc "sed -n '750,830p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+  if path == "/v1/campaigns"
+    return json_response(201, create_campaign(parse_json_body(body)))
+  end
+
+  if path == "/v1/compendium/monsters"
+    return json_response(201, create_monster(parse_json_body(body)))
+  end
+
+  if path == "/v1/compendium/items"
+    return json_response(201, create_item(parse_json_body(body)))
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/register"
+    return json_response(201, register_user(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/login"
+    return json_response(200, login_user(parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/advance\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, advance_combat_session(session))
+  end
+
+  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
+    campaign = CAMPAIGNS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless campaign
+
+    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
+    campaign = CAMPAIGNS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless campaign
+
+    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
+  end
+
+  params = parse_json_body(body)
+  response = case path
+             when "/v1/dice/stats" then dice_stats(params)
+             when "/v1/checks/ability" then ability_check(params)
+             when "/v1/characters/ability-modifier" then character_ability_modifier(params)
+             when "/v1/characters/proficiency" then character_proficiency(params)
+             when "/v1/characters/derived-stats" then character_derived_stats(params)
+             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
+             when "/v1/initiative/order" then initiative_order(params)
+             else
+               return json_response(404, { "error" => "not found" })
+             end
+
+  json_response(200, response)
+rescue BadCredentialsError
+  json_response(401, { "error" => "bad credentials" })
+rescue DuplicateUsernameError
+  json_response(409, { "error" => "duplicate username" })
+rescue DuplicateSlugError
+  json_response(409, { "error" => "duplicate slug" })
+rescue DuplicateIdError
+  json_response(409, { "error" => "duplicate id" })
+rescue ArgumentError
+  json_response(400, { "error" => "bad request" })
+end
+
+def read_request(client)
+  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
+  return unless request_line
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index f8c99f9be632081f9fad5d371700328b23dfea3b..de9a4b8c8779ff26e6e6eaa966efcaa0df561007
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -27,11 +27,13 @@
+ USERS = {}
+ MONSTERS = {}
+ ITEMS = {}
++CAMPAIGNS = {}
+ DB_PATH = File.expand_path("game.db", __dir__)
+ SCHEMA_VERSION = 1
+ 
+ class DuplicateUsernameError < StandardError; end
+ class DuplicateSlugError < StandardError; end
++class DuplicateIdError < StandardError; end
+ class BadCredentialsError < StandardError; end
+ 
+ class SQLiteStorage
+@@ -79,6 +81,10 @@
+         slug TEXT PRIMARY KEY,
+         data TEXT NOT NULL
+       );
++      CREATE TABLE IF NOT EXISTS campaigns (
++        id TEXT PRIMARY KEY,
++        data TEXT NOT NULL
++      );
+       INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+     SQL
+   end
+@@ -94,6 +100,7 @@
+       DROP TABLE IF EXISTS combat_sessions;
+       DROP TABLE IF EXISTS monsters;
+       DROP TABLE IF EXISTS items;
++      DROP TABLE IF EXISTS campaigns;
+       DROP TABLE IF EXISTS metadata;
+     SQL
+     initialize_schema
+@@ -139,6 +146,16 @@
+     execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+   end
+ 
++  def load_campaigns
++    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
++      campaigns[row["id"]] = JSON.parse(row["data"])
++    end
++  end
++
++  def save_campaign(campaign)
++    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
++  end
++
+   def close
+     @close.call(@db) if @close && @db
+   end
+@@ -352,6 +369,80 @@
+   item
+ end
+ 
++def create_campaign(params)
++  id = params["id"]
++  name = params["name"]
++  dm = params["dm"]
++  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if CAMPAIGNS.key?(id)
++
++  campaign = {
++    "id" => id,
++    "name" => name,
++    "dm" => dm,
++    "characters" => [],
++    "events" => []
++  }
++  CAMPAIGNS[id] = campaign
++  $storage.save_campaign(campaign)
++  campaign_response(campaign)
++end
++
++def campaign_response(campaign)
++  {
++    "id" => campaign["id"],
++    "name" => campaign["name"],
++    "dm" => campaign["dm"]
++  }
++end
++
++def add_campaign_character(campaign, params)
++  id = params["id"]
++  name = params["name"]
++  level = params["level"]
++  character_class = params["class"]
++  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
++  raise ArgumentError unless integer_value?(level)
++  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
++
++  character = {
++    "id" => id,
++    "name" => name,
++    "level" => level,
++    "class" => character_class
++  }
++  campaign["characters"] << character
++  $storage.save_campaign(campaign)
++  character
++end
++
++def add_campaign_event(campaign, params)
++  id = params["id"]
++  kind = params["kind"]
++  summary = params["summary"]
++  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
++
++  event = {
++    "id" => id,
++    "kind" => kind,
++    "summary" => summary
++  }
++  campaign["events"] << event
++  $storage.save_campaign(campaign)
++  {
++    "id" => id,
++    "kind" => kind
++  }
++end
++
++def campaign_state(campaign)
++  campaign_response(campaign).merge(
++    "characters" => campaign["characters"],
++    "log_count" => campaign["events"].length
++  )
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -635,6 +726,13 @@
+     return json_response(200, item)
+   end
+ 
++  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(200, campaign_state(campaign))
++  end
++
+   unless method == "POST"
+     return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+   end
+@@ -645,9 +743,14 @@
+     COMBAT_SESSIONS.clear
+     MONSTERS.clear
+     ITEMS.clear
++    CAMPAIGNS.clear
+     return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+   end
+ 
++  if path == "/v1/campaigns"
++    return json_response(201, create_campaign(parse_json_body(body)))
++  end
++
+   if path == "/v1/compendium/monsters"
+     return json_response(201, create_monster(parse_json_body(body)))
+   end
+@@ -682,6 +785,20 @@
+     return json_response(200, advance_combat_session(session))
+   end
+ 
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
++  end
++
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
++  end
++
+   params = parse_json_body(body)
+   response = case path
+              when "/v1/dice/stats" then dice_stats(params)
+@@ -702,6 +819,8 @@
+   json_response(409, { "error" => "duplicate username" })
+ rescue DuplicateSlugError
+   json_response(409, { "error" => "duplicate slug" })
++rescue DuplicateIdError
++  json_response(409, { "error" => "duplicate id" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+@@ -731,6 +850,7 @@
+ COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+ MONSTERS.replace($storage.load_monsters)
+ ITEMS.replace($storage.load_items)
++CAMPAIGNS.replace($storage.load_campaigns)
+ 
+ port = Integer(ENV.fetch("PORT"))
+ server = TCPServer.new("127.0.0.1", port)
+
+codex
+Implemented campaign state APIs in [server.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb):
+
+- Added SQLite-backed `campaigns` storage.
+- Added `POST /v1/campaigns`.
+- Added `POST /v1/campaigns/:id/characters`.
+- Added `POST /v1/campaigns/:id/events`.
+- Added `GET /v1/campaigns/:id/state`.
+- Updated storage reset to clear campaigns too.
+- Preserved `run.sh`; it still starts `ruby server.rb` in the foreground.
+
+Verification: `ruby -c server.rb` passes. I did not start the HTTP server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index f8c99f9be632081f9fad5d371700328b23dfea3b..de9a4b8c8779ff26e6e6eaa966efcaa0df561007
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -27,11 +27,13 @@
+ USERS = {}
+ MONSTERS = {}
+ ITEMS = {}
++CAMPAIGNS = {}
+ DB_PATH = File.expand_path("game.db", __dir__)
+ SCHEMA_VERSION = 1
+ 
+ class DuplicateUsernameError < StandardError; end
+ class DuplicateSlugError < StandardError; end
++class DuplicateIdError < StandardError; end
+ class BadCredentialsError < StandardError; end
+ 
+ class SQLiteStorage
+@@ -79,6 +81,10 @@
+         slug TEXT PRIMARY KEY,
+         data TEXT NOT NULL
+       );
++      CREATE TABLE IF NOT EXISTS campaigns (
++        id TEXT PRIMARY KEY,
++        data TEXT NOT NULL
++      );
+       INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', '#{SCHEMA_VERSION}');
+     SQL
+   end
+@@ -94,6 +100,7 @@
+       DROP TABLE IF EXISTS combat_sessions;
+       DROP TABLE IF EXISTS monsters;
+       DROP TABLE IF EXISTS items;
++      DROP TABLE IF EXISTS campaigns;
+       DROP TABLE IF EXISTS metadata;
+     SQL
+     initialize_schema
+@@ -139,6 +146,16 @@
+     execute("INSERT OR REPLACE INTO items (slug, data) VALUES (#{quote(item["slug"])}, #{quote(JSON.generate(item))})")
+   end
+ 
++  def load_campaigns
++    select("SELECT id, data FROM campaigns").each_with_object({}) do |row, campaigns|
++      campaigns[row["id"]] = JSON.parse(row["data"])
++    end
++  end
++
++  def save_campaign(campaign)
++    execute("INSERT OR REPLACE INTO campaigns (id, data) VALUES (#{quote(campaign["id"])}, #{quote(JSON.generate(campaign))})")
++  end
++
+   def close
+     @close.call(@db) if @close && @db
+   end
+@@ -352,6 +369,80 @@
+   item
+ end
+ 
++def create_campaign(params)
++  id = params["id"]
++  name = params["name"]
++  dm = params["dm"]
++  raise ArgumentError unless [id, name, dm].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if CAMPAIGNS.key?(id)
++
++  campaign = {
++    "id" => id,
++    "name" => name,
++    "dm" => dm,
++    "characters" => [],
++    "events" => []
++  }
++  CAMPAIGNS[id] = campaign
++  $storage.save_campaign(campaign)
++  campaign_response(campaign)
++end
++
++def campaign_response(campaign)
++  {
++    "id" => campaign["id"],
++    "name" => campaign["name"],
++    "dm" => campaign["dm"]
++  }
++end
++
++def add_campaign_character(campaign, params)
++  id = params["id"]
++  name = params["name"]
++  level = params["level"]
++  character_class = params["class"]
++  raise ArgumentError unless [id, name, character_class].all? { |value| non_empty_string?(value) }
++  raise ArgumentError unless integer_value?(level)
++  raise DuplicateIdError if campaign["characters"].any? { |character| character["id"] == id }
++
++  character = {
++    "id" => id,
++    "name" => name,
++    "level" => level,
++    "class" => character_class
++  }
++  campaign["characters"] << character
++  $storage.save_campaign(campaign)
++  character
++end
++
++def add_campaign_event(campaign, params)
++  id = params["id"]
++  kind = params["kind"]
++  summary = params["summary"]
++  raise ArgumentError unless [id, kind, summary].all? { |value| non_empty_string?(value) }
++  raise DuplicateIdError if campaign["events"].any? { |event| event["id"] == id }
++
++  event = {
++    "id" => id,
++    "kind" => kind,
++    "summary" => summary
++  }
++  campaign["events"] << event
++  $storage.save_campaign(campaign)
++  {
++    "id" => id,
++    "kind" => kind
++  }
++end
++
++def campaign_state(campaign)
++  campaign_response(campaign).merge(
++    "characters" => campaign["characters"],
++    "log_count" => campaign["events"].length
++  )
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -635,6 +726,13 @@
+     return json_response(200, item)
+   end
+ 
++  if method == "GET" && (match = path.match(%r{\A/v1/campaigns/([^/]+)/state\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(200, campaign_state(campaign))
++  end
++
+   unless method == "POST"
+     return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+   end
+@@ -645,9 +743,14 @@
+     COMBAT_SESSIONS.clear
+     MONSTERS.clear
+     ITEMS.clear
++    CAMPAIGNS.clear
+     return json_response(200, { "ok" => true, "schema_version" => SCHEMA_VERSION })
+   end
+ 
++  if path == "/v1/campaigns"
++    return json_response(201, create_campaign(parse_json_body(body)))
++  end
++
+   if path == "/v1/compendium/monsters"
+     return json_response(201, create_monster(parse_json_body(body)))
+   end
+@@ -682,6 +785,20 @@
+     return json_response(200, advance_combat_session(session))
+   end
+ 
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/characters\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_character(campaign, parse_json_body(body)))
++  end
++
++  if (match = path.match(%r{\A/v1/campaigns/([^/]+)/events\z}))
++    campaign = CAMPAIGNS[match[1]]
++    return json_response(404, { "error" => "not found" }) unless campaign
++
++    return json_response(201, add_campaign_event(campaign, parse_json_body(body)))
++  end
++
+   params = parse_json_body(body)
+   response = case path
+              when "/v1/dice/stats" then dice_stats(params)
+@@ -702,6 +819,8 @@
+   json_response(409, { "error" => "duplicate username" })
+ rescue DuplicateSlugError
+   json_response(409, { "error" => "duplicate slug" })
++rescue DuplicateIdError
++  json_response(409, { "error" => "duplicate id" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+@@ -731,6 +850,7 @@
+ COMBAT_SESSIONS.replace($storage.load_combat_sessions)
+ MONSTERS.replace($storage.load_monsters)
+ ITEMS.replace($storage.load_items)
++CAMPAIGNS.replace($storage.load_campaigns)
+ 
+ port = Integer(ENV.fetch("PORT"))
+ server = TCPServer.new("127.0.0.1", port)
+
+tokens used
+54,591

@@ -1,0 +1,1778 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f503b-1954-7021-a98c-f48e07dca95a
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-sinatra
+        Language: ruby
+        Framework/runtime: sinatra
+        Lifecycle stage: core
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5, Sinatra 4.2.1, Rack 3.2.6, and Puma 8.0.2.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+
+Previous deterministic failure report:
+
+```text
+server did not become healthy: <urlopen error [Errno 61] Connection refused>
+```
+
+Fix the implementation so the same evaluator suite passes. Do not
+remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the current Sinatra app and startup script first, since the failure is at server boot/health rather than endpoint logic.
+exec
+/bin/zsh -lc 'ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+total 232
+drwxr-xr-x@  17 dorkitude  staff    544 Jul 11 01:11 .
+drwxr-xr-x@ 120 dorkitude  staff   3840 Jul 11 01:07 ..
+-rw-r--r--@   1 dorkitude  staff     94 Jul 11 01:07 Gemfile
+-rw-r--r--@   1 dorkitude  staff   1595 Jul 11 01:10 Gemfile.lock
+-rw-r--r--@   1 dorkitude  staff   4516 Jul 11 01:11 PROMPT.md
+-rw-r--r--@   1 dorkitude  staff    635 Jul 11 01:07 VERSION-PINS.json
+-rw-r--r--@   1 dorkitude  staff    689 Jul 11 01:10 agent_last_message.txt
+-rw-r--r--@   1 dorkitude  staff  69339 Jul 11 01:10 agent_stderr.txt
+-rw-r--r--@   1 dorkitude  staff    690 Jul 11 01:10 agent_stdout.txt
+-rw-r--r--@   1 dorkitude  staff   3738 Jul 11 01:09 app.rb
+-rw-r--r--@   1 dorkitude  staff   3348 Jul 11 01:11 lifecycle-result.json
+-rwxr-xr-x@   1 dorkitude  staff     86 Jul 11 01:07 run.sh
+-rw-r--r--@   1 dorkitude  staff    170 Jul 11 01:11 server_stderr.txt
+-rw-r--r--@   1 dorkitude  staff      0 Jul 11 01:11 server_stdout.txt
+-rw-r--r--@   1 dorkitude  staff    904 Jul 11 01:10 setup.json
+drwxr-xr-x@   4 dorkitude  staff    128 Jul 11 01:11 shots
+drwxr-xr-x@   3 dorkitude  staff     96 Jul 11 01:10 vendor
+
+exec
+/bin/zsh -lc "pwd && rg --files -g '"'!vendor'"' -g '"'!node_modules'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+shots/02_core_bugfix/PROMPT.md
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+Gemfile.lock
+Gemfile
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+app.rb
+agent_stdout.txt
+agent_last_message.txt
+setup.json
+
+codex
+The project is small. I’m reading `run.sh`, the app, and the prior stderr now to find why the evaluator saw connection refused.
+exec
+/bin/zsh -lc "sed -n '1,220p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
+
+exec
+/bin/zsh -lc "sed -n '1,260p' app.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+require 'json'
+require 'sinatra'
+
+set :bind, '127.0.0.1'
+set :port, ENV.fetch('PORT', '4567')
+
+before do
+  content_type :json
+end
+
+helpers do
+  def json_body
+    body = request.body.read
+    body.empty? ? {} : JSON.parse(body)
+  rescue JSON::ParserError
+    halt 400, { error: 'invalid_json' }.to_json
+  end
+
+  def bad_request!
+    halt 400, { error: 'bad_request' }.to_json
+  end
+end
+
+get '/health' do
+  { ok: true }.to_json
+end
+
+post '/v1/dice/stats' do
+  expression = json_body['expression']
+  match = expression.to_s.match(/\A([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?\z/)
+  bad_request! unless match
+
+  dice_count = match[1].to_i
+  sides = match[2].to_i
+  bad_request! if dice_count <= 0 || sides <= 0
+
+  modifier = match[4].to_i
+  modifier = -modifier if match[3] == '-'
+  min = dice_count + modifier
+  max = dice_count * sides + modifier
+  average_sum = min + max
+  average = average_sum.even? ? average_sum / 2 : average_sum / 2.0
+
+  {
+    dice_count: dice_count,
+    sides: sides,
+    modifier: modifier,
+    min: min,
+    max: max,
+    average: average
+  }.to_json
+end
+
+post '/v1/checks/ability' do
+  data = json_body
+  total = data.fetch('roll') + data.fetch('modifier')
+  dc = data.fetch('dc')
+
+  {
+    total: total,
+    success: total >= dc,
+    margin: total - dc
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/encounters/adjusted-xp' do
+  xp_by_cr = {
+    '0' => 10,
+    '1/8' => 25,
+    '1/4' => 50,
+    '1/2' => 100,
+    '1' => 200,
+    '2' => 450,
+    '3' => 700,
+    '4' => 1100,
+    '5' => 1800
+  }
+  level_thresholds = {
+    3 => { easy: 75, medium: 150, hard: 225, deadly: 400 }
+  }
+
+  data = json_body
+  party = data.fetch('party')
+  monsters = data.fetch('monsters')
+
+  base_xp = monsters.sum do |monster|
+    cr = monster.fetch('cr').to_s
+    count = monster.fetch('count')
+    bad_request! unless xp_by_cr.key?(cr) && count.is_a?(Integer) && count >= 0
+    xp_by_cr.fetch(cr) * count
+  end
+
+  monster_count = monsters.sum { |monster| monster.fetch('count') }
+  multiplier =
+    case monster_count
+    when 0 then 0
+    when 1 then 1
+    when 2 then 1.5
+    when 3..6 then 2
+    when 7..10 then 2.5
+    when 11..14 then 3
+    else 4
+    end
+  adjusted_xp = base_xp * multiplier
+  adjusted_xp = adjusted_xp.to_i if adjusted_xp.is_a?(Float) && adjusted_xp == adjusted_xp.to_i
+
+  thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 }
+  party.each do |member|
+    level = member.fetch('level')
+    member_thresholds = level_thresholds[level]
+    bad_request! unless member_thresholds
+    thresholds.each_key { |name| thresholds[name] += member_thresholds[name] }
+  end
+
+  difficulty =
+    if adjusted_xp >= thresholds[:deadly]
+      'deadly'
+    elsif adjusted_xp >= thresholds[:hard]
+      'hard'
+    elsif adjusted_xp >= thresholds[:medium]
+      'medium'
+    elsif adjusted_xp >= thresholds[:easy]
+      'easy'
+    else
+      'trivial'
+    end
+
+  {
+    base_xp: base_xp,
+    monster_count: monster_count,
+    multiplier: multiplier,
+    adjusted_xp: adjusted_xp,
+    difficulty: difficulty,
+    thresholds: thresholds
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/initiative/order' do
+  combatants = json_body.fetch('combatants')
+  order = combatants
+          .map do |combatant|
+            name = combatant.fetch('name')
+            dex = combatant.fetch('dex')
+            roll = combatant.fetch('roll')
+            { name: name, dex: dex, score: roll + dex }
+          end
+          .sort_by { |combatant| [-combatant[:score], -combatant[:dex], combatant[:name]] }
+          .map { |combatant| { name: combatant[:name], score: combatant[:score] } }
+
+  { order: order }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+exec
+/bin/zsh -lc "sed -n '1,160p' server_stderr.txt" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+Sinatra could not start, the required gems weren't found!
+
+Add them to your bundle with:
+
+    bundle add rackup puma
+
+or install them with:
+
+    gem install rackup puma
+
+
+exec
+/bin/zsh -lc "sed -n '1,120p' Gemfile && sed -n '1,220p' Gemfile.lock" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+source 'https://rubygems.org'
+
+gem 'sinatra', '4.2.1'
+gem 'rack', '3.2.6'
+gem 'puma', '8.0.2'
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.3.0)
+    logger (1.7.0)
+    mustermann (3.1.1)
+    nio4r (2.7.5)
+    puma (8.0.2)
+      nio4r (~> 2.0)
+    rack (3.2.6)
+    rack-protection (4.2.1)
+      base64 (>= 0.1.0)
+      logger (>= 1.6.0)
+      rack (>= 3.0.0, < 4)
+    rack-session (2.1.2)
+      base64 (>= 0.1.0)
+      rack (>= 3.0.0)
+    sinatra (4.2.1)
+      logger (>= 1.6.0)
+      mustermann (~> 3.0)
+      rack (>= 3.0.0, < 4)
+      rack-protection (= 4.2.1)
+      rack-session (>= 2.0.0, < 3)
+      tilt (~> 2.0)
+    tilt (2.8.0)
+
+PLATFORMS
+  arm64-darwin-25
+  ruby
+
+DEPENDENCIES
+  puma (= 8.0.2)
+  rack (= 3.2.6)
+  sinatra (= 4.2.1)
+
+CHECKSUMS
+  base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
+  logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  mustermann (3.1.1) sha256=4c6170c7234d5499c345562ba7c7dfe73e1754286dcc1abb053064d66a127198
+  nio4r (2.7.5) sha256=6c90168e48fb5f8e768419c93abb94ba2b892a1d0602cb06eef16d8b7df1dca1
+  puma (8.0.2) sha256=c8ed871dfbbe66448ea9ffd46692342d9804d4071522b52b5331b7b6e7b686fb
+  rack (3.2.6) sha256=5ed78e1f73b2e25679bec7d45ee2d4483cc4146eb1be0264fc4d94cb5ef212c2
+  rack-protection (4.2.1) sha256=cf6e2842df8c55f5e4d1a4be015e603e19e9bc3a7178bae58949ccbb58558bac
+  rack-session (2.1.2) sha256=595434f8c0c3473ae7d7ac56ecda6cc6dfd9d37c0b2b5255330aa1576967ffe8
+  sinatra (4.2.1) sha256=b7aeb9b11d046b552972ade834f1f9be98b185fa8444480688e3627625377080
+  tilt (2.8.0) sha256=ba472eb2716fe1e04112d6d219a9dae938ec09a6a1e2ad3ecc7922e79bde3721
+
+BUNDLED WITH
+  4.0.11
+
+codex
+The crash is explicit: Sinatra 4 requires `rackup` to boot the built-in server path, but the bundle only pins Sinatra/Rack/Puma. I’m going to add the already-specified `rackup` version to the bundle so `./run.sh` can start normally.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+index 03ee4eb215388d72acfea2bc0e060e7e5fffaac5..fa27e727a433bb5db57bc3073342defe5cc12e5e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+@@ -2,4 +2,5 @@
+ 
+ gem 'sinatra', '4.2.1'
+ gem 'rack', '3.2.6'
++gem 'rackup', '2.3.1'
+ gem 'puma', '8.0.2'
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+index 03ee4eb215388d72acfea2bc0e060e7e5fffaac5..fa27e727a433bb5db57bc3073342defe5cc12e5e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+@@ -2,4 +2,5 @@
+ 
+ gem 'sinatra', '4.2.1'
+ gem 'rack', '3.2.6'
++gem 'rackup', '2.3.1'
+ gem 'puma', '8.0.2'
+
+codex
+Next I’ll update the lockfile with the pinned dependency and verify the bundle without launching the server.
+exec
+/bin/zsh -lc 'ruby -c app.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc 'bundle lock --local' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+index 03ee4eb215388d72acfea2bc0e060e7e5fffaac5..fa27e727a433bb5db57bc3073342defe5cc12e5e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+@@ -2,4 +2,5 @@
+ 
+ gem 'sinatra', '4.2.1'
+ gem 'rack', '3.2.6'
++gem 'rackup', '2.3.1'
+ gem 'puma', '8.0.2'
+
+ exited 7 in 141ms:
+Could not find gem 'rackup (= 2.3.1)' in locally installed gems.
+
+codex
+`rackup` is not installed in the local gem cache, so Bundler could not regenerate the lockfile locally. I’m checking whether the repo already has a vendored cache or prior-stage lock data I can reuse deterministically.
+exec
+/bin/zsh -lc 'find vendor -maxdepth 4 -type f -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'rg -n "rackup|puma|Sinatra could not" .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+./Gemfile:5:gem 'rackup', '2.3.1'
+./Gemfile:6:gem 'puma', '8.0.2'
+./server_stderr.txt:1:Sinatra could not start, the required gems weren't found!
+./server_stderr.txt:5:    bundle add rackup puma
+./server_stderr.txt:9:    gem install rackup puma
+./agent_stderr.txt:39:- puma: 8.0.2
+./agent_stderr.txt:42:- rackup: 2.3.1
+./agent_stderr.txt:285:  "rackup": "2.3.1",
+./agent_stderr.txt:286:  "puma": "8.0.2",
+./agent_stderr.txt:308:gem 'puma', '8.0.2'
+./Gemfile.lock:8:    puma (8.0.2)
+./Gemfile.lock:32:  puma (= 8.0.2)
+./Gemfile.lock:41:  puma (8.0.2) sha256=c8ed871dfbbe66448ea9ffd46692342d9804d4071522b52b5331b7b6e7b686fb
+./shots/02_core_bugfix/PROMPT.md:28:- puma: 8.0.2
+./shots/02_core_bugfix/PROMPT.md:31:- rackup: 2.3.1
+./VERSION-PINS.json:20:  "rackup": "2.3.1",
+./VERSION-PINS.json:21:  "puma": "8.0.2",
+./PROMPT.md:28:- puma: 8.0.2
+./PROMPT.md:31:- rackup: 2.3.1
+./shots/01_core_creative/PROMPT.md:28:- puma: 8.0.2
+./shots/01_core_creative/PROMPT.md:31:- rackup: 2.3.1
+./lifecycle-result.json:28:      "rackup": "2.3.1",
+./lifecycle-result.json:29:      "puma": "8.0.2",
+./lifecycle-result.json:67:          "stdout": "Fetching gem metadata from https://rubygems.org/....\nResolving dependencies...\nFetching mustermann 3.1.1\nFetching base64 0.3.0\nFetching logger 1.7.0\nFetching nio4r 2.7.5\nFetching puma 8.0.2\nFetching rack 3.2.6\nFetching rack-protection 4.2.1\nFetching rack-session 2.1.2\nInstalling nio4r 2.7.5 with native extensions\nFetching tilt 2.8.0\nFetching sinatra 4.2.1\nInstalling base64 0.3.0\nInstalling logger 1.7.0\nInstalling mustermann 3.1.1\nInstalling rack-protection 4.2.1\nInstalling rack-session 2.1.2\nInstalling rack 3.2.6\nInstalling tilt 2.8.0\nInstalling sinatra 4.2.1\nInstalling puma 8.0.2 with native extensions\nBundle complete! 3 Gemfile dependencies, 10 gems now installed.\nBundled gems are installed into `./vendor/bundle`\n",
+./shots/01_core_creative/server_stderr.txt:1:Sinatra could not start, the required gems weren't found!
+./shots/01_core_creative/server_stderr.txt:5:    bundle add rackup puma
+./shots/01_core_creative/server_stderr.txt:9:    gem install rackup puma
+./setup.json:9:    "stdout": "Fetching gem metadata from https://rubygems.org/....\nResolving dependencies...\nFetching mustermann 3.1.1\nFetching base64 0.3.0\nFetching logger 1.7.0\nFetching nio4r 2.7.5\nFetching puma 8.0.2\nFetching rack 3.2.6\nFetching rack-protection 4.2.1\nFetching rack-session 2.1.2\nInstalling nio4r 2.7.5 with native extensions\nFetching tilt 2.8.0\nFetching sinatra 4.2.1\nInstalling base64 0.3.0\nInstalling logger 1.7.0\nInstalling mustermann 3.1.1\nInstalling rack-protection 4.2.1\nInstalling rack-session 2.1.2\nInstalling rack 3.2.6\nInstalling tilt 2.8.0\nInstalling sinatra 4.2.1\nInstalling puma 8.0.2 with native extensions\nBundle complete! 3 Gemfile dependencies, 10 gems now installed.\nBundled gems are installed into `./vendor/bundle`\n",
+./shots/01_core_creative/setup.json:9:    "stdout": "Fetching gem metadata from https://rubygems.org/....\nResolving dependencies...\nFetching mustermann 3.1.1\nFetching base64 0.3.0\nFetching logger 1.7.0\nFetching nio4r 2.7.5\nFetching puma 8.0.2\nFetching rack 3.2.6\nFetching rack-protection 4.2.1\nFetching rack-session 2.1.2\nInstalling nio4r 2.7.5 with native extensions\nFetching tilt 2.8.0\nFetching sinatra 4.2.1\nInstalling base64 0.3.0\nInstalling logger 1.7.0\nInstalling mustermann 3.1.1\nInstalling rack-protection 4.2.1\nInstalling rack-session 2.1.2\nInstalling rack 3.2.6\nInstalling tilt 2.8.0\nInstalling sinatra 4.2.1\nInstalling puma 8.0.2 with native extensions\nBundle complete! 3 Gemfile dependencies, 10 gems now installed.\nBundled gems are installed into `./vendor/bundle`\n",
+./shots/01_core_creative/agent_stderr.txt:39:- puma: 8.0.2
+./shots/01_core_creative/agent_stderr.txt:42:- rackup: 2.3.1
+./shots/01_core_creative/agent_stderr.txt:285:  "rackup": "2.3.1",
+./shots/01_core_creative/agent_stderr.txt:286:  "puma": "8.0.2",
+./shots/01_core_creative/agent_stderr.txt:308:gem 'puma', '8.0.2'
+
+exec
+/bin/zsh -lc 'gem list rackup -a && gem list puma -a && gem env home' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+index 03ee4eb215388d72acfea2bc0e060e7e5fffaac5..fa27e727a433bb5db57bc3073342defe5cc12e5e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+@@ -2,4 +2,5 @@
+ 
+ gem 'sinatra', '4.2.1'
+ gem 'rack', '3.2.6'
++gem 'rackup', '2.3.1'
+ gem 'puma', '8.0.2'
+
+ succeeded in 208ms:
+
+/opt/homebrew/lib/ruby/gems/4.0.0
+
+codex
+There are two viable fixes: add `rackup`, or bypass Sinatra’s built-in launcher and run Puma directly. Since the gem is not locally available, I’m checking Puma’s CLI path so the startup script can use the already-installed pinned Puma without adding an unavailable dependency.
+exec
+/bin/zsh -lc "bundle exec puma --help | sed -n '1,120p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+bundler: failed to load command: puma (/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/vendor/bundle/ruby/4.0.0/bin/puma)
+/opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:360:in 'Bundler::Resolver#raise_not_found!': Could not find gem 'rackup (= 2.3.1)' in locally installed gems. (Bundler::GemNotFound)
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:468:in 'block in Bundler::Resolver#prepare_dependencies'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:443:in 'Hash#each'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:443:in 'Enumerable#filter_map'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:443:in 'Bundler::Resolver#prepare_dependencies'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:63:in 'Bundler::Resolver#setup_solver'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:28:in 'Bundler::Resolver#start'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:756:in 'Bundler::Definition#start_resolution'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:351:in 'Bundler::Definition#resolve'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:669:in 'Bundler::Definition#materialize'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:240:in 'Bundler::Definition#specs'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:313:in 'Bundler::Definition#specs_for'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/runtime.rb:18:in 'Bundler::Runtime#setup'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler.rb:165:in 'Bundler.setup'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/setup.rb:32:in 'block in <top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/ui/shell.rb:177:in 'Bundler::UI::Shell#with_level'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/ui/shell.rb:122:in 'Bundler::UI::Shell#silence'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/setup.rb:32:in '<top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/cli/exec.rb:59:in 'Kernel#require_relative'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/cli/exec.rb:59:in 'Bundler::CLI::Exec#kernel_load'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/cli/exec.rb:24:in 'Bundler::CLI::Exec#run'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/cli.rb:504:in 'Bundler::CLI#exec'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/vendor/thor/lib/thor/command.rb:28:in 'Bundler::Thor::Command#run'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/vendor/thor/lib/thor/invocation.rb:127:in 'Bundler::Thor::Invocation#invoke_command'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/vendor/thor/lib/thor.rb:538:in 'Bundler::Thor.dispatch'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/cli.rb:35:in 'Bundler::CLI.dispatch'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/vendor/thor/lib/thor/base.rb:584:in 'Bundler::Thor::Base::ClassMethods#start'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/cli.rb:29:in 'Bundler::CLI.start'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/gems/4.0.0/gems/bundler-4.0.11/exe/bundle:28:in 'block in <top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/friendly_errors.rb:118:in 'Bundler.with_friendly_errors'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/gems/4.0.0/gems/bundler-4.0.11/exe/bundle:20:in '<top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems.rb:305:in 'Kernel#load'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems.rb:305:in 'Gem.activate_and_load_bin_path'
+	from /opt/homebrew/bin/bundle:25:in '<main>'
+
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma'; puts Puma::Const::VERSION\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+exec
+/bin/zsh -lc "find vendor/bundle -maxdepth 5 -type f \\( -name 'puma' -o -name '*.rb' \\) | head -80" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+vendor/bundle/ruby/4.0.0/bin/puma
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+index 03ee4eb215388d72acfea2bc0e060e7e5fffaac5..fa27e727a433bb5db57bc3073342defe5cc12e5e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+@@ -2,4 +2,5 @@
+ 
+ gem 'sinatra', '4.2.1'
+ gem 'rack', '3.2.6'
++gem 'rackup', '2.3.1'
+ gem 'puma', '8.0.2'
+
+ exited 1 in 114ms:
+/opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:360:in 'Bundler::Resolver#raise_not_found!': Could not find gem 'rackup (= 2.3.1)' in locally installed gems. (Bundler::GemNotFound)
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:468:in 'block in Bundler::Resolver#prepare_dependencies'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:443:in 'Hash#each'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:443:in 'Enumerable#filter_map'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:443:in 'Bundler::Resolver#prepare_dependencies'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:63:in 'Bundler::Resolver#setup_solver'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/resolver.rb:28:in 'Bundler::Resolver#start'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:756:in 'Bundler::Definition#start_resolution'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:351:in 'Bundler::Definition#resolve'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:669:in 'Bundler::Definition#materialize'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:240:in 'Bundler::Definition#specs'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/definition.rb:313:in 'Bundler::Definition#specs_for'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/runtime.rb:18:in 'Bundler::Runtime#setup'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler.rb:165:in 'Bundler.setup'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/setup.rb:32:in 'block in <top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/ui/shell.rb:177:in 'Bundler::UI::Shell#with_level'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/ui/shell.rb:122:in 'Bundler::UI::Shell#silence'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundler/setup.rb:32:in '<top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems.rb:1459:in 'Kernel#require'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems.rb:1459:in '<top (required)>'
+	from <internal:gem_prelude>:2:in '<internal:gem_prelude>'
+
+codex
+Adding the missing gem without a local install makes Bundler fail before anything can run, so I’m backing that out. I’ll keep the existing bundle intact and change startup to use Puma programmatically against the Sinatra app.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/Gemfile
+codex
+I’m checking Puma’s API from the installed gem so the server script can bind `127.0.0.1:$PORT` without going through Rackup.
+exec
+/bin/zsh -lc "ruby -e \"spec=Gem::Specification.find_by_name('puma','8.0.2'); puts spec.full_gem_path\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ exited 1 in 0ms:
+/opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems/dependency.rb:301:in 'Gem::Dependency#to_specs': Could not find 'puma' (= 8.0.2) among 123 total gem(s) (Gem::MissingSpecError)
+Checked in 'GEM_PATH=/Users/dorkitude/.gem/ruby/4.0.0:/opt/homebrew/lib/ruby/gems/4.0.0:/opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/gems/4.0.0' , execute `gem env` for more information
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems/dependency.rb:313:in 'Gem::Dependency#to_spec'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/rubygems/specification.rb:955:in 'Gem::Specification.find_by_name'
+	from -e:1:in '<main>'
+
+exec
+/bin/zsh -lc 'bundle check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+The Gemfile's dependencies are satisfied
+
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma'; puts Puma::Const::VERSION\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 395ms:
+8.0.2
+
+exec
+/bin/zsh -lc 'bundle show puma' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/vendor/bundle/ruby/4.0.0/gems/puma-8.0.2
+
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma/server'; p Puma::Server.instance_method(:initialize).parameters; p Puma::Server.instance_methods(false).grep(/add|run|stop|thread|bind/)\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma/events'; p Puma::Events.respond_to?(:stdio); p Puma::Events.methods.grep(/stdio/)\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 106ms:
+false
+[]
+
+ exited 1 in 148ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/vendor/bundle/ruby/4.0.0/gems/puma-8.0.2/lib/puma/log_writer.rb:6:in '<top (required)>': uninitialized constant Puma::HAS_NATIVE_IO_WAIT (NameError)
+
+require 'io/wait' unless Puma::HAS_NATIVE_IO_WAIT
+                             ^^^^^^^^^^^^^^^^^^^^
+	from /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/vendor/bundle/ruby/4.0.0/gems/puma-8.0.2/lib/puma/server.rb:7:in 'Kernel#require_relative'
+	from /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/vendor/bundle/ruby/4.0.0/gems/puma-8.0.2/lib/puma/server.rb:7:in '<top (required)>'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundled_gems.rb:60:in 'Kernel.require'
+	from /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/4.0.0/bundled_gems.rb:60:in 'block (2 levels) in Kernel#replace_require'
+	from -e:1:in '<main>'
+
+exec
+/bin/zsh -lc "sed -n '1,220p' vendor/bundle/ruby/4.0.0/gems/puma-8.0.2/lib/puma/server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+# frozen_string_literal: true
+
+require 'stringio'
+
+require_relative 'thread_pool'
+require_relative 'const'
+require_relative 'log_writer'
+require_relative 'events'
+require_relative 'null_io'
+require_relative 'reactor'
+require_relative 'client'
+require_relative 'binder'
+require_relative 'util'
+require_relative 'response'
+require_relative 'configuration'
+require_relative 'cluster_accept_loop_delay'
+
+require 'socket'
+require 'io/wait' unless Puma::HAS_NATIVE_IO_WAIT
+
+module Puma
+  # The HTTP Server itself. Serves out a single Rack app.
+  #
+  # This class is used by the `Puma::Single` and `Puma::Cluster` classes
+  # to generate one or more `Puma::Server` instances capable of handling requests.
+  # Each Puma process will contain one `Puma::Server` instance.
+  #
+  # The `Puma::Server` instance pulls requests from the socket, adds them to a
+  # `Puma::Reactor` where they get eventually passed to a `Puma::ThreadPool`.
+  #
+  # Each `Puma::Server` will have one reactor and one thread pool.
+  class Server
+    module FiberPerRequest
+      def handle_request(processor, client, requests)
+        Fiber.new do
+          super
+        end.resume
+      end
+    end
+
+    include Const
+    include Response
+
+    attr_reader :options
+    attr_reader :thread
+    attr_reader :log_writer
+    attr_reader :events
+    attr_reader :min_threads, :max_threads  # for #stats
+    attr_reader :requests_count             # @version 5.0.0
+
+    # @todo the following may be deprecated in the future
+    attr_reader :auto_trim_time, :early_hints, :first_data_timeout,
+      :leak_stack_on_error,
+      :persistent_timeout, :reaping_time
+
+    attr_accessor :app
+    attr_accessor :binder
+
+    # Create a server for the rack app +app+.
+    #
+    # +log_writer+ is a Puma::LogWriter object used to log info and error messages.
+    #
+    # +events+ is a Puma::Events object used to notify application status events.
+    #
+    # Server#run returns a thread that you can join on to wait for the server
+    # to do its work.
+    #
+    # @note Several instance variables exist so they are available for testing,
+    #   and have default values set via +fetch+.  Normally the values are set via
+    #   `::Puma::Configuration.puma_default_options`.
+    #
+    # @note The `events` parameter is set to nil, and set to `Events.new` in code.
+    #   Often `options` needs to be passed, but `events` does not.  Using nil allows
+    #   calling code to not require events.rb.
+    #
+    def initialize(app, events = nil, options = {})
+      @app = app
+      @events = events || Events.new
+
+      @check, @notify = nil
+      @status = :stop
+
+      @thread = nil
+      @thread_pool = nil
+      @reactor = nil
+
+      @env_set_http_version = nil
+
+      @options = if options.is_a?(UserFileDefaultOptions)
+        options
+      else
+        UserFileDefaultOptions.new(options, Configuration::DEFAULTS)
+      end
+
+      @clustered                 = (@options.fetch :workers, 0) > 0
+      @worker_write              = @options[:worker_write]
+      @log_writer                = @options.fetch :log_writer, LogWriter.stdio
+      @early_hints               = @options[:early_hints]
+      @first_data_timeout        = @options[:first_data_timeout]
+      @persistent_timeout        = @options[:persistent_timeout]
+      @idle_timeout              = @options[:idle_timeout]
+      @min_threads               = @options[:min_threads]
+      @max_threads               = @options[:max_threads]
+      @queue_requests            = @options[:queue_requests]
+      @max_keep_alive            = @options[:max_keep_alive]
+      @enable_keep_alives        = @options[:enable_keep_alives]
+      @enable_keep_alives      &&= @queue_requests
+      @io_selector_backend       = @options[:io_selector_backend]
+      @http_content_length_limit = @options[:http_content_length_limit]
+      @cluster_accept_loop_delay = ClusterAcceptLoopDelay.new(
+        workers: @options[:workers],
+        max_delay: @options[:wait_for_less_busy_worker] || 0 # Real default is in Configuration::DEFAULTS, this is for unit testing
+      )
+
+      if @options[:fiber_per_request]
+        singleton_class.prepend(FiberPerRequest)
+      end
+
+      # make this a hash, since we prefer `key?` over `include?`
+      @supported_http_methods =
+        if @options[:supported_http_methods] == :any
+          :any
+        else
+          if (ary = @options[:supported_http_methods])
+            ary
+          else
+            SUPPORTED_HTTP_METHODS
+          end.sort.product([nil]).to_h.freeze
+        end
+
+      temp = !!(@options[:environment] =~ /\A(development|test)\z/)
+      @leak_stack_on_error = @options[:environment] ? temp : true
+
+      @binder = Binder.new(log_writer, @options)
+
+      ENV['RACK_ENV'] ||= "development"
+
+      @mode = :http
+
+      @precheck_closing = true
+
+      @requests_count = 0
+
+      @idle_timeout_reached = false
+    end
+
+    def inherit_binder(bind)
+      @binder = bind
+    end
+
+    class << self
+      # @!attribute [r] current
+      def current
+        Thread.current.puma_server
+      end
+
+      # :nodoc:
+      # @version 5.0.0
+      def tcp_cork_supported?
+        Socket.const_defined?(:TCP_CORK) && Socket.const_defined?(:IPPROTO_TCP)
+      end
+
+      # :nodoc:
+      # @version 5.0.0
+      def closed_socket_supported?
+        Socket.const_defined?(:TCP_INFO) && Socket.const_defined?(:IPPROTO_TCP)
+      end
+      private :tcp_cork_supported?
+      private :closed_socket_supported?
+    end
+
+    # On Linux, use TCP_CORK to better control how the TCP stack
+    # packetizes our stream. This improves both latency and throughput.
+    # socket parameter may be an MiniSSL::Socket, so use to_io
+    #
+    if tcp_cork_supported?
+      # 6 == Socket::IPPROTO_TCP
+      # 3 == TCP_CORK
+      # 1/0 == turn on/off
+      def cork_socket(socket)
+        skt = socket.to_io
+        begin
+          skt.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_CORK, 1) if skt.kind_of? TCPSocket
+        rescue IOError, SystemCallError
+        end
+      end
+
+      def uncork_socket(socket)
+        skt = socket.to_io
+        begin
+          skt.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_CORK, 0) if skt.kind_of? TCPSocket
+        rescue IOError, SystemCallError
+        end
+      end
+    else
+      def cork_socket(socket)
+      end
+
+      def uncork_socket(socket)
+      end
+    end
+
+    if closed_socket_supported?
+      UNPACK_TCP_STATE_FROM_TCP_INFO = "C".freeze
+
+      def closed_socket?(socket)
+        skt = socket.to_io
+        return false unless skt.kind_of?(TCPSocket) && @precheck_closing
+
+        begin
+          tcp_info = skt.getsockopt(Socket::IPPROTO_TCP, Socket::TCP_INFO)
+        rescue IOError, SystemCallError
+          @precheck_closing = false
+          false
+        else
+          state = tcp_info.unpack(UNPACK_TCP_STATE_FROM_TCP_INFO)[0]
+          # TIME_WAIT: 6, CLOSE: 7, CLOSE_WAIT: 8, LAST_ACK: 9, CLOSING: 11
+          (state >= 6 && state <= 9) || state == 11
+        end
+      end
+
+exec
+/bin/zsh -lc "sed -n '1,200p' vendor/bundle/ruby/4.0.0/gems/puma-8.0.2/lib/puma/binder.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+# frozen_string_literal: true
+
+require 'uri'
+require 'socket'
+
+require_relative 'const'
+require_relative 'util'
+
+module Puma
+
+  if HAS_SSL
+    require_relative 'minissl'
+    require_relative 'minissl/context_builder'
+  end
+
+  class Binder
+    include Puma::Const
+
+    RACK_VERSION = [1,6].freeze
+
+    def initialize(log_writer, options, env: ENV)
+      @log_writer = log_writer
+      @options = options
+      @listeners = []
+      @inherited_fds = {}
+      @activated_sockets = {}
+      @unix_paths = []
+      @env = env
+
+      @proto_env = {
+        "rack.version".freeze => RACK_VERSION,
+        "rack.errors".freeze => log_writer.stderr,
+        "rack.multithread".freeze => options[:max_threads] > 1,
+        "rack.multiprocess".freeze => options[:workers] >= 1,
+        "rack.run_once".freeze => false,
+        RACK_URL_SCHEME => options[:rack_url_scheme],
+        "SCRIPT_NAME".freeze => env['SCRIPT_NAME'] || "",
+
+        # I'd like to set a default CONTENT_TYPE here but some things
+        # depend on their not being a default set and inferring
+        # it from the content. And so if i set it here, it won't
+        # infer properly.
+
+        "QUERY_STRING".freeze => "",
+        SERVER_SOFTWARE => PUMA_SERVER_STRING,
+        GATEWAY_INTERFACE => CGI_VER,
+
+        RACK_AFTER_REPLY => nil,
+        RACK_RESPONSE_FINISHED => nil,
+      }
+
+      @envs = {}
+      @ios = []
+    end
+
+    attr_reader :ios
+
+    # @version 5.0.0
+    attr_reader :activated_sockets, :envs, :inherited_fds, :listeners, :proto_env, :unix_paths
+
+    # @version 5.0.0
+    attr_writer :ios, :listeners
+
+    def env(sock)
+      @envs.fetch(sock, @proto_env)
+    end
+
+    def close
+      @ios.each { |i| i.close }
+    end
+
+    # @!attribute [r] connected_ports
+    # @version 5.0.0
+    def connected_ports
+      t = ios.map { |io| io.addr[1] }; t.uniq!; t
+    end
+
+    # @version 5.0.0
+    def create_inherited_fds(env_hash)
+      env_hash.select {|k,v| k =~ /PUMA_INHERIT_\d+/}.each do |_k, v|
+        fd, url = v.split(":", 2)
+        @inherited_fds[url] = fd.to_i
+      end.keys # pass keys back for removal
+    end
+
+    # systemd socket activation.
+    # LISTEN_FDS = number of listening sockets. e.g. 2 means accept on 2 sockets w/descriptors 3 and 4.
+    # LISTEN_PID = PID of the service process, aka us
+    # @see https://www.freedesktop.org/software/systemd/man/systemd-socket-activate.html
+    # @version 5.0.0
+    #
+    def create_activated_fds(env_hash)
+      @log_writer.debug { "ENV['LISTEN_FDS'] #{@env['LISTEN_FDS'].inspect}  env_hash['LISTEN_PID'] #{env_hash['LISTEN_PID'].inspect}" }
+      return [] unless env_hash['LISTEN_FDS'] && env_hash['LISTEN_PID'].to_i == $$
+      env_hash['LISTEN_FDS'].to_i.times do |index|
+        sock = TCPServer.for_fd(socket_activation_fd(index))
+        key = begin # Try to parse as a path
+          [:unix, Socket.unpack_sockaddr_un(sock.getsockname)]
+        rescue ArgumentError # Try to parse as a port/ip
+          port, addr = Socket.unpack_sockaddr_in(sock.getsockname)
+          addr = "[#{addr}]" if addr&.include? ':'
+          [:tcp, addr, port]
+        end
+        @activated_sockets[key] = sock
+        @log_writer.debug { "Registered #{key.join ':'} for activation from LISTEN_FDS" }
+      end
+      ["LISTEN_FDS", "LISTEN_PID"] # Signal to remove these keys from ENV
+    end
+
+    # Synthesize binds from systemd socket activation
+    #
+    # When systemd socket activation is enabled, it can be tedious to keep the
+    # binds in sync. This method can synthesize any binds based on the received
+    # activated sockets. Any existing matching binds will be respected.
+    #
+    # When only_matching is true in, all binds that do not match an activated
+    # socket is removed in place.
+    #
+    # It's a noop if no activated sockets were received.
+    def synthesize_binds_from_activated_fs(binds, only_matching)
+      return binds unless activated_sockets.any?
+
+      activated_binds = []
+
+      activated_sockets.keys.each do |proto, addr, port|
+        if port
+          tcp_url = "#{proto}://#{addr}:#{port}"
+          ssl_url = "ssl://#{addr}:#{port}"
+          ssl_url_prefix = "#{ssl_url}?"
+
+          existing = binds.find { |bind| bind == tcp_url || bind == ssl_url || bind.start_with?(ssl_url_prefix) }
+
+          activated_binds << (existing || tcp_url)
+        else
+          # TODO: can there be a SSL bind without a port?
+          activated_binds << "#{proto}://#{addr}"
+        end
+      end
+
+      if only_matching
+        activated_binds
+      else
+        binds | activated_binds
+      end
+    end
+
+    def before_parse(&block)
+      @before_parse ||= []
+      @before_parse << block if block
+      @before_parse
+    end
+
+    def parse(binds, log_writer = nil, log_msg = 'Listening')
+      before_parse.each(&:call)
+      log_writer ||= @log_writer
+      binds.each do |str|
+        uri = URI.parse str
+        case uri.scheme
+        when "tcp"
+          if fd = @inherited_fds.delete(str)
+            io = inherit_tcp_listener uri.host, uri.port, fd
+            log_writer.log "* Inherited #{str}"
+          elsif sock = @activated_sockets.delete([ :tcp, uri.host, uri.port ])
+            io = inherit_tcp_listener uri.host, uri.port, sock
+            log_writer.log "* Activated #{str}"
+          else
+            ios_len = @ios.length
+            params = Util.parse_query uri.query
+
+            low_latency = params.key?('low_latency') && params['low_latency'] != 'false'
+            backlog = params.fetch('backlog', 1024).to_i
+
+            io = add_tcp_listener uri.host, uri.port, low_latency, backlog
+
+            @ios[ios_len..-1].each do |i|
+              addr = loc_addr_str i
+              log_writer.log "* #{log_msg} on http://#{addr}"
+            end
+          end
+
+          @listeners << [str, io] if io
+        when "unix"
+          path = "#{uri.host}#{uri.path}".gsub("%20", " ")
+          abstract = false
+          if str.start_with? 'unix://@'
+            raise "OS does not support abstract UNIXSockets" unless Puma.abstract_unix_socket?
+            abstract = true
+            path = "@#{path}"
+          end
+
+          if fd = @inherited_fds.delete(str)
+            @unix_paths << path unless abstract || File.exist?(path)
+            io = inherit_unix_listener path, fd
+            log_writer.log "* Inherited #{str}"
+          elsif sock = @activated_sockets.delete([ :unix, path ]) ||
+              !abstract && @activated_sockets.delete([ :unix, File.realdirpath(path) ])
+            @unix_paths << path unless abstract || File.exist?(path)
+            io = inherit_unix_listener path, sock
+            log_writer.log "* Activated #{str}"
+          else
+
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma'; require 'puma/server'; p Puma::Server.instance_method(:initialize).parameters; p Puma::Server.instance_methods(false).grep(/add|run|stop|thread|bind/)\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 138ms:
+[[:req, :app], [:opt, :events], [:opt, :options]]
+[:binder=, :add_tcp_listener, :add_ssl_listener, :add_unix_listener, :update_thread_pool_min_max, :min_threads, :max_threads, :binder, :thread, :stop, :run, :inherit_binder, :running]
+
+exec
+/bin/zsh -lc 'rg -n "at_exit|run!|set :run|def self.run" vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/main.rb:36:    set :run, proc { File.expand_path($0) == File.expand_path(app_file) }
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/main.rb:47:  at_exit { Application.run! if $!.nil? && Application.run? }
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1599:        set :running_server, nil
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1610:      def run!(options = {}, &block)
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1646:      alias start! run!
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1704:          set :running_server, server
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1719:        at_exit { quit! }
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1972:    set :run, false                       # start server via at-exit hook?
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:1973:    set :running_server, nil
+vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1/lib/sinatra/base.rb:2090:    set :run, proc { !test? }
+
+exec
+/bin/zsh -lc 'bundle show sinatra' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/vendor/bundle/ruby/4.0.0/gems/sinatra-4.2.1
+
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma'; require 'puma/server'; require 'puma/log_writer'; p Puma::LogWriter.methods.grep(/stdio/); p Puma::LogWriter.method(:stdio).parameters\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 124ms:
+[:stdio]
+[[:key, :env]]
+
+codex
+I’m making `app.rb` loadable without Sinatra’s at-exit launcher, then adding a tiny `server.rb` that starts Puma directly in the foreground. This keeps `./run.sh` simple and avoids requiring the missing Rackup executable path.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+codex
+The startup path is now independent of Sinatra’s built-in runner. I’m doing static checks and a non-listening Puma object smoke check, while avoiding actually starting the HTTP server.
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+exec
+/bin/zsh -lc 'ruby -c app.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+Syntax OK
+
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require './app'; puts Sinatra::Application.run?; puts Sinatra::Application.respond_to?(:call)\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+exec
+/bin/zsh -lc "bundle exec ruby -e \"require 'puma'; require 'puma/server'; p Puma::Server.instance_method(:stop).parameters\"" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+ succeeded in 135ms:
+[[:opt, :sync]]
+
+ succeeded in 179ms:
+false
+true
+
+codex
+`app.rb` now reports `run?` as false when loaded, so the at-exit failure path is disabled. I’m exercising the API through Rack’s in-process mock request layer to catch endpoint regressions without opening a port.
+exec
+/bin/zsh -lc "bundle exec ruby - <<'RUBY'
+require './app'
+require 'rack/mock'
+
+request = Rack::MockRequest.new(Sinatra::Application)
+checks = []
+checks << ['health', request.get('/health').body]
+checks << ['dice', request.post('/v1/dice/stats', 'CONTENT_TYPE' => 'application/json', input: { expression: '2d6+3' }.to_json).body]
+checks << ['ability', request.post('/v1/checks/ability', 'CONTENT_TYPE' => 'application/json', input: { roll: 9, modifier: 5, dc: 15 }.to_json).body]
+checks << ['xp', request.post('/v1/encounters/adjusted-xp', 'CONTENT_TYPE' => 'application/json', input: { party: [{ level: 3 }, { level: 3 }, { level: 3 }, { level: 3 }], monsters: [{ cr: '1', count: 2 }, { cr: '2', count: 1 }] }.to_json).body]
+checks << ['initiative', request.post('/v1/initiative/order', 'CONTENT_TYPE' => 'application/json', input: { combatants: [{ name: 'rogue', dex: 3, roll: 14 }, { name: 'ogre', dex: -1, roll: 16 }] }.to_json).body]
+checks.each { |name, body| puts \"#{name}: #{body}\" }
+RUBY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+ succeeded in 179ms:
+health: {"ok":true}
+dice: {"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}
+ability: {"total":14,"success":false,"margin":-1}
+xp: {"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}
+initiative: {"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}
+
+codex
+The in-process endpoint checks match the stage examples. I’m doing a final diff review for scope and executable state.
+exec
+/bin/zsh -lc 'git diff -- app.rb run.sh server.rb Gemfile Gemfile.lock' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'ls -l run.sh server.rb app.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+-rw-r--r--@ 1 dorkitude  staff  3754 Jul 11 01:13 app.rb
+-rwxr-xr-x@ 1 dorkitude  staff    65 Jul 11 01:13 run.sh
+-rw-r--r--@ 1 dorkitude  staff   420 Jul 11 01:13 server.rb
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+codex
+`git diff` is empty because this benchmark workspace is not presenting these files as tracked changes in the usual way. I’m checking status once so I can report the actual modified files accurately.
+exec
+/bin/zsh -lc "sed -n '1,24p' app.rb && sed -n '1,80p' server.rb && sed -n '1,20p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+require 'json'
+require 'sinatra'
+
+set :bind, '127.0.0.1'
+set :port, ENV.fetch('PORT', '4567')
+set :run, false
+
+before do
+  content_type :json
+end
+
+helpers do
+  def json_body
+    body = request.body.read
+    body.empty? ? {} : JSON.parse(body)
+  rescue JSON::ParserError
+    halt 400, { error: 'invalid_json' }.to_json
+  end
+
+  def bad_request!
+    halt 400, { error: 'bad_request' }.to_json
+  end
+end
+
+require_relative 'app'
+require 'puma'
+require 'puma/server'
+
+port = Integer(ENV.fetch('PORT'))
+
+server = Puma::Server.new(
+  Sinatra::Application,
+  nil,
+  min_threads: 0,
+  max_threads: 5,
+  environment: ENV.fetch('RACK_ENV', 'production')
+)
+
+server.add_tcp_listener('127.0.0.1', port)
+thread = server.run
+
+shutdown = proc { server.stop(true) }
+Signal.trap('INT', &shutdown)
+Signal.trap('TERM', &shutdown)
+
+thread.join
+#!/usr/bin/env bash
+set -euo pipefail
+bundle exec ruby server.rb
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+codex
+Implemented the startup fix.
+
+Changed:
+- [app.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb): disabled Sinatra’s built-in at-exit runner with `set :run, false`.
+- [server.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb): added a direct Puma server launcher bound to `127.0.0.1` and `ENV["PORT"]`.
+- [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh): now starts `bundle exec ruby server.rb` in the foreground.
+
+Verified without starting the HTTP server:
+- `bundle check`
+- `ruby -c app.rb`
+- `ruby -c server.rb`
+- Rack in-process checks for all specified endpoints matched the expected sample responses.
+
+I did not start `./run.sh`, per the contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index 561f1b1f0b59420e03689e339bdac6563444eeaf..8528d702dd505e195029004dc7e703d482253a63
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -3,6 +3,7 @@
+ 
+ set :bind, '127.0.0.1'
+ set :port, ENV.fetch('PORT', '4567')
++set :run, false
+ 
+ before do
+   content_type :json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+index af3e7ea8ec05c5d6efc38ab682aae69003493b8d..105670dcb6328b1825127500d633b35c553d2b54
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/run.sh
+@@ -1,3 +1,3 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-bundle exec ruby app.rb -o 127.0.0.1 -p "$PORT"
++bundle exec ruby server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..734c432aeff126539b7b590c5490a96553f47c57
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/server.rb
+@@ -0,0 +1,22 @@
++require_relative 'app'
++require 'puma'
++require 'puma/server'
++
++port = Integer(ENV.fetch('PORT'))
++
++server = Puma::Server.new(
++  Sinatra::Application,
++  nil,
++  min_threads: 0,
++  max_threads: 5,
++  environment: ENV.fetch('RACK_ENV', 'production')
++)
++
++server.add_tcp_listener('127.0.0.1', port)
++thread = server.run
++
++shutdown = proc { server.stop(true) }
++Signal.trap('INT', &shutdown)
++Signal.trap('TERM', &shutdown)
++
++thread.join
+
+tokens used
+35,539

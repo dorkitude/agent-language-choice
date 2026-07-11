@@ -1,0 +1,2002 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4df1-67ae-7c42-8850-e8f911cd3e81
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-vite
+        Language: typescript
+        Framework/runtime: vite
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Vite 8.1.3 with TypeScript. Implement the REST API through Vite dev-server middleware or a Vite plugin; do not replace it with a plain Node-only server.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:58505 passed=false tests=19/20
+PASS	health	0ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}],"conditions":{}}
+
+
+Error: suite failed: 19/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Vite middleware and current combat state handling first, then patch the smallest behavior difference causing the missing `fighter` key.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+lifecycle-result.json
+agent_stderr.txt
+VERSION-PINS.json
+dndeval-core-report.json
+package.json
+package-lock.json
+tsconfig.json
+vite.config.ts
+server_stderr.txt
+dndeval-characters-report.json
+agent_last_message.txt
+index.html
+setup.json
+dndeval-combat-state-report.json
+PROMPT.md
+agent_stdout.txt
+server_stdout.txt
+run.sh
+src/main.ts
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/PROMPT.md
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+
+exec
+/bin/zsh -lc 'rg -n "combat|conditions|advance|sessions" .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+./lifecycle-result.json:42:      "combat-state",
+./lifecycle-result.json:307:      "stage": "combat-state",
+./lifecycle-result.json:308:      "suite": "combat-state",
+./lifecycle-result.json:343:        "stdout": "suite=combat-state base_url=http://127.0.0.1:58505 passed=false tests=19/20\nPASS\thealth\t0ms\tHTTP 200\nPASS\tdice-stats-2d6-plus-3\t0ms\tHTTP 200\nPASS\tdice-stats-1d20-minus-1\t0ms\tHTTP 200\nPASS\tdice-stats-invalid\t0ms\tHTTP 400\nPASS\tability-check-failure\t0ms\tHTTP 200\nPASS\tability-check-success\t0ms\tHTTP 200\nPASS\tencounter-adjusted-xp\t0ms\tHTTP 200\nPASS\tinitiative-order\t0ms\tHTTP 200\nPASS\tability-modifier-negative\t0ms\tHTTP 200\nPASS\tability-modifier-high\t0ms\tHTTP 200\nPASS\tability-modifier-invalid\t0ms\tHTTP 400\nPASS\tproficiency-level-boundary\t0ms\tHTTP 200\nPASS\tderived-stats\t0ms\tHTTP 200\nPASS\tcombat-create-session\t0ms\tHTTP 200\nPASS\tcombat-add-condition\t0ms\tHTTP 200\nPASS\tcombat-advance-to-mage\t0ms\tHTTP 200\nPASS\tcombat-advance-to-fighter-decrements\t0ms\tHTTP 200\nPASS\tcombat-advance-wrap-round\t0ms\tHTTP 200\nPASS\tcombat-advance-condition-expires\t0ms\tHTTP 200\nFAIL\tcombat-advance-expired-removed\t0ms\tHTTP 200\tconditions: missing JSON key \"fighter\"\n  response: {\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"order\":[{\"name\":\"rogue\",\"score\":17},{\"name\":\"mage\",\"score\":16},{\"name\":\"fighter\",\"score\":14}],\"conditions\":{}}\n",
+./lifecycle-result.json:346:          "suite": "combat-state",
+./lifecycle-result.json:444:              "id": "combat-create-session",
+./lifecycle-result.json:445:              "name": "Create deterministic combat session",
+./lifecycle-result.json:451:              "id": "combat-add-condition",
+./lifecycle-result.json:452:              "name": "Add condition to combatant",
+./lifecycle-result.json:458:              "id": "combat-advance-to-mage",
+./lifecycle-result.json:465:              "id": "combat-advance-to-fighter-decrements",
+./lifecycle-result.json:472:              "id": "combat-advance-wrap-round",
+./lifecycle-result.json:479:              "id": "combat-advance-condition-expires",
+./lifecycle-result.json:486:              "id": "combat-advance-expired-removed",
+./lifecycle-result.json:491:              "error": "conditions: missing JSON key \"fighter\"",
+./lifecycle-result.json:492:              "response_body": "{\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"order\":[{\"name\":\"rogue\",\"score\":17},{\"name\":\"mage\",\"score\":16},{\"name\":\"fighter\",\"score\":14}],\"conditions\":{}}"
+./lifecycle-result.json:498:      "artifacts": "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/shots/03_combat-state_maintenance"
+./agent_stderr.txt:18:        Lifecycle stage: combat-state
+./agent_stderr.txt:82:`POST /v1/combat/sessions`
+./agent_stderr.txt:89:  "combatants": [
+./agent_stderr.txt:102:- New sessions start at `round = 1` and `turn_index = 0`.
+./agent_stderr.txt:103:- `active` is the combatant at the current `turn_index`.
+./agent_stderr.txt:123:`POST /v1/combat/sessions/{id}/conditions`
+./agent_stderr.txt:137:- `target` must name a combatant in the session.
+./agent_stderr.txt:140:- Conditions are attached to the named combatant.
+./agent_stderr.txt:147:  "conditions": [
+./agent_stderr.txt:155:`POST /v1/combat/sessions/{id}/advance`
+./agent_stderr.txt:159:- Advance `turn_index` to the next combatant.
+./agent_stderr.txt:162:- At the start of a combatant's turn, decrement each condition attached to that
+./agent_stderr.txt:163:  active combatant.
+./agent_stderr.txt:165:- Conditions on inactive combatants do not decrement.
+./agent_stderr.txt:175:  "conditions": {
+./agent_stderr.txt:187:I’ll inspect the existing Vite API shape first so the combat additions preserve the current endpoint style and validation patterns.
+./agent_stderr.txt:226:shots/03_combat-state_maintenance/PROMPT.md
+./agent_stderr.txt:246:The repo is a small Vite middleware app. I’m reading the server implementation and scripts now, then I’ll patch only the combat state surface.
+./agent_stderr.txt:338:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:339:              const item = asObject(combatant);
+./agent_stderr.txt:346:            combatants.sort((a, b) => {
+./agent_stderr.txt:353:              order: combatants.map(({ name, score }) => ({ name, score })),
+./agent_stderr.txt:669:+  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:672:+const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:681:+          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:684:+            combatSessions.set(session.id, session);
+./agent_stderr.txt:689:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:696:+            if (!session.conditions.has(target)) {
+./agent_stderr.txt:697:+              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:703:+            const conditions = session.conditions.get(target);
+./agent_stderr.txt:704:+            if (!conditions) {
+./agent_stderr.txt:705:+              throw new Error('missing conditions');
+./agent_stderr.txt:707:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:711:+              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:716:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:717:+          if (advanceMatch) {
+./agent_stderr.txt:718:+            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:721:+            advanceCombatSession(session);
+./agent_stderr.txt:724:+              conditions: serializeConditions(session),
+./agent_stderr.txt:738:+  if (combatSessions.has(id)) {
+./agent_stderr.txt:742:+  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:743:+    const item = asObject(combatant);
+./agent_stderr.txt:751:+    throw new Error('expected combatants');
+./agent_stderr.txt:761:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:772:+  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:780:+function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:788:+  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:789:+  if (!conditions) {
+./agent_stderr.txt:790:+    throw new Error('missing active conditions');
+./agent_stderr.txt:793:+  const remaining = conditions
+./agent_stderr.txt:799:+  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:815:+  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:816:+    if (conditions.length > 0) {
+./agent_stderr.txt:817:+      result[name] = conditions.map(copyCondition);
+./agent_stderr.txt:858:+  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:861:+const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:870:+          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:873:+            combatSessions.set(session.id, session);
+./agent_stderr.txt:878:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:885:+            if (!session.conditions.has(target)) {
+./agent_stderr.txt:886:+              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:892:+            const conditions = session.conditions.get(target);
+./agent_stderr.txt:893:+            if (!conditions) {
+./agent_stderr.txt:894:+              throw new Error('missing conditions');
+./agent_stderr.txt:896:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:900:+              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:905:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:906:+          if (advanceMatch) {
+./agent_stderr.txt:907:+            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:910:+            advanceCombatSession(session);
+./agent_stderr.txt:913:+              conditions: serializeConditions(session),
+./agent_stderr.txt:927:+  if (combatSessions.has(id)) {
+./agent_stderr.txt:931:+  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:932:+    const item = asObject(combatant);
+./agent_stderr.txt:940:+    throw new Error('expected combatants');
+./agent_stderr.txt:950:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:961:+  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:969:+function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:977:+  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:978:+  if (!conditions) {
+./agent_stderr.txt:979:+    throw new Error('missing active conditions');
+./agent_stderr.txt:982:+  const remaining = conditions
+./agent_stderr.txt:988:+  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:1004:+  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:1005:+    if (conditions.length > 0) {
+./agent_stderr.txt:1006:+      result[name] = conditions.map(copyCondition);
+./agent_stderr.txt:1024:The combat routes are patched in. I’m running TypeScript validation now, then I’ll do lightweight HTTP checks without leaving the server running.
+./agent_stderr.txt:1051:+  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:1054:+const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:1063:+          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:1066:+            combatSessions.set(session.id, session);
+./agent_stderr.txt:1071:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:1078:+            if (!session.conditions.has(target)) {
+./agent_stderr.txt:1079:+              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:1085:+            const conditions = session.conditions.get(target);
+./agent_stderr.txt:1086:+            if (!conditions) {
+./agent_stderr.txt:1087:+              throw new Error('missing conditions');
+./agent_stderr.txt:1089:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:1093:+              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:1098:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:1099:+          if (advanceMatch) {
+./agent_stderr.txt:1100:+            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:1103:+            advanceCombatSession(session);
+./agent_stderr.txt:1106:+              conditions: serializeConditions(session),
+./agent_stderr.txt:1120:+  if (combatSessions.has(id)) {
+./agent_stderr.txt:1124:+  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:1125:+    const item = asObject(combatant);
+./agent_stderr.txt:1133:+    throw new Error('expected combatants');
+./agent_stderr.txt:1143:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:1154:+  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:1162:+function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:1170:+  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:1171:+  if (!conditions) {
+./agent_stderr.txt:1172:+    throw new Error('missing active conditions');
+./agent_stderr.txt:1175:+  const remaining = conditions
+./agent_stderr.txt:1181:+  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:1197:+  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:1198:+    if (conditions.length > 0) {
+./agent_stderr.txt:1199:+      result[name] = conditions.map(copyCondition);
+./agent_stderr.txt:1251:+  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:1254:+const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:1263:+          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:1266:+            combatSessions.set(session.id, session);
+./agent_stderr.txt:1271:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:1278:+            if (!session.conditions.has(target)) {
+./agent_stderr.txt:1279:+              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:1285:+            const conditions = session.conditions.get(target);
+./agent_stderr.txt:1286:+            if (!conditions) {
+./agent_stderr.txt:1287:+              throw new Error('missing conditions');
+./agent_stderr.txt:1289:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:1293:+              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:1298:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:1299:+          if (advanceMatch) {
+./agent_stderr.txt:1300:+            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:1303:+            advanceCombatSession(session);
+./agent_stderr.txt:1306:+              conditions: serializeConditions(session),
+./agent_stderr.txt:1320:+  if (combatSessions.has(id)) {
+./agent_stderr.txt:1324:+  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:1325:+    const item = asObject(combatant);
+./agent_stderr.txt:1333:+    throw new Error('expected combatants');
+./agent_stderr.txt:1343:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:1354:+  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:1362:+function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:1370:+  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:1371:+  if (!conditions) {
+./agent_stderr.txt:1372:+    throw new Error('missing active conditions');
+./agent_stderr.txt:1375:+  const remaining = conditions
+./agent_stderr.txt:1381:+  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:1397:+  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:1398:+    if (conditions.length > 0) {
+./agent_stderr.txt:1399:+      result[name] = conditions.map(copyCondition);
+./agent_stderr.txt:1428:    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:1439:  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:1447:function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:1455:  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:1456:  if (!conditions) {
+./agent_stderr.txt:1457:    throw new Error('missing active conditions');
+./agent_stderr.txt:1460:  const remaining = conditions
+./agent_stderr.txt:1466:  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:1482:  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:1483:    if (conditions.length > 0) {
+./agent_stderr.txt:1484:      result[name] = conditions.map(copyCondition);
+./agent_stderr.txt:1721:  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:1724:const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:1798:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:1799:              const item = asObject(combatant);
+./agent_stderr.txt:1806:            combatants.sort((a, b) => {
+./agent_stderr.txt:1813:              order: combatants.map(({ name, score }) => ({ name, score })),
+./agent_stderr.txt:1838:          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:1841:            combatSessions.set(session.id, session);
+./agent_stderr.txt:1846:          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:1853:            if (!session.conditions.has(target)) {
+./agent_stderr.txt:1854:              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:1860:            const conditions = session.conditions.get(target);
+./agent_stderr.txt:1861:            if (!conditions) {
+./agent_stderr.txt:1862:              throw new Error('missing conditions');
+./agent_stderr.txt:1864:            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:1868:              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:1873:          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:1874:          if (advanceMatch) {
+./agent_stderr.txt:1875:            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:1878:            advanceCombatSession(session);
+./agent_stderr.txt:1881:              conditions: serializeConditions(session),
+./agent_stderr.txt:1897:  if (combatSessions.has(id)) {
+./agent_stderr.txt:1901:  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:1902:    const item = asObject(combatant);
+./agent_stderr.txt:1910:    throw new Error('expected combatants');
+./agent_stderr.txt:1946:+  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:1949:+const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:1958:+          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:1961:+            combatSessions.set(session.id, session);
+./agent_stderr.txt:1966:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:1973:+            if (!session.conditions.has(target)) {
+./agent_stderr.txt:1974:+              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:1980:+            const conditions = session.conditions.get(target);
+./agent_stderr.txt:1981:+            if (!conditions) {
+./agent_stderr.txt:1982:+              throw new Error('missing conditions');
+./agent_stderr.txt:1984:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:1988:+              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:1993:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:1994:+          if (advanceMatch) {
+./agent_stderr.txt:1995:+            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:1998:+            advanceCombatSession(session);
+./agent_stderr.txt:2001:+              conditions: serializeConditions(session),
+./agent_stderr.txt:2015:+  if (combatSessions.has(id)) {
+./agent_stderr.txt:2019:+  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:2020:+    const item = asObject(combatant);
+./agent_stderr.txt:2028:+    throw new Error('expected combatants');
+./agent_stderr.txt:2038:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:2049:+  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:2057:+function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:2065:+  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:2066:+  if (!conditions) {
+./agent_stderr.txt:2067:+    throw new Error('missing active conditions');
+./agent_stderr.txt:2070:+  const remaining = conditions
+./agent_stderr.txt:2076:+  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:2092:+  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:2093:+    if (conditions.length > 0) {
+./agent_stderr.txt:2094:+      result[name] = conditions.map(copyCondition);
+./agent_stderr.txt:2112:Implemented Stage 2 combat state in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts).
+./agent_stderr.txt:2115:- `POST /v1/combat/sessions`
+./agent_stderr.txt:2116:- `POST /v1/combat/sessions/{id}/conditions`
+./agent_stderr.txt:2117:- `POST /v1/combat/sessions/{id}/advance`
+./agent_stderr.txt:2119:State is in memory, initiative ordering follows the specified tie-breaks, condition durations decrement only when the affected combatant becomes active, and unknown sessions return `404`.
+./agent_stderr.txt:2149:+  conditions: Map<string, Condition[]>;
+./agent_stderr.txt:2152:+const combatSessions = new Map<string, CombatSession>();
+./agent_stderr.txt:2161:+          if (url === '/v1/combat/sessions') {
+./agent_stderr.txt:2164:+            combatSessions.set(session.id, session);
+./agent_stderr.txt:2169:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./agent_stderr.txt:2176:+            if (!session.conditions.has(target)) {
+./agent_stderr.txt:2177:+              sendJson(res, 400, { error: 'unknown combatant' });
+./agent_stderr.txt:2183:+            const conditions = session.conditions.get(target);
+./agent_stderr.txt:2184:+            if (!conditions) {
+./agent_stderr.txt:2185:+              throw new Error('missing conditions');
+./agent_stderr.txt:2187:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./agent_stderr.txt:2191:+              conditions: conditions.map(copyCondition),
+./agent_stderr.txt:2196:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./agent_stderr.txt:2197:+          if (advanceMatch) {
+./agent_stderr.txt:2198:+            const session = getCombatSession(advanceMatch[1], res);
+./agent_stderr.txt:2201:+            advanceCombatSession(session);
+./agent_stderr.txt:2204:+              conditions: serializeConditions(session),
+./agent_stderr.txt:2218:+  if (combatSessions.has(id)) {
+./agent_stderr.txt:2222:+  const order = getArray(body, 'combatants').map((combatant) => {
+./agent_stderr.txt:2223:+    const item = asObject(combatant);
+./agent_stderr.txt:2231:+    throw new Error('expected combatants');
+./agent_stderr.txt:2241:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./agent_stderr.txt:2252:+  const session = combatSessions.get(decodeURIComponent(id));
+./agent_stderr.txt:2260:+function advanceCombatSession(session: CombatSession): void {
+./agent_stderr.txt:2268:+  const conditions = session.conditions.get(active.name);
+./agent_stderr.txt:2269:+  if (!conditions) {
+./agent_stderr.txt:2270:+    throw new Error('missing active conditions');
+./agent_stderr.txt:2273:+  const remaining = conditions
+./agent_stderr.txt:2279:+  session.conditions.set(active.name, remaining);
+./agent_stderr.txt:2295:+  for (const [name, conditions] of session.conditions) {
+./agent_stderr.txt:2296:+    if (conditions.length > 0) {
+./agent_stderr.txt:2297:+      result[name] = conditions.map(copyCondition);
+./PROMPT.md:7:        Lifecycle stage: combat-state
+./PROMPT.md:71:`POST /v1/combat/sessions`
+./PROMPT.md:78:  "combatants": [
+./PROMPT.md:91:- New sessions start at `round = 1` and `turn_index = 0`.
+./PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+./PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+./PROMPT.md:126:- `target` must name a combatant in the session.
+./PROMPT.md:129:- Conditions are attached to the named combatant.
+./PROMPT.md:136:  "conditions": [
+./PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+./PROMPT.md:148:- Advance `turn_index` to the next combatant.
+./PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+./PROMPT.md:152:  active combatant.
+./PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+./PROMPT.md:164:  "conditions": {
+./PROMPT.md:177:            suite=combat-state base_url=http://127.0.0.1:58505 passed=false tests=19/20
+./PROMPT.md:191:PASS	combat-create-session	0ms	HTTP 200
+./PROMPT.md:192:PASS	combat-add-condition	0ms	HTTP 200
+./PROMPT.md:193:PASS	combat-advance-to-mage	0ms	HTTP 200
+./PROMPT.md:194:PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+./PROMPT.md:195:PASS	combat-advance-wrap-round	0ms	HTTP 200
+./PROMPT.md:196:PASS	combat-advance-condition-expires	0ms	HTTP 200
+./PROMPT.md:197:FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+./PROMPT.md:198:  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}],"conditions":{}}
+./PROMPT.md:216:failed test IDs: combat-advance-expired-removed
+./dndeval-combat-state-report.json:2:  "suite": "combat-state",
+./dndeval-combat-state-report.json:100:      "id": "combat-create-session",
+./dndeval-combat-state-report.json:101:      "name": "Create deterministic combat session",
+./dndeval-combat-state-report.json:107:      "id": "combat-add-condition",
+./dndeval-combat-state-report.json:108:      "name": "Add condition to combatant",
+./dndeval-combat-state-report.json:114:      "id": "combat-advance-to-mage",
+./dndeval-combat-state-report.json:121:      "id": "combat-advance-to-fighter-decrements",
+./dndeval-combat-state-report.json:128:      "id": "combat-advance-wrap-round",
+./dndeval-combat-state-report.json:135:      "id": "combat-advance-condition-expires",
+./dndeval-combat-state-report.json:142:      "id": "combat-advance-expired-removed",
+./dndeval-combat-state-report.json:147:      "error": "conditions: missing JSON key \"fighter\"",
+./dndeval-combat-state-report.json:148:      "response_body": "{\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"order\":[{\"name\":\"rogue\",\"score\":17},{\"name\":\"mage\",\"score\":16},{\"name\":\"fighter\",\"score\":14}],\"conditions\":{}}"
+./agent_last_message.txt:1:Implemented Stage 2 combat state in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts).
+./agent_last_message.txt:4:- `POST /v1/combat/sessions`
+./agent_last_message.txt:5:- `POST /v1/combat/sessions/{id}/conditions`
+./agent_last_message.txt:6:- `POST /v1/combat/sessions/{id}/advance`
+./agent_last_message.txt:8:State is in memory, initiative ordering follows the specified tie-breaks, condition durations decrement only when the affected combatant becomes active, and unknown sessions return `404`.
+./agent_stdout.txt:1:Implemented Stage 2 combat state in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts).
+./agent_stdout.txt:4:- `POST /v1/combat/sessions`
+./agent_stdout.txt:5:- `POST /v1/combat/sessions/{id}/conditions`
+./agent_stdout.txt:6:- `POST /v1/combat/sessions/{id}/advance`
+./agent_stdout.txt:8:State is in memory, initiative ordering follows the specified tie-breaks, condition durations decrement only when the affected combatant becomes active, and unknown sessions return `404`.
+./vite.config.ts:28:  conditions: Map<string, Condition[]>;
+./vite.config.ts:31:const combatSessions = new Map<string, CombatSession>();
+./vite.config.ts:105:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./vite.config.ts:106:              const item = asObject(combatant);
+./vite.config.ts:113:            combatants.sort((a, b) => {
+./vite.config.ts:120:              order: combatants.map(({ name, score }) => ({ name, score })),
+./vite.config.ts:145:          if (url === '/v1/combat/sessions') {
+./vite.config.ts:148:            combatSessions.set(session.id, session);
+./vite.config.ts:153:          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./vite.config.ts:160:            if (!session.conditions.has(target)) {
+./vite.config.ts:161:              sendJson(res, 400, { error: 'unknown combatant' });
+./vite.config.ts:167:            const conditions = session.conditions.get(target);
+./vite.config.ts:168:            if (!conditions) {
+./vite.config.ts:169:              throw new Error('missing conditions');
+./vite.config.ts:171:            conditions.push({ condition, remaining_rounds: remainingRounds });
+./vite.config.ts:175:              conditions: conditions.map(copyCondition),
+./vite.config.ts:180:          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./vite.config.ts:181:          if (advanceMatch) {
+./vite.config.ts:182:            const session = getCombatSession(advanceMatch[1], res);
+./vite.config.ts:185:            advanceCombatSession(session);
+./vite.config.ts:188:              conditions: serializeConditions(session),
+./vite.config.ts:204:  if (combatSessions.has(id)) {
+./vite.config.ts:208:  const order = getArray(body, 'combatants').map((combatant) => {
+./vite.config.ts:209:    const item = asObject(combatant);
+./vite.config.ts:217:    throw new Error('expected combatants');
+./vite.config.ts:227:    conditions: new Map(order.map(({ name }) => [name, []])),
+./vite.config.ts:238:  const session = combatSessions.get(decodeURIComponent(id));
+./vite.config.ts:246:function advanceCombatSession(session: CombatSession): void {
+./vite.config.ts:254:  const conditions = session.conditions.get(active.name);
+./vite.config.ts:255:  if (!conditions) {
+./vite.config.ts:256:    throw new Error('missing active conditions');
+./vite.config.ts:259:  const remaining = conditions
+./vite.config.ts:265:  session.conditions.set(active.name, remaining);
+./vite.config.ts:281:  for (const [name, conditions] of session.conditions) {
+./vite.config.ts:282:    if (conditions.length > 0) {
+./vite.config.ts:283:      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stdout.txt:1:Implemented Stage 2 combat state in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts).
+./shots/03_combat-state_maintenance/agent_stdout.txt:4:- `POST /v1/combat/sessions`
+./shots/03_combat-state_maintenance/agent_stdout.txt:5:- `POST /v1/combat/sessions/{id}/conditions`
+./shots/03_combat-state_maintenance/agent_stdout.txt:6:- `POST /v1/combat/sessions/{id}/advance`
+./shots/03_combat-state_maintenance/agent_stdout.txt:8:State is in memory, initiative ordering follows the specified tie-breaks, condition durations decrement only when the affected combatant becomes active, and unknown sessions return `404`.
+./shots/04_combat-state_bugfix/PROMPT.md:7:        Lifecycle stage: combat-state
+./shots/04_combat-state_bugfix/PROMPT.md:71:`POST /v1/combat/sessions`
+./shots/04_combat-state_bugfix/PROMPT.md:78:  "combatants": [
+./shots/04_combat-state_bugfix/PROMPT.md:91:- New sessions start at `round = 1` and `turn_index = 0`.
+./shots/04_combat-state_bugfix/PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+./shots/04_combat-state_bugfix/PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+./shots/04_combat-state_bugfix/PROMPT.md:126:- `target` must name a combatant in the session.
+./shots/04_combat-state_bugfix/PROMPT.md:129:- Conditions are attached to the named combatant.
+./shots/04_combat-state_bugfix/PROMPT.md:136:  "conditions": [
+./shots/04_combat-state_bugfix/PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+./shots/04_combat-state_bugfix/PROMPT.md:148:- Advance `turn_index` to the next combatant.
+./shots/04_combat-state_bugfix/PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+./shots/04_combat-state_bugfix/PROMPT.md:152:  active combatant.
+./shots/04_combat-state_bugfix/PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+./shots/04_combat-state_bugfix/PROMPT.md:164:  "conditions": {
+./shots/04_combat-state_bugfix/PROMPT.md:177:            suite=combat-state base_url=http://127.0.0.1:58505 passed=false tests=19/20
+./shots/04_combat-state_bugfix/PROMPT.md:191:PASS	combat-create-session	0ms	HTTP 200
+./shots/04_combat-state_bugfix/PROMPT.md:192:PASS	combat-add-condition	0ms	HTTP 200
+./shots/04_combat-state_bugfix/PROMPT.md:193:PASS	combat-advance-to-mage	0ms	HTTP 200
+./shots/04_combat-state_bugfix/PROMPT.md:194:PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+./shots/04_combat-state_bugfix/PROMPT.md:195:PASS	combat-advance-wrap-round	0ms	HTTP 200
+./shots/04_combat-state_bugfix/PROMPT.md:196:PASS	combat-advance-condition-expires	0ms	HTTP 200
+./shots/04_combat-state_bugfix/PROMPT.md:197:FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+./shots/04_combat-state_bugfix/PROMPT.md:198:  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}],"conditions":{}}
+./shots/04_combat-state_bugfix/PROMPT.md:216:failed test IDs: combat-advance-expired-removed
+./shots/03_combat-state_maintenance/PROMPT.md:7:        Lifecycle stage: combat-state
+./shots/03_combat-state_maintenance/PROMPT.md:71:`POST /v1/combat/sessions`
+./shots/03_combat-state_maintenance/PROMPT.md:78:  "combatants": [
+./shots/03_combat-state_maintenance/PROMPT.md:91:- New sessions start at `round = 1` and `turn_index = 0`.
+./shots/03_combat-state_maintenance/PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+./shots/03_combat-state_maintenance/PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+./shots/03_combat-state_maintenance/PROMPT.md:126:- `target` must name a combatant in the session.
+./shots/03_combat-state_maintenance/PROMPT.md:129:- Conditions are attached to the named combatant.
+./shots/03_combat-state_maintenance/PROMPT.md:136:  "conditions": [
+./shots/03_combat-state_maintenance/PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+./shots/03_combat-state_maintenance/PROMPT.md:148:- Advance `turn_index` to the next combatant.
+./shots/03_combat-state_maintenance/PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+./shots/03_combat-state_maintenance/PROMPT.md:152:  active combatant.
+./shots/03_combat-state_maintenance/PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+./shots/03_combat-state_maintenance/PROMPT.md:164:  "conditions": {
+./shots/03_combat-state_maintenance/agent_stderr.txt:18:        Lifecycle stage: combat-state
+./shots/03_combat-state_maintenance/agent_stderr.txt:82:`POST /v1/combat/sessions`
+./shots/03_combat-state_maintenance/agent_stderr.txt:89:  "combatants": [
+./shots/03_combat-state_maintenance/agent_stderr.txt:102:- New sessions start at `round = 1` and `turn_index = 0`.
+./shots/03_combat-state_maintenance/agent_stderr.txt:103:- `active` is the combatant at the current `turn_index`.
+./shots/03_combat-state_maintenance/agent_stderr.txt:123:`POST /v1/combat/sessions/{id}/conditions`
+./shots/03_combat-state_maintenance/agent_stderr.txt:137:- `target` must name a combatant in the session.
+./shots/03_combat-state_maintenance/agent_stderr.txt:140:- Conditions are attached to the named combatant.
+./shots/03_combat-state_maintenance/agent_stderr.txt:147:  "conditions": [
+./shots/03_combat-state_maintenance/agent_stderr.txt:155:`POST /v1/combat/sessions/{id}/advance`
+./shots/03_combat-state_maintenance/agent_stderr.txt:159:- Advance `turn_index` to the next combatant.
+./shots/03_combat-state_maintenance/agent_stderr.txt:162:- At the start of a combatant's turn, decrement each condition attached to that
+./shots/03_combat-state_maintenance/agent_stderr.txt:163:  active combatant.
+./shots/03_combat-state_maintenance/agent_stderr.txt:165:- Conditions on inactive combatants do not decrement.
+./shots/03_combat-state_maintenance/agent_stderr.txt:175:  "conditions": {
+./shots/03_combat-state_maintenance/agent_stderr.txt:187:I’ll inspect the existing Vite API shape first so the combat additions preserve the current endpoint style and validation patterns.
+./shots/03_combat-state_maintenance/agent_stderr.txt:226:shots/03_combat-state_maintenance/PROMPT.md
+./shots/03_combat-state_maintenance/agent_stderr.txt:246:The repo is a small Vite middleware app. I’m reading the server implementation and scripts now, then I’ll patch only the combat state surface.
+./shots/03_combat-state_maintenance/agent_stderr.txt:338:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:339:              const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:346:            combatants.sort((a, b) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:353:              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/03_combat-state_maintenance/agent_stderr.txt:669:+  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:672:+const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:681:+          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:684:+            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:689:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:696:+            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:697:+              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:703:+            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:704:+            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:705:+              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:707:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:711:+              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:716:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:717:+          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:718:+            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:721:+            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:724:+              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:738:+  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:742:+  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:743:+    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:751:+    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:761:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:772:+  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:780:+function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:788:+  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:789:+  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:790:+    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:793:+  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:799:+  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:815:+  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:816:+    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:817:+      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stderr.txt:858:+  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:861:+const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:870:+          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:873:+            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:878:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:885:+            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:886:+              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:892:+            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:893:+            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:894:+              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:896:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:900:+              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:905:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:906:+          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:907:+            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:910:+            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:913:+              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:927:+  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:931:+  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:932:+    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:940:+    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:950:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:961:+  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:969:+function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:977:+  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:978:+  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:979:+    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:982:+  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:988:+  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1004:+  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1005:+    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1006:+      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1024:The combat routes are patched in. I’m running TypeScript validation now, then I’ll do lightweight HTTP checks without leaving the server running.
+./shots/03_combat-state_maintenance/agent_stderr.txt:1051:+  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:1054:+const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:1063:+          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1066:+            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1071:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1078:+            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1079:+              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1085:+            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1086:+            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1087:+              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1089:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1093:+              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1098:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1099:+          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1100:+            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1103:+            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1106:+              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1120:+  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1124:+  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1125:+    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1133:+    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1143:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1154:+  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:1162:+function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1170:+  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1171:+  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1172:+    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1175:+  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:1181:+  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1197:+  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1198:+    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1199:+      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1251:+  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:1254:+const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:1263:+          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1266:+            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1271:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1278:+            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1279:+              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1285:+            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1286:+            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1287:+              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1289:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1293:+              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1298:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1299:+          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1300:+            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1303:+            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1306:+              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1320:+  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1324:+  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1325:+    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1333:+    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1343:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1354:+  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:1362:+function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1370:+  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1371:+  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1372:+    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1375:+  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:1381:+  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1397:+  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1398:+    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1399:+      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1428:    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1439:  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:1447:function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1455:  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1456:  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1457:    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1460:  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:1466:  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1482:  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1483:    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1484:      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1721:  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:1724:const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:1798:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1799:              const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1806:            combatants.sort((a, b) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1813:              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1838:          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1841:            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1846:          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1853:            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1854:              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1860:            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1861:            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1862:              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1864:            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1868:              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1873:          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1874:          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1875:            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1878:            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1881:              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1897:  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1901:  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1902:    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1910:    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1946:+  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:1949:+const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:1958:+          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1961:+            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1966:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1973:+            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1974:+              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1980:+            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1981:+            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1982:+              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:1984:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:1988:+              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:1993:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1994:+          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:1995:+            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:1998:+            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2001:+              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:2015:+  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2019:+  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2020:+    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2028:+    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:2038:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:2049:+  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:2057:+function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2065:+  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2066:+  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2067:+    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:2070:+  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:2076:+  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2092:+  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2093:+    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2094:+      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2112:Implemented Stage 2 combat state in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts).
+./shots/03_combat-state_maintenance/agent_stderr.txt:2115:- `POST /v1/combat/sessions`
+./shots/03_combat-state_maintenance/agent_stderr.txt:2116:- `POST /v1/combat/sessions/{id}/conditions`
+./shots/03_combat-state_maintenance/agent_stderr.txt:2117:- `POST /v1/combat/sessions/{id}/advance`
+./shots/03_combat-state_maintenance/agent_stderr.txt:2119:State is in memory, initiative ordering follows the specified tie-breaks, condition durations decrement only when the affected combatant becomes active, and unknown sessions return `404`.
+./shots/03_combat-state_maintenance/agent_stderr.txt:2149:+  conditions: Map<string, Condition[]>;
+./shots/03_combat-state_maintenance/agent_stderr.txt:2152:+const combatSessions = new Map<string, CombatSession>();
+./shots/03_combat-state_maintenance/agent_stderr.txt:2161:+          if (url === '/v1/combat/sessions') {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2164:+            combatSessions.set(session.id, session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2169:+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2176:+            if (!session.conditions.has(target)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2177:+              sendJson(res, 400, { error: 'unknown combatant' });
+./shots/03_combat-state_maintenance/agent_stderr.txt:2183:+            const conditions = session.conditions.get(target);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2184:+            if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2185:+              throw new Error('missing conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:2187:+            conditions.push({ condition, remaining_rounds: remainingRounds });
+./shots/03_combat-state_maintenance/agent_stderr.txt:2191:+              conditions: conditions.map(copyCondition),
+./shots/03_combat-state_maintenance/agent_stderr.txt:2196:+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2197:+          if (advanceMatch) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2198:+            const session = getCombatSession(advanceMatch[1], res);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2201:+            advanceCombatSession(session);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2204:+              conditions: serializeConditions(session),
+./shots/03_combat-state_maintenance/agent_stderr.txt:2218:+  if (combatSessions.has(id)) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2222:+  const order = getArray(body, 'combatants').map((combatant) => {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2223:+    const item = asObject(combatant);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2231:+    throw new Error('expected combatants');
+./shots/03_combat-state_maintenance/agent_stderr.txt:2241:+    conditions: new Map(order.map(({ name }) => [name, []])),
+./shots/03_combat-state_maintenance/agent_stderr.txt:2252:+  const session = combatSessions.get(decodeURIComponent(id));
+./shots/03_combat-state_maintenance/agent_stderr.txt:2260:+function advanceCombatSession(session: CombatSession): void {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2268:+  const conditions = session.conditions.get(active.name);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2269:+  if (!conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2270:+    throw new Error('missing active conditions');
+./shots/03_combat-state_maintenance/agent_stderr.txt:2273:+  const remaining = conditions
+./shots/03_combat-state_maintenance/agent_stderr.txt:2279:+  session.conditions.set(active.name, remaining);
+./shots/03_combat-state_maintenance/agent_stderr.txt:2295:+  for (const [name, conditions] of session.conditions) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2296:+    if (conditions.length > 0) {
+./shots/03_combat-state_maintenance/agent_stderr.txt:2297:+      result[name] = conditions.map(copyCondition);
+./shots/03_combat-state_maintenance/agent_last_message.txt:1:Implemented Stage 2 combat state in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts).
+./shots/03_combat-state_maintenance/agent_last_message.txt:4:- `POST /v1/combat/sessions`
+./shots/03_combat-state_maintenance/agent_last_message.txt:5:- `POST /v1/combat/sessions/{id}/conditions`
+./shots/03_combat-state_maintenance/agent_last_message.txt:6:- `POST /v1/combat/sessions/{id}/advance`
+./shots/03_combat-state_maintenance/agent_last_message.txt:8:State is in memory, initiative ordering follows the specified tie-breaks, condition durations decrement only when the affected combatant becomes active, and unknown sessions return `404`.
+./shots/02_characters_maintenance/agent_stderr.txt:323:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/02_characters_maintenance/agent_stderr.txt:324:              const item = asObject(combatant);
+./shots/02_characters_maintenance/agent_stderr.txt:331:            combatants.sort((a, b) => {
+./shots/02_characters_maintenance/agent_stderr.txt:338:              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/02_characters_maintenance/agent_stderr.txt:1087:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/02_characters_maintenance/agent_stderr.txt:1088:              const item = asObject(combatant);
+./shots/02_characters_maintenance/agent_stderr.txt:1095:            combatants.sort((a, b) => {
+./shots/02_characters_maintenance/agent_stderr.txt:1102:              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:2:  "suite": "combat-state",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:100:      "id": "combat-create-session",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:101:      "name": "Create deterministic combat session",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:107:      "id": "combat-add-condition",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:108:      "name": "Add condition to combatant",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:114:      "id": "combat-advance-to-mage",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:121:      "id": "combat-advance-to-fighter-decrements",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:128:      "id": "combat-advance-wrap-round",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:135:      "id": "combat-advance-condition-expires",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:142:      "id": "combat-advance-expired-removed",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:147:      "error": "conditions: missing JSON key \"fighter\"",
+./shots/03_combat-state_maintenance/dndeval-combat-state-report.json:148:      "response_body": "{\"id\":\"enc-1\",\"round\":2,\"turn_index\":2,\"active\":{\"name\":\"fighter\",\"score\":14},\"order\":[{\"name\":\"rogue\",\"score\":17},{\"name\":\"mage\",\"score\":16},{\"name\":\"fighter\",\"score\":14}],\"conditions\":{}}"
+./shots/01_core_creative/PROMPT.md:195:  "combatants": [
+./shots/01_core_creative/agent_stderr.txt:206:  "combatants": [
+./shots/01_core_creative/agent_stderr.txt:425:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:426:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:433:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:440:+              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:689:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:690:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:697:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:704:+              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:967:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:968:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:975:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:982:+              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:1224:            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:1225:              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:1232:            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:1239:              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:1488:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:1489:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:1496:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:1503:+              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:1754:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:1755:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:1762:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:1769:+              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:2038:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:2039:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:2046:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:2053:+              order: combatants.map(({ name, score }) => ({ name, score })),
+./shots/01_core_creative/agent_stderr.txt:2308:+            const combatants = getArray(body, 'combatants').map((combatant) => {
+./shots/01_core_creative/agent_stderr.txt:2309:+              const item = asObject(combatant);
+./shots/01_core_creative/agent_stderr.txt:2316:+            combatants.sort((a, b) => {
+./shots/01_core_creative/agent_stderr.txt:2323:+              order: combatants.map(({ name, score }) => ({ name, score })),
+
+codex
+The failure is localized: serialization currently omits empty condition arrays, while the evaluator expects the combatant key to remain present after expiry. I’m opening the implementation around that helper before editing.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+exec
+/bin/zsh -lc "sed -n '1,260p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT"
+
+ succeeded in 0ms:
+import { defineConfig, type Plugin } from 'vite';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+type InitiativeEntry = {
+  name: string;
+  dex: number;
+  score: number;
+};
+
+type Condition = {
+  condition: string;
+  remaining_rounds: number;
+};
+
+type CombatSession = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order: InitiativeEntry[];
+  conditions: Map<string, Condition[]>;
+};
+
+const combatSessions = new Map<string, CombatSession>();
+
+const monsterXp: Record<string, number> = {
+  '0': 10,
+  '1/8': 25,
+  '1/4': 50,
+  '1/2': 100,
+  '1': 200,
+  '2': 450,
+  '3': 700,
+  '4': 1100,
+  '5': 1800,
+};
+
+const levelThresholds: Record<number, Thresholds> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+type Thresholds = {
+  easy: number;
+  medium: number;
+  hard: number;
+  deadly: number;
+};
+
+function dndApiPlugin(): Plugin {
+  return {
+    name: 'dnd-rest-api',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        try {
+          const url = req.url?.split('?', 1)[0] ?? '';
+
+          if (req.method === 'GET' && url === '/health') {
+            sendJson(res, 200, { ok: true });
+            return;
+          }
+
+          if (req.method !== 'POST') {
+            next();
+            return;
+          }
+
+          if (url === '/v1/dice/stats') {
+            const body = await readJson(req);
+            const expression = getString(body, 'expression');
+            const stats = parseDiceExpression(expression);
+            if (!stats) {
+              sendJson(res, 400, { error: 'invalid dice expression' });
+              return;
+            }
+            sendJson(res, 200, stats);
+            return;
+          }
+
+          if (url === '/v1/checks/ability') {
+            const body = await readJson(req);
+            const roll = getNumber(body, 'roll');
+            const modifier = getNumber(body, 'modifier');
+            const dc = getNumber(body, 'dc');
+            const total = roll + modifier;
+            sendJson(res, 200, { total, success: total >= dc, margin: total - dc });
+            return;
+          }
+
+          if (url === '/v1/encounters/adjusted-xp') {
+            const body = await readJson(req);
+            const result = calculateAdjustedXp(body);
+            sendJson(res, 200, result);
+            return;
+          }
+
+          if (url === '/v1/initiative/order') {
+            const body = await readJson(req);
+            const combatants = getArray(body, 'combatants').map((combatant) => {
+              const item = asObject(combatant);
+              const name = getString(item, 'name');
+              const dex = getNumber(item, 'dex');
+              const roll = getNumber(item, 'roll');
+              return { name, dex, score: roll + dex };
+            });
+
+            combatants.sort((a, b) => {
+              if (b.score !== a.score) return b.score - a.score;
+              if (b.dex !== a.dex) return b.dex - a.dex;
+              return a.name.localeCompare(b.name);
+            });
+
+            sendJson(res, 200, {
+              order: combatants.map(({ name, score }) => ({ name, score })),
+            });
+            return;
+          }
+
+          if (url === '/v1/characters/ability-modifier') {
+            const body = await readJson(req);
+            const score = getBoundedInteger(body, 'score', 1, 30);
+            sendJson(res, 200, { score, modifier: abilityModifier(score) });
+            return;
+          }
+
+          if (url === '/v1/characters/proficiency') {
+            const body = await readJson(req);
+            const level = getBoundedInteger(body, 'level', 1, 20);
+            sendJson(res, 200, { level, proficiency_bonus: proficiencyBonus(level) });
+            return;
+          }
+
+          if (url === '/v1/characters/derived-stats') {
+            const body = await readJson(req);
+            sendJson(res, 200, calculateDerivedStats(body));
+            return;
+          }
+
+          if (url === '/v1/combat/sessions') {
+            const body = await readJson(req);
+            const session = createCombatSession(body);
+            combatSessions.set(session.id, session);
+            sendJson(res, 200, serializeCombatSession(session));
+            return;
+          }
+
+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+          if (conditionMatch) {
+            const session = getCombatSession(conditionMatch[1], res);
+            if (!session) return;
+
+            const body = await readJson(req);
+            const target = getString(body, 'target');
+            if (!session.conditions.has(target)) {
+              sendJson(res, 400, { error: 'unknown combatant' });
+              return;
+            }
+
+            const condition = getString(body, 'condition');
+            const remainingRounds = getBoundedInteger(body, 'duration_rounds', 1, Number.MAX_SAFE_INTEGER);
+            const conditions = session.conditions.get(target);
+            if (!conditions) {
+              throw new Error('missing conditions');
+            }
+            conditions.push({ condition, remaining_rounds: remainingRounds });
+
+            sendJson(res, 200, {
+              target,
+              conditions: conditions.map(copyCondition),
+            });
+            return;
+          }
+
+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+          if (advanceMatch) {
+            const session = getCombatSession(advanceMatch[1], res);
+            if (!session) return;
+
+            advanceCombatSession(session);
+            sendJson(res, 200, {
+              ...serializeCombatSession(session),
+              conditions: serializeConditions(session),
+            });
+            return;
+          }
+
+          next();
+        } catch {
+          sendJson(res, 400, { error: 'invalid request' });
+        }
+      });
+    },
+  };
+}
+
+function createCombatSession(body: Record<string, JsonValue>): CombatSession {
+  const id = getString(body, 'id');
+  if (combatSessions.has(id)) {
+    throw new Error('duplicate session');
+  }
+
+  const order = getArray(body, 'combatants').map((combatant) => {
+    const item = asObject(combatant);
+    const name = getString(item, 'name');
+    const dex = getNumber(item, 'dex');
+    const roll = getNumber(item, 'roll');
+    return { name, dex, score: roll + dex };
+  });
+
+  if (order.length === 0) {
+    throw new Error('expected combatants');
+  }
+
+  order.sort(compareInitiative);
+
+  return {
+    id,
+    round: 1,
+    turn_index: 0,
+    order,
+    conditions: new Map(order.map(({ name }) => [name, []])),
+  };
+}
+
+function compareInitiative(a: InitiativeEntry, b: InitiativeEntry): number {
+  if (b.score !== a.score) return b.score - a.score;
+  if (b.dex !== a.dex) return b.dex - a.dex;
+  return a.name.localeCompare(b.name);
+}
+
+function getCombatSession(id: string, res: ServerResponse): CombatSession | null {
+  const session = combatSessions.get(decodeURIComponent(id));
+  if (!session) {
+    sendJson(res, 404, { error: 'unknown session' });
+    return null;
+  }
+  return session;
+}
+
+function advanceCombatSession(session: CombatSession): void {
+  session.turn_index += 1;
+  if (session.turn_index >= session.order.length) {
+    session.turn_index = 0;
+    session.round += 1;
+  }
+
+  const active = session.order[session.turn_index];
+  const conditions = session.conditions.get(active.name);
+  if (!conditions) {
+    throw new Error('missing active conditions');
+  }
+
+  const remaining = conditions
+    .map(({ condition, remaining_rounds }) => ({
+
+exec
+/bin/zsh -lc 'cat package.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bash ./run.sh"
+  },
+  "dependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "26.1.1",
+    "vite": "8.1.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {}
+}
+
+exec
+/bin/zsh -lc "sed -n '260,560p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+    .map(({ condition, remaining_rounds }) => ({
+      condition,
+      remaining_rounds: remaining_rounds - 1,
+    }))
+    .filter(({ remaining_rounds }) => remaining_rounds > 0);
+  session.conditions.set(active.name, remaining);
+}
+
+function serializeCombatSession(session: CombatSession) {
+  const active = session.order[session.turn_index];
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: { name: active.name, score: active.score },
+    order: session.order.map(({ name, score }) => ({ name, score })),
+  };
+}
+
+function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+  const result: Record<string, JsonValue> = {};
+  for (const [name, conditions] of session.conditions) {
+    if (conditions.length > 0) {
+      result[name] = conditions.map(copyCondition);
+    }
+  }
+  return result;
+}
+
+function copyCondition(condition: Condition) {
+  return {
+    condition: condition.condition,
+    remaining_rounds: condition.remaining_rounds,
+  };
+}
+
+function parseDiceExpression(expression: string) {
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(expression);
+  if (!match) return null;
+
+  const diceCount = Number.parseInt(match[1], 10);
+  const sides = Number.parseInt(match[2], 10);
+  const unsignedModifier = match[4] ? Number.parseInt(match[4], 10) : 0;
+  const modifier = match[3] === '-' ? -unsignedModifier : unsignedModifier;
+
+  if (!Number.isSafeInteger(diceCount) || !Number.isSafeInteger(sides)) return null;
+  if (diceCount <= 0 || sides <= 0) return null;
+
+  const min = diceCount + modifier;
+  const max = diceCount * sides + modifier;
+
+  return {
+    dice_count: diceCount,
+    sides,
+    modifier,
+    min,
+    max,
+    average: (min + max) / 2,
+  };
+}
+
+function calculateAdjustedXp(body: Record<string, JsonValue>) {
+  const monsters = getArray(body, 'monsters');
+  const party = getArray(body, 'party');
+
+  let baseXp = 0;
+  let monsterCount = 0;
+  for (const monsterValue of monsters) {
+    const monster = asObject(monsterValue);
+    const cr = getString(monster, 'cr');
+    const count = getNumber(monster, 'count');
+    if (!Number.isInteger(count) || count < 0 || monsterXp[cr] === undefined) {
+      throw new Error('invalid monster');
+    }
+    baseXp += monsterXp[cr] * count;
+    monsterCount += count;
+  }
+
+  const multiplier = monsterMultiplier(monsterCount);
+  const adjustedXp = baseXp * multiplier;
+  const thresholds: Thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+
+  for (const memberValue of party) {
+    const member = asObject(memberValue);
+    const level = getNumber(member, 'level');
+    const memberThresholds = levelThresholds[level];
+    if (!Number.isInteger(level) || !memberThresholds) {
+      throw new Error('invalid party member');
+    }
+    thresholds.easy += memberThresholds.easy;
+    thresholds.medium += memberThresholds.medium;
+    thresholds.hard += memberThresholds.hard;
+    thresholds.deadly += memberThresholds.deadly;
+  }
+
+  return {
+    base_xp: baseXp,
+    monster_count: monsterCount,
+    multiplier,
+    adjusted_xp: adjustedXp,
+    difficulty: difficulty(adjustedXp, thresholds),
+    thresholds,
+  };
+}
+
+function monsterMultiplier(count: number): number {
+  if (count <= 0) return 1;
+  if (count === 1) return 1;
+  if (count === 2) return 1.5;
+  if (count <= 6) return 2;
+  if (count <= 10) return 2.5;
+  if (count <= 14) return 3;
+  return 4;
+}
+
+function difficulty(adjustedXp: number, thresholds: Thresholds): string {
+  if (adjustedXp >= thresholds.deadly) return 'deadly';
+  if (adjustedXp >= thresholds.hard) return 'hard';
+  if (adjustedXp >= thresholds.medium) return 'medium';
+  if (adjustedXp >= thresholds.easy) return 'easy';
+  return 'trivial';
+}
+
+function abilityModifier(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function proficiencyBonus(level: number): number {
+  return 2 + Math.floor((level - 1) / 4);
+}
+
+function calculateDerivedStats(body: Record<string, JsonValue>) {
+  const level = getBoundedInteger(body, 'level', 1, 20);
+  const abilities = asObject(body.abilities);
+  const armor = asObject(body.armor);
+
+  const modifiers = {
+    str: abilityModifier(getBoundedInteger(abilities, 'str', 1, 30)),
+    dex: abilityModifier(getBoundedInteger(abilities, 'dex', 1, 30)),
+    con: abilityModifier(getBoundedInteger(abilities, 'con', 1, 30)),
+    int: abilityModifier(getBoundedInteger(abilities, 'int', 1, 30)),
+    wis: abilityModifier(getBoundedInteger(abilities, 'wis', 1, 30)),
+    cha: abilityModifier(getBoundedInteger(abilities, 'cha', 1, 30)),
+  };
+
+  const armorBase = getNumber(armor, 'base');
+  const dexCap = getNumber(armor, 'dex_cap');
+  const shield = getBoolean(armor, 'shield');
+  const shieldBonus = shield ? 2 : 0;
+
+  return {
+    level,
+    proficiency_bonus: proficiencyBonus(level),
+    hp_max: level * (6 + modifiers.con),
+    armor_class: armorBase + Math.min(modifiers.dex, dexCap) + shieldBonus,
+    modifiers,
+  };
+}
+
+async function readJson(req: IncomingMessage): Promise<Record<string, JsonValue>> {
+  let raw = '';
+  for await (const chunk of req) {
+    raw += chunk;
+  }
+  const parsed: unknown = JSON.parse(raw || '{}');
+  return asObject(parsed);
+}
+
+function sendJson(res: ServerResponse, status: number, value: JsonValue): void {
+  res.statusCode = status;
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify(value));
+}
+
+function asObject(value: unknown): Record<string, JsonValue> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('expected object');
+  }
+  return value as Record<string, JsonValue>;
+}
+
+function getString(body: Record<string, JsonValue>, key: string): string {
+  const value = body[key];
+  if (typeof value !== 'string') {
+    throw new Error(`expected string ${key}`);
+  }
+  return value;
+}
+
+function getNumber(body: Record<string, JsonValue>, key: string): number {
+  const value = body[key];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`expected number ${key}`);
+  }
+  return value;
+}
+
+function getBoundedInteger(
+  body: Record<string, JsonValue>,
+  key: string,
+  min: number,
+  max: number,
+): number {
+  const value = getNumber(body, key);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`expected integer ${key}`);
+  }
+  return value;
+}
+
+function getBoolean(body: Record<string, JsonValue>, key: string): boolean {
+  const value = body[key];
+  if (typeof value !== 'boolean') {
+    throw new Error(`expected boolean ${key}`);
+  }
+  return value;
+}
+
+function getArray(body: Record<string, JsonValue>, key: string): JsonValue[] {
+  const value = body[key];
+  if (!Array.isArray(value)) {
+    throw new Error(`expected array ${key}`);
+  }
+  return value;
+}
+
+export default defineConfig({
+  plugins: [dndApiPlugin()],
+});
+
+codex
+I’m going to track combatants that have ever received a condition, then serialize those keys even after their arrays become empty. That preserves the earlier passing responses for never-conditioned combatants while fixing the expired-condition response.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 906da434c98c582c14b88b667054ebf3eeb44cba..fab3d0d6caf9b07009db2dcf1df29bc4465ec7b0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -26,6 +26,7 @@
+   turn_index: number;
+   order: InitiativeEntry[];
+   conditions: Map<string, Condition[]>;
++  conditionTargets: Set<string>;
+ };
+ 
+ const combatSessions = new Map<string, CombatSession>();
+@@ -169,6 +170,7 @@
+               throw new Error('missing conditions');
+             }
+             conditions.push({ condition, remaining_rounds: remainingRounds });
++            session.conditionTargets.add(target);
+ 
+             sendJson(res, 200, {
+               target,
+@@ -225,6 +227,7 @@
+     turn_index: 0,
+     order,
+     conditions: new Map(order.map(({ name }) => [name, []])),
++    conditionTargets: new Set(),
+   };
+ }
+ 
+@@ -279,7 +282,7 @@
+ function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+   const result: Record<string, JsonValue> = {};
+   for (const [name, conditions] of session.conditions) {
+-    if (conditions.length > 0) {
++    if (conditions.length > 0 || session.conditionTargets.has(name)) {
+       result[name] = conditions.map(copyCondition);
+     }
+   }
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 906da434c98c582c14b88b667054ebf3eeb44cba..fab3d0d6caf9b07009db2dcf1df29bc4465ec7b0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -26,6 +26,7 @@
+   turn_index: number;
+   order: InitiativeEntry[];
+   conditions: Map<string, Condition[]>;
++  conditionTargets: Set<string>;
+ };
+ 
+ const combatSessions = new Map<string, CombatSession>();
+@@ -169,6 +170,7 @@
+               throw new Error('missing conditions');
+             }
+             conditions.push({ condition, remaining_rounds: remainingRounds });
++            session.conditionTargets.add(target);
+ 
+             sendJson(res, 200, {
+               target,
+@@ -225,6 +227,7 @@
+     turn_index: 0,
+     order,
+     conditions: new Map(order.map(({ name }) => [name, []])),
++    conditionTargets: new Set(),
+   };
+ }
+ 
+@@ -279,7 +282,7 @@
+ function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+   const result: Record<string, JsonValue> = {};
+   for (const [name, conditions] of session.conditions) {
+-    if (conditions.length > 0) {
++    if (conditions.length > 0 || session.conditionTargets.has(name)) {
+       result[name] = conditions.map(copyCondition);
+     }
+   }
+
+codex
+The code change is in place. I’m running static TypeScript validation only, since the benchmark contract says not to start the HTTP server before the final answer.
+exec
+/bin/zsh -lc 'git diff -- vite.config.ts run.sh package.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+exec
+/bin/zsh -lc './node_modules/.bin/tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 906da434c98c582c14b88b667054ebf3eeb44cba..fab3d0d6caf9b07009db2dcf1df29bc4465ec7b0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -26,6 +26,7 @@
+   turn_index: number;
+   order: InitiativeEntry[];
+   conditions: Map<string, Condition[]>;
++  conditionTargets: Set<string>;
+ };
+ 
+ const combatSessions = new Map<string, CombatSession>();
+@@ -169,6 +170,7 @@
+               throw new Error('missing conditions');
+             }
+             conditions.push({ condition, remaining_rounds: remainingRounds });
++            session.conditionTargets.add(target);
+ 
+             sendJson(res, 200, {
+               target,
+@@ -225,6 +227,7 @@
+     turn_index: 0,
+     order,
+     conditions: new Map(order.map(({ name }) => [name, []])),
++    conditionTargets: new Set(),
+   };
+ }
+ 
+@@ -279,7 +282,7 @@
+ function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+   const result: Record<string, JsonValue> = {};
+   for (const [name, conditions] of session.conditions) {
+-    if (conditions.length > 0) {
++    if (conditions.length > 0 || session.conditionTargets.has(name)) {
+       result[name] = conditions.map(copyCondition);
+     }
+   }
+
+ succeeded in 341ms:
+codex
+TypeScript validation passed. Git sees this benchmark directory as untracked from the parent repo, so `git diff` has no tracked-file output; I’m checking the edited lines directly.
+exec
+/bin/zsh -lc "sed -n '120,230p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+exec
+/bin/zsh -lc "sed -n '1,60p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+import { defineConfig, type Plugin } from 'vite';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+type InitiativeEntry = {
+  name: string;
+  dex: number;
+  score: number;
+};
+
+type Condition = {
+  condition: string;
+  remaining_rounds: number;
+};
+
+type CombatSession = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order: InitiativeEntry[];
+  conditions: Map<string, Condition[]>;
+  conditionTargets: Set<string>;
+};
+
+const combatSessions = new Map<string, CombatSession>();
+
+const monsterXp: Record<string, number> = {
+  '0': 10,
+  '1/8': 25,
+  '1/4': 50,
+  '1/2': 100,
+  '1': 200,
+  '2': 450,
+  '3': 700,
+  '4': 1100,
+  '5': 1800,
+};
+
+const levelThresholds: Record<number, Thresholds> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+type Thresholds = {
+  easy: number;
+  medium: number;
+  hard: number;
+  deadly: number;
+};
+
+function dndApiPlugin(): Plugin {
+  return {
+    name: 'dnd-rest-api',
+    configureServer(server) {
+
+ succeeded in 0ms:
+            sendJson(res, 200, {
+              order: combatants.map(({ name, score }) => ({ name, score })),
+            });
+            return;
+          }
+
+          if (url === '/v1/characters/ability-modifier') {
+            const body = await readJson(req);
+            const score = getBoundedInteger(body, 'score', 1, 30);
+            sendJson(res, 200, { score, modifier: abilityModifier(score) });
+            return;
+          }
+
+          if (url === '/v1/characters/proficiency') {
+            const body = await readJson(req);
+            const level = getBoundedInteger(body, 'level', 1, 20);
+            sendJson(res, 200, { level, proficiency_bonus: proficiencyBonus(level) });
+            return;
+          }
+
+          if (url === '/v1/characters/derived-stats') {
+            const body = await readJson(req);
+            sendJson(res, 200, calculateDerivedStats(body));
+            return;
+          }
+
+          if (url === '/v1/combat/sessions') {
+            const body = await readJson(req);
+            const session = createCombatSession(body);
+            combatSessions.set(session.id, session);
+            sendJson(res, 200, serializeCombatSession(session));
+            return;
+          }
+
+          const conditionMatch = /^\/v1\/combat\/sessions\/([^/]+)\/conditions$/.exec(url);
+          if (conditionMatch) {
+            const session = getCombatSession(conditionMatch[1], res);
+            if (!session) return;
+
+            const body = await readJson(req);
+            const target = getString(body, 'target');
+            if (!session.conditions.has(target)) {
+              sendJson(res, 400, { error: 'unknown combatant' });
+              return;
+            }
+
+            const condition = getString(body, 'condition');
+            const remainingRounds = getBoundedInteger(body, 'duration_rounds', 1, Number.MAX_SAFE_INTEGER);
+            const conditions = session.conditions.get(target);
+            if (!conditions) {
+              throw new Error('missing conditions');
+            }
+            conditions.push({ condition, remaining_rounds: remainingRounds });
+            session.conditionTargets.add(target);
+
+            sendJson(res, 200, {
+              target,
+              conditions: conditions.map(copyCondition),
+            });
+            return;
+          }
+
+          const advanceMatch = /^\/v1\/combat\/sessions\/([^/]+)\/advance$/.exec(url);
+          if (advanceMatch) {
+            const session = getCombatSession(advanceMatch[1], res);
+            if (!session) return;
+
+            advanceCombatSession(session);
+            sendJson(res, 200, {
+              ...serializeCombatSession(session),
+              conditions: serializeConditions(session),
+            });
+            return;
+          }
+
+          next();
+        } catch {
+          sendJson(res, 400, { error: 'invalid request' });
+        }
+      });
+    },
+  };
+}
+
+function createCombatSession(body: Record<string, JsonValue>): CombatSession {
+  const id = getString(body, 'id');
+  if (combatSessions.has(id)) {
+    throw new Error('duplicate session');
+  }
+
+  const order = getArray(body, 'combatants').map((combatant) => {
+    const item = asObject(combatant);
+    const name = getString(item, 'name');
+    const dex = getNumber(item, 'dex');
+    const roll = getNumber(item, 'roll');
+    return { name, dex, score: roll + dex };
+  });
+
+  if (order.length === 0) {
+    throw new Error('expected combatants');
+  }
+
+  order.sort(compareInitiative);
+
+  return {
+    id,
+    round: 1,
+    turn_index: 0,
+    order,
+    conditions: new Map(order.map(({ name }) => [name, []])),
+    conditionTargets: new Set(),
+
+exec
+/bin/zsh -lc "sed -n '250,305p' vite.config.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite
+ succeeded in 0ms:
+  session.turn_index += 1;
+  if (session.turn_index >= session.order.length) {
+    session.turn_index = 0;
+    session.round += 1;
+  }
+
+  const active = session.order[session.turn_index];
+  const conditions = session.conditions.get(active.name);
+  if (!conditions) {
+    throw new Error('missing active conditions');
+  }
+
+  const remaining = conditions
+    .map(({ condition, remaining_rounds }) => ({
+      condition,
+      remaining_rounds: remaining_rounds - 1,
+    }))
+    .filter(({ remaining_rounds }) => remaining_rounds > 0);
+  session.conditions.set(active.name, remaining);
+}
+
+function serializeCombatSession(session: CombatSession) {
+  const active = session.order[session.turn_index];
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: { name: active.name, score: active.score },
+    order: session.order.map(({ name, score }) => ({ name, score })),
+  };
+}
+
+function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+  const result: Record<string, JsonValue> = {};
+  for (const [name, conditions] of session.conditions) {
+    if (conditions.length > 0 || session.conditionTargets.has(name)) {
+      result[name] = conditions.map(copyCondition);
+    }
+  }
+  return result;
+}
+
+function copyCondition(condition: Condition) {
+  return {
+    condition: condition.condition,
+    remaining_rounds: condition.remaining_rounds,
+  };
+}
+
+function parseDiceExpression(expression: string) {
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(expression);
+  if (!match) return null;
+
+  const diceCount = Number.parseInt(match[1], 10);
+  const sides = Number.parseInt(match[2], 10);
+  const unsignedModifier = match[4] ? Number.parseInt(match[4], 10) : 0;
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 906da434c98c582c14b88b667054ebf3eeb44cba..fab3d0d6caf9b07009db2dcf1df29bc4465ec7b0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -26,6 +26,7 @@
+   turn_index: number;
+   order: InitiativeEntry[];
+   conditions: Map<string, Condition[]>;
++  conditionTargets: Set<string>;
+ };
+ 
+ const combatSessions = new Map<string, CombatSession>();
+@@ -169,6 +170,7 @@
+               throw new Error('missing conditions');
+             }
+             conditions.push({ condition, remaining_rounds: remainingRounds });
++            session.conditionTargets.add(target);
+ 
+             sendJson(res, 200, {
+               target,
+@@ -225,6 +227,7 @@
+     turn_index: 0,
+     order,
+     conditions: new Map(order.map(({ name }) => [name, []])),
++    conditionTargets: new Set(),
+   };
+ }
+ 
+@@ -279,7 +282,7 @@
+ function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+   const result: Record<string, JsonValue> = {};
+   for (const [name, conditions] of session.conditions) {
+-    if (conditions.length > 0) {
++    if (conditions.length > 0 || session.conditionTargets.has(name)) {
+       result[name] = conditions.map(copyCondition);
+     }
+   }
+
+codex
+Fixed the combat condition serialization in [vite.config.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts:24).
+
+The API now remembers combatants that have ever received conditions and keeps their key in `conditions` after the array expires, so the final response includes `"fighter": []` instead of omitting `"fighter"`.
+
+Validation run:
+`./node_modules/.bin/tsc --noEmit`
+
+I did not start the server, per the benchmark contract. `run.sh` is still present and starts Vite on `127.0.0.1` using `$PORT`.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+index 906da434c98c582c14b88b667054ebf3eeb44cba..fab3d0d6caf9b07009db2dcf1df29bc4465ec7b0
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T212708Z_codex_gpt-5.5_typescript-vite/vite.config.ts
+@@ -26,6 +26,7 @@
+   turn_index: number;
+   order: InitiativeEntry[];
+   conditions: Map<string, Condition[]>;
++  conditionTargets: Set<string>;
+ };
+ 
+ const combatSessions = new Map<string, CombatSession>();
+@@ -169,6 +170,7 @@
+               throw new Error('missing conditions');
+             }
+             conditions.push({ condition, remaining_rounds: remainingRounds });
++            session.conditionTargets.add(target);
+ 
+             sendJson(res, 200, {
+               target,
+@@ -225,6 +227,7 @@
+     turn_index: 0,
+     order,
+     conditions: new Map(order.map(({ name }) => [name, []])),
++    conditionTargets: new Set(),
+   };
+ }
+ 
+@@ -279,7 +282,7 @@
+ function serializeConditions(session: CombatSession): Record<string, JsonValue> {
+   const result: Record<string, JsonValue> = {};
+   for (const [name, conditions] of session.conditions) {
+-    if (conditions.length > 0) {
++    if (conditions.length > 0 || session.conditionTargets.has(name)) {
+       result[name] = conditions.map(copyCondition);
+     }
+   }
+
+tokens used
+27,579

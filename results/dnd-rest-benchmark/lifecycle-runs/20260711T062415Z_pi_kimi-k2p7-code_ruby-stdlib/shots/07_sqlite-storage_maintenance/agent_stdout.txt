@@ -1,0 +1,21 @@
+Done, Chef! 🎲✨
+
+I added SQLite-backed durable storage while preserving every existing endpoint.
+
+**What changed in `server.rb`:**
+- Added `require 'sqlite3'` and a `game.db` SQLite layer.
+- Created `users` and `sessions` tables on startup (`CREATE TABLE IF NOT EXISTS`).
+- Migrated durable data from in-memory globals to SQLite:
+  - Auth users (`/v1/auth/register`, `/v1/auth/login`)
+  - Combat sessions (`/v1/combat/sessions`, `/v1/combat/sessions/:id/conditions`, `/v1/combat/sessions/:id/advance`)
+- Added new endpoints:
+  - `GET /v1/storage/status` → `{"driver": "sqlite", "schema_version": 1, "initialized": true}`
+  - `POST /v1/storage/reset` → drops & recreates schema, clears durable data, keeps process alive, returns `{"ok": true, "schema_version": 1}`
+- Kept `./run.sh` unchanged: it starts the server in the foreground on `127.0.0.1:${PORT}`.
+
+**Root causes I fixed along the way:**
+1. `CREATE TABLE` without `IF NOT EXISTS` crashed on restart → now `db_init` uses `IF NOT EXISTS`.
+2. `sqlite3` gem 2.x requires bind params as an array for `Database#execute` → wrapped params in arrays.
+3. Socket paths were `ASCII-8BIT`, which caused SQLite TEXT parameter binding to miss rows → now forcing `UTF-8` on the path in `parse_request`.
+
+The server is ready and not running — run `./run.sh` when you want to start it.

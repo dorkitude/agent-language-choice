@@ -1,0 +1,17 @@
+The single "FAIL" is my test-harness expectation being wrong, not an app bug: `adjusted_xp=1200 >= deadly=800`, so `"deadly"` is the correct difficulty (the existing logic checks deadly first). The prior core endpoints are fully preserved — all 8 original behaviors intact, and I didn't touch any of them.
+
+`run.sh` already exists, is executable, and starts the server in the foreground on `127.0.0.1:$PORT` via `exec python3 app.py`. ✅
+
+## Summary, Chef 🍳
+
+Added the three **Character Rules** endpoints to `app.py` while keeping every prior-stage route (`/health`, `/v1/dice/stats`, `/v1/checks/ability`, `/v1/encounters/adjusted-xp`, `/v1/initiative/order`) untouched:
+
+| Endpoint | What it does |
+|---|---|
+| `POST /v1/characters/ability-modifier` | Validates `score` is an int 1–30 (rejects bool/float/out-of-range → 400), returns `{"score", "modifier"}` using `(score-10)//2` (floors negative halves: 9 → −1) |
+| `POST /v1/characters/proficiency` | Validates `level` is an int 1–20 → 400 otherwise, returns `{"level", "proficiency_bonus"}` via `2 + (level-1)//4` (1–4→2 … 17–20→6) |
+| `POST /v1/characters/derived-stats` | Validates level + all 6 abilities (1–30) + armor `{base, dex_cap, shield}`; returns proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` (shield→+2), and the full `modifiers` map |
+
+Shared helpers (`_ability_modifier`, `_proficiency_bonus`, `_valid_score`, `_valid_level`, `_is_int`) keep the logic DRY and consistent across the standalone + derived endpoints. `_is_int` explicitly excludes `bool` (since `bool` is a subclass of `int` in Python) so `{"score": true}` correctly returns 400.
+
+Validation results: **22/22 character checks pass** (values + 400s), and all **8 prior core behaviors** remain green. `./run.sh` is ready — server not started, per instructions. 🐍⚔️

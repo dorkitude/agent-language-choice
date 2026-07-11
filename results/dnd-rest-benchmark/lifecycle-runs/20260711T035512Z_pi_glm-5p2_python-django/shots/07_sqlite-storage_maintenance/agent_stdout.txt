@@ -1,0 +1,33 @@
+All clean, Chef 🎲 — the `_LOCK` matches are my new `_COMBAT_LOCK`/`_AUTH_LOCK` (serializing read-modify-write), not the old in-memory ones. No stale `_SESSIONS`/`_USERS` references remain.
+
+## Done ✅
+
+Stage 4 (SQLite Game Storage) is implemented and verified. Here's what changed:
+
+### New file: `dndsite/storage.py`
+- Owns the single SQLite connection (`game.db` in the project dir) with a threading lock for the multi-threaded dev server.
+- Schema version **1** with tables: `meta`, `users`, `combat_sessions`.
+- `init_schema(reset=False)` creates the DB + tables; `reset()` drops & recreates them.
+- Data accessors: `get_user`/`insert_user`, `get_session`/`upsert_session`.
+- Calls `init_schema()` at module import so the schema is ready before the first request.
+
+### `dndsite/__init__.py`
+- Eagerly imports `storage`, so `django.setup()` (at server startup, when `dndsite.settings` loads) creates `game.db` — **independent of any request**. Verified: `django.setup()` alone creates the file + tables.
+
+### `dndsite/views.py`
+- Moved durable game-state behind SQLite: combat sessions and auth users now persist via `storage.*` instead of the old in-memory `_SESSIONS`/`_USERS` dicts. All computation logic (scoring, sorting, turn advancement, condition decrement/expiry, validation, hashing, status codes, response shapes) is **unchanged** — only the persistence backend swapped.
+- Added `storage_status` (`GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`) and `storage_reset` (`POST /v1/storage/reset` → `{"ok":true,"schema_version":1}`).
+- Wrong-method on either storage endpoint → 400 (consistent with the rest of the API).
+
+### `dndsite/urls.py`
+- Added the two new routes.
+
+### `run.sh`
+- Unchanged: starts Django in the foreground on `127.0.0.1:$PORT` with `--noreload`.
+
+### Verification
+- **25/25** live smoke checks passed (core, characters, combat incl. 404 on missing session, auth 201/409/200/401, both storage endpoints + bodies, wrong-method 400s, health-after-reset).
+- `POST /v1/storage/reset` confirmed to clear `users` and `combat_sessions` (verified via direct `sqlite3` queries: 1→0) while the process stays healthy.
+- No errors/tracebacks in server stderr.
+
+The cumulative contract from prior stages is preserved, and the new storage stage is fully wired. 🗡️

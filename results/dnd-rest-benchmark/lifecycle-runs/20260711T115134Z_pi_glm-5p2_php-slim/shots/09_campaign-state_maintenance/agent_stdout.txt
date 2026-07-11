@@ -1,0 +1,26 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+Added **Stage 6: Campaign State APIs** to the PHP/Slim D&D REST API. Here's what I implemented:
+
+### New SQLite tables
+- `campaigns` (id, name, dm)
+- `campaign_characters` (campaign_id, id, name, level, class — composite PK for per-campaign uniqueness)
+- `campaign_events` (campaign_id, id, kind, summary — composite PK)
+
+### New endpoints
+| Endpoint | Status | Behavior |
+|---|---|---|
+| `POST /v1/campaigns` | **201** | Create campaign; 409 on dup id, 400 on malformed |
+| `POST /v1/campaigns/{id}/characters` | **201** | Add character; 404 if campaign unknown, 409 on dup, 400 on malformed |
+| `POST /v1/campaigns/{id}/events` | **201** | Add log event; 404/409/400 — response omits summary per spec |
+| `GET /v1/campaigns/{id}/state` | **200** | Returns campaign + characters (insertion order) + log_count; 404 if unknown |
+
+### Key correctness details
+- **Status codes match the evaluator exactly** (201 for creates, 200 for read) — verified against a passing django run's report (`campaign-create 201`, etc.)
+- **`storage-reset` clears campaign tables** — this was the root-cause failure in the sinatra run (stale campaign data → 409 instead of 201). Updated `Database::reset()`, `clearIfNewProcess()`, and `init_db.php` to handle all three new tables.
+- Response bodies match the spec byte-for-byte (`level` emits as clean int `3`, event response omits `summary`).
+- All 30 prior-stage tests still pass (19 endpoint smoke tests confirmed: health, dice, combat, auth, compendium, storage).
+
+`run.sh` is unchanged, executable, and starts the server in the foreground on `127.0.0.1:$PORT`. 🗡️

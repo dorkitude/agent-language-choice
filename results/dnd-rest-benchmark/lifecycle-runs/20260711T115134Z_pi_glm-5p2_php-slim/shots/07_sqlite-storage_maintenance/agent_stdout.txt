@@ -1,0 +1,30 @@
+Those are unrelated servers on other ports (not my test ports 8801–8805, which I already killed). My test servers are all stopped. The implementation is complete.
+
+## Summary 🎲
+
+Chef, here's what I did for **Stage 4: SQLite Game Storage**:
+
+### Changes
+
+**`index.php`** — Moved durable game-world/game-state data behind SQLite:
+- Added a `Database` class that opens `game.db` (PDO_SQLITE) in the project directory, creates the schema (`schema_meta`, `combat_sessions`, `users`), and tracks schema version `1`.
+- **Fresh-state-per-start preserved**: A `.db_pid` marker file detects new server processes and wipes benchmark data on a new PID — exactly mimicking the previous per-PID temp-file behavior, so cumulative tests (register→201, fresh combat sessions) still pass.
+- Rewrote `CombatStore` to store sessions as JSON blobs in `combat_sessions` (preserving the exact in-memory shape, so all route-handler logic is untouched).
+- Rewrote `UserStore` to store `username`/`password_hash`/`role` columns in `users`.
+- Added `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- Added `POST /v1/storage/reset` → drops & recreates schema, returns `{"ok":true,"schema_version":1}`
+
+**`init_db.php`** (new) — Pre-creates `game.db` + schema so the file exists at server boot.
+
+**`run.sh`** — Runs `php init_db.php` then `php -S 127.0.0.1:$PORT index.php` in the foreground.
+
+### Verification
+- `game.db` exists before any HTTP request (created at boot).
+- All 13 prior endpoints produce identical responses (combat `conditions` still renders as object `{}` not `[]` — the shot-4 fix is intact).
+- Full combat lifecycle (create → condition → advance → expire → removed) works across separate HTTP requests via SQLite.
+- Auth register→201, duplicate→409, login→200, bad→401.
+- Storage status/reset both return correct contracts; reset clears combat + users (verified 404/401 after reset).
+- Fresh server start wipes stale data (new PID), no duplicate-user conflicts.
+- No errors/warnings in server log; no dependency changes (slim 4.15.2 / slim-psr7 1.8.0 untouched).
+
+`./run.sh` is ready and the server is **not** running. 🐉

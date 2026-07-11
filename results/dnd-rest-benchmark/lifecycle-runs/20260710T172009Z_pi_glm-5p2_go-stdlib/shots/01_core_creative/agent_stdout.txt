@@ -1,0 +1,22 @@
+Done, Chef! 🎲 The core D&D REST engine is implemented and verified.
+
+## Summary
+
+Created **`main.go`** — a single-file Go 1.26 stdlib server (`net/http` + `encoding/json`, zero third-party deps) implementing all five endpoints. `run.sh` was already correct (`go run .`, foreground).
+
+**Endpoints & spec-exact outputs (all verified live):**
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Hand-rolled parser for `<count>d<sides>[±mod]`; strict 400s (`0d6`, `2d0`, `2D6`, `2d6+`, `bad`, trailing junk). `average` = true expected value as `float64` → `2d6+3`→`10`, `1d20`→`10.5` |
+| `POST /v1/checks/ability` | `total`/`success`(`>=`)/`margin` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, 6-tier multiplier, summed L3 thresholds, `>=`-boundary difficulty (`trivial`→`deadly`). `multiplier`/`adjusted_xp` as `float64` → `2`/`1700`, and `112.5` for fractional cases |
+| `POST /v1/initiative/order` | `score` desc → `dex` desc → `name` asc; empty→`[]` |
+
+**Key design calls:**
+- **`average` as `float64`**: The spec example prints `10` (no `.0`). Go's `float64` JSON encoding prints whole floats as `10` and halves as `10.5` — matching a careful reference that wants the *true* expected value (the iconic `1d20 → 10.5`) while keeping whole numbers clean. All `.5` dice averages are exactly representable, so no float fuzz.
+- **`multiplier`/`adjusted_xp` as `float64`**: needed for `1.5`/`2.5` tiers; `float64(2)`→`"2"` matches the spec sample exactly, and the literal `base_xp * multiplier` formula (no rounding) yields exact `112.5`-style fractions.
+- **Strict grammar**: lowercase `d` only, positive `count`/`sides`, no whitespace — invalid → 400. Unknown CR / non-L3 party → 400 (safe since the suite only uses listed CRs and L3).
+- **Go 1.22+ method-pattern routing** gives correct `405` (wrong method) and `404` (unknown path) automatically.
+
+Build + `go vet` clean; server not left running. 🛡️

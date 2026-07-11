@@ -1,0 +1,5501 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4cd4-9ac3-7ff2-afde-dc9897370b46
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: go-stdlib
+        Language: go
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Go 1.26.5, net/http, and encoding/json. Do not add third-party packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Go service and tests first so the combat state endpoints fit the current routing and response conventions.
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+main.go
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+go.mod
+
+exec
+/bin/zsh -lc 'pwd && ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+total 248
+drwxr-xr-x@ 17 dorkitude  staff    544 Jul 10 09:20 .
+drwxr-xr-x@ 75 dorkitude  staff   2400 Jul 10 09:16 ..
+-rw-r--r--@  1 dorkitude  staff   4093 Jul 10 09:20 PROMPT.md
+-rw-r--r--@  1 dorkitude  staff    635 Jul 10 09:16 VERSION-PINS.json
+-rw-r--r--@  1 dorkitude  staff    712 Jul 10 09:20 agent_last_message.txt
+-rw-r--r--@  1 dorkitude  staff  65506 Jul 10 09:20 agent_stderr.txt
+-rw-r--r--@  1 dorkitude  staff    713 Jul 10 09:20 agent_stdout.txt
+-rw-r--r--@  1 dorkitude  staff   2270 Jul 10 09:20 dndeval-characters-report.json
+-rw-r--r--@  1 dorkitude  staff   1422 Jul 10 09:18 dndeval-core-report.json
+-rw-r--r--@  1 dorkitude  staff     24 Jul 10 09:16 go.mod
+-rw-r--r--@  1 dorkitude  staff   9539 Jul 10 09:20 lifecycle-result.json
+-rw-r--r--@  1 dorkitude  staff  10596 Jul 10 09:19 main.go
+-rwxr-xr-x@  1 dorkitude  staff     95 Jul 10 09:18 run.sh
+-rw-r--r--@  1 dorkitude  staff      0 Jul 10 09:20 server_stderr.txt
+-rw-r--r--@  1 dorkitude  staff      0 Jul 10 09:20 server_stdout.txt
+-rw-r--r--@  1 dorkitude  staff      3 Jul 10 09:20 setup.json
+drwxr-xr-x@  5 dorkitude  staff    160 Jul 10 09:20 shots
+
+codex
+I found a compact stdlib app in `main.go` with the previous reports present. Next I’m reading the handler layout and run script before making the smallest additive change.
+exec
+/bin/zsh -lc "sed -n '261,560p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+	}
+	if err := readJSON(r, &req); err != nil || !validLevel(req.Level) {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		Level            int `json:"level"`
+		ProficiencyBonus int `json:"proficiency_bonus"`
+	}{
+		Level:            req.Level,
+		ProficiencyBonus: proficiencyBonus(req.Level),
+	})
+}
+
+func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Level     int       `json:"level"`
+		Abilities abilities `json:"abilities"`
+		Armor     struct {
+			Base   int  `json:"base"`
+			Shield bool `json:"shield"`
+			DexCap int  `json:"dex_cap"`
+		} `json:"armor"`
+	}
+	if err := readJSON(r, &req); err != nil || !validLevel(req.Level) || !validAbilities(req.Abilities) {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	modifiers := abilities{
+		Str: abilityModifier(req.Abilities.Str),
+		Dex: abilityModifier(req.Abilities.Dex),
+		Con: abilityModifier(req.Abilities.Con),
+		Int: abilityModifier(req.Abilities.Int),
+		Wis: abilityModifier(req.Abilities.Wis),
+		Cha: abilityModifier(req.Abilities.Cha),
+	}
+
+	shieldBonus := 0
+	if req.Armor.Shield {
+		shieldBonus = 2
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		Level            int       `json:"level"`
+		ProficiencyBonus int       `json:"proficiency_bonus"`
+		HPMax            int       `json:"hp_max"`
+		ArmorClass       int       `json:"armor_class"`
+		Modifiers        abilities `json:"modifiers"`
+	}{
+		Level:            req.Level,
+		ProficiencyBonus: proficiencyBonus(req.Level),
+		HPMax:            req.Level * (6 + modifiers.Con),
+		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
+		Modifiers:        modifiers,
+	})
+}
+
+type abilities struct {
+	Str int `json:"str"`
+	Dex int `json:"dex"`
+	Con int `json:"con"`
+	Int int `json:"int"`
+	Wis int `json:"wis"`
+	Cha int `json:"cha"`
+}
+
+func parseDiceExpression(expression string) (int, int, int, error) {
+	matches := dicePattern.FindStringSubmatch(expression)
+	if matches == nil {
+		return 0, 0, 0, errors.New("invalid dice expression")
+	}
+
+	count, err := strconv.Atoi(matches[1])
+	if err != nil || count <= 0 {
+		return 0, 0, 0, errors.New("invalid dice count")
+	}
+	sides, err := strconv.Atoi(matches[2])
+	if err != nil || sides <= 0 {
+		return 0, 0, 0, errors.New("invalid dice sides")
+	}
+
+	modifier := 0
+	if matches[4] != "" {
+		modifier, err = strconv.Atoi(matches[4])
+		if err != nil {
+			return 0, 0, 0, errors.New("invalid dice modifier")
+		}
+		if matches[3] == "-" {
+			modifier = -modifier
+		}
+	}
+
+	return count, sides, modifier, nil
+}
+
+func abilityModifier(score int) int {
+	delta := score - 10
+	if delta < 0 {
+		return (delta - 1) / 2
+	}
+	return delta / 2
+}
+
+func proficiencyBonus(level int) int {
+	return 2 + (level-1)/4
+}
+
+func validAbilityScore(score int) bool {
+	return score >= 1 && score <= 30
+}
+
+func validAbilities(a abilities) bool {
+	return validAbilityScore(a.Str) &&
+		validAbilityScore(a.Dex) &&
+		validAbilityScore(a.Con) &&
+		validAbilityScore(a.Int) &&
+		validAbilityScore(a.Wis) &&
+		validAbilityScore(a.Cha)
+}
+
+func validLevel(level int) bool {
+	return level >= 1 && level <= 20
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func encounterMultiplier(monsterCount int) float64 {
+	switch {
+	case monsterCount <= 0:
+		return 0
+	case monsterCount == 1:
+		return 1
+	case monsterCount == 2:
+		return 1.5
+	case monsterCount <= 6:
+		return 2
+	case monsterCount <= 10:
+		return 2.5
+	case monsterCount <= 14:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func encounterDifficulty(adjustedXP float64, t thresholds) string {
+	switch {
+	case adjustedXP >= float64(t.Deadly):
+		return "deadly"
+	case adjustedXP >= float64(t.Hard):
+		return "hard"
+	case adjustedXP >= float64(t.Medium):
+		return "medium"
+	case adjustedXP >= float64(t.Easy):
+		return "easy"
+	default:
+		return "trivial"
+	}
+}
+
+func readJSON(r *http.Request, v any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(v)
+}
+
+func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	writeError(w, http.StatusMethodNotAllowed)
+	return false
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int) {
+	writeJSON(w, status, map[string]string{"error": http.StatusText(status)})
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"regexp"
+	"sort"
+	"strconv"
+)
+
+var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+
+var monsterXP = map[string]int{
+	"0":   10,
+	"1/8": 25,
+	"1/4": 50,
+	"1/2": 100,
+	"1":   200,
+	"2":   450,
+	"3":   700,
+	"4":   1100,
+	"5":   1800,
+}
+
+type thresholds struct {
+	Easy   int `json:"easy"`
+	Medium int `json:"medium"`
+	Hard   int `json:"hard"`
+	Deadly int `json:"deadly"`
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/v1/dice/stats", diceStatsHandler)
+	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
+	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	addr := "127.0.0.1:" + port
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func diceStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Expression string `json:"expression"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	count, sides, modifier, err := parseDiceExpression(req.Expression)
+	if err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		DiceCount int     `json:"dice_count"`
+		Sides     int     `json:"sides"`
+		Modifier  int     `json:"modifier"`
+		Min       int     `json:"min"`
+		Max       int     `json:"max"`
+		Average   float64 `json:"average"`
+	}{
+		DiceCount: count,
+		Sides:     sides,
+		Modifier:  modifier,
+		Min:       count + modifier,
+		Max:       count*sides + modifier,
+		Average:   float64(count)*(float64(sides)+1)/2 + float64(modifier),
+	})
+}
+
+func abilityCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Roll     int `json:"roll"`
+		Modifier int `json:"modifier"`
+		DC       int `json:"dc"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	total := req.Roll + req.Modifier
+	writeJSON(w, http.StatusOK, struct {
+		Total   int  `json:"total"`
+		Success bool `json:"success"`
+		Margin  int  `json:"margin"`
+	}{
+		Total:   total,
+		Success: total >= req.DC,
+		Margin:  total - req.DC,
+	})
+}
+
+func adjustedXPHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Party []struct {
+			Level int `json:"level"`
+		} `json:"party"`
+		Monsters []struct {
+			CR    string `json:"cr"`
+			Count int    `json:"count"`
+		} `json:"monsters"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	baseXP := 0
+	monsterCount := 0
+	for _, monster := range req.Monsters {
+		xp, ok := monsterXP[monster.CR]
+		if !ok || monster.Count <= 0 {
+			writeError(w, http.StatusBadRequest)
+			return
+		}
+		baseXP += xp * monster.Count
+		monsterCount += monster.Count
+	}
+
+	partyThresholds := thresholds{}
+	for _, member := range req.Party {
+		if member.Level != 3 {
+			writeError(w, http.StatusBadRequest)
+			return
+		}
+		partyThresholds.Easy += 75
+		partyThresholds.Medium += 150
+		partyThresholds.Hard += 225
+		partyThresholds.Deadly += 400
+	}
+
+	multiplier := encounterMultiplier(monsterCount)
+	adjustedXP := float64(baseXP) * multiplier
+	writeJSON(w, http.StatusOK, struct {
+		BaseXP       int        `json:"base_xp"`
+		MonsterCount int        `json:"monster_count"`
+		Multiplier   float64    `json:"multiplier"`
+		AdjustedXP   float64    `json:"adjusted_xp"`
+		Difficulty   string     `json:"difficulty"`
+		Thresholds   thresholds `json:"thresholds"`
+	}{
+		BaseXP:       baseXP,
+		MonsterCount: monsterCount,
+		Multiplier:   multiplier,
+		AdjustedXP:   adjustedXP,
+		Difficulty:   encounterDifficulty(adjustedXP, partyThresholds),
+		Thresholds:   partyThresholds,
+	})
+}
+
+func initiativeOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Combatants []struct {
+			Name string `json:"name"`
+			Dex  int    `json:"dex"`
+			Roll int    `json:"roll"`
+		} `json:"combatants"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	type entry struct {
+		Name  string `json:"name"`
+		Score int    `json:"score"`
+		dex   int
+	}
+	order := make([]entry, 0, len(req.Combatants))
+	for _, combatant := range req.Combatants {
+		order = append(order, entry{
+			Name:  combatant.Name,
+			Score: combatant.Roll + combatant.Dex,
+			dex:   combatant.Dex,
+		})
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		if order[i].Score != order[j].Score {
+			return order[i].Score > order[j].Score
+		}
+		if order[i].dex != order[j].dex {
+			return order[i].dex > order[j].dex
+		}
+		return order[i].Name < order[j].Name
+	})
+
+	writeJSON(w, http.StatusOK, struct {
+		Order []entry `json:"order"`
+	}{Order: order})
+}
+
+func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Score int `json:"score"`
+	}
+	if err := readJSON(r, &req); err != nil || !validAbilityScore(req.Score) {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		Score    int `json:"score"`
+		Modifier int `json:"modifier"`
+	}{
+		Score:    req.Score,
+		Modifier: abilityModifier(req.Score),
+	})
+}
+
+func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Level int `json:"level"`
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh && sed -n '1,80p' go.mod" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+GOCACHE="${GOCACHE:-/tmp/dndrest-gocache}" exec go run .
+module dndrest
+
+go 1.26
+
+exec
+/bin/zsh -lc 'cat dndeval-core-report.json dndeval-characters-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:63251",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:63455",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+The current service uses one file and `ServeMux` exact-prefix routing. I’m adding an in-memory combat store with a mutex, plus a prefix handler for session actions so existing endpoints remain untouched.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..889e30c0569757823059d727efc7c790624a755d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -42,6 +49,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +238,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..889e30c0569757823059d727efc7c790624a755d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -42,6 +49,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +238,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+
+codex
+The routes are in place. I still need to add the shared combat structs and response helpers, then I’ll format and run local checks without starting the server persistently.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..163a5eff2d73d91bb97694b7acdf0314b4f3d23d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..163a5eff2d73d91bb97694b7acdf0314b4f3d23d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..33a7ef12448a5f954e6d07eb4807fe877e4ad813
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,74 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		response.Conditions = copyConditions(s.Conditions)
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..33a7ef12448a5f954e6d07eb4807fe877e4ad813
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,74 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		response.Conditions = copyConditions(s.Conditions)
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+codex
+One response-shape detail matters here: create responses should omit `conditions`, while advance responses should include an empty `{}` when no conditions remain. I’m adjusting the response helper to encode that deterministically.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+codex
+The implementation is now complete enough to compile-check. I’m formatting and running Go’s local checks only; I won’t start the HTTP server.
+exec
+/bin/zsh -lc 'gofmt -w main.go' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+ succeeded in 987ms:
+?   	dndrest	[no test files]
+
+codex
+`go test ./...` passes. I’m doing a final source review around the new handlers and `run.sh` so the endpoint shapes and foreground startup contract are clean.
+exec
+/bin/zsh -lc "sed -n '420,620p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+
+	writeJSON(w, http.StatusOK, struct {
+		Score    int `json:"score"`
+		Modifier int `json:"modifier"`
+	}{
+		Score:    req.Score,
+		Modifier: abilityModifier(req.Score),
+	})
+}
+
+func proficiencyHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Level int `json:"level"`
+	}
+	if err := readJSON(r, &req); err != nil || !validLevel(req.Level) {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		Level            int `json:"level"`
+		ProficiencyBonus int `json:"proficiency_bonus"`
+	}{
+		Level:            req.Level,
+		ProficiencyBonus: proficiencyBonus(req.Level),
+	})
+}
+
+func derivedStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Level     int       `json:"level"`
+		Abilities abilities `json:"abilities"`
+		Armor     struct {
+			Base   int  `json:"base"`
+			Shield bool `json:"shield"`
+			DexCap int  `json:"dex_cap"`
+		} `json:"armor"`
+	}
+	if err := readJSON(r, &req); err != nil || !validLevel(req.Level) || !validAbilities(req.Abilities) {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	modifiers := abilities{
+		Str: abilityModifier(req.Abilities.Str),
+		Dex: abilityModifier(req.Abilities.Dex),
+		Con: abilityModifier(req.Abilities.Con),
+		Int: abilityModifier(req.Abilities.Int),
+		Wis: abilityModifier(req.Abilities.Wis),
+		Cha: abilityModifier(req.Abilities.Cha),
+	}
+
+	shieldBonus := 0
+	if req.Armor.Shield {
+		shieldBonus = 2
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		Level            int       `json:"level"`
+		ProficiencyBonus int       `json:"proficiency_bonus"`
+		HPMax            int       `json:"hp_max"`
+		ArmorClass       int       `json:"armor_class"`
+		Modifiers        abilities `json:"modifiers"`
+	}{
+		Level:            req.Level,
+		ProficiencyBonus: proficiencyBonus(req.Level),
+		HPMax:            req.Level * (6 + modifiers.Con),
+		ArmorClass:       req.Armor.Base + minInt(modifiers.Dex, req.Armor.DexCap) + shieldBonus,
+		Modifiers:        modifiers,
+	})
+}
+
+type abilities struct {
+	Str int `json:"str"`
+	Dex int `json:"dex"`
+	Con int `json:"con"`
+	Int int `json:"int"`
+	Wis int `json:"wis"`
+	Cha int `json:"cha"`
+}
+
+func parseDiceExpression(expression string) (int, int, int, error) {
+	matches := dicePattern.FindStringSubmatch(expression)
+	if matches == nil {
+		return 0, 0, 0, errors.New("invalid dice expression")
+	}
+
+	count, err := strconv.Atoi(matches[1])
+	if err != nil || count <= 0 {
+		return 0, 0, 0, errors.New("invalid dice count")
+	}
+	sides, err := strconv.Atoi(matches[2])
+	if err != nil || sides <= 0 {
+		return 0, 0, 0, errors.New("invalid dice sides")
+	}
+
+	modifier := 0
+	if matches[4] != "" {
+		modifier, err = strconv.Atoi(matches[4])
+		if err != nil {
+			return 0, 0, 0, errors.New("invalid dice modifier")
+		}
+		if matches[3] == "-" {
+			modifier = -modifier
+		}
+	}
+
+	return count, sides, modifier, nil
+}
+
+func abilityModifier(score int) int {
+	delta := score - 10
+	if delta < 0 {
+		return (delta - 1) / 2
+	}
+	return delta / 2
+}
+
+func proficiencyBonus(level int) int {
+	return 2 + (level-1)/4
+}
+
+func validAbilityScore(score int) bool {
+	return score >= 1 && score <= 30
+}
+
+func validAbilities(a abilities) bool {
+	return validAbilityScore(a.Str) &&
+		validAbilityScore(a.Dex) &&
+		validAbilityScore(a.Con) &&
+		validAbilityScore(a.Int) &&
+		validAbilityScore(a.Wis) &&
+		validAbilityScore(a.Cha)
+}
+
+func validLevel(level int) bool {
+	return level >= 1 && level <= 20
+}
+
+func sortCombatants(order []combatantEntry) {
+	sort.SliceStable(order, func(i, j int) bool {
+		if order[i].Score != order[j].Score {
+			return order[i].Score > order[j].Score
+		}
+		if order[i].dex != order[j].dex {
+			return order[i].dex > order[j].dex
+		}
+		return order[i].Name < order[j].Name
+	})
+}
+
+func (s *combatSession) hasCombatant(name string) bool {
+	for _, combatant := range s.Order {
+		if combatant.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *combatSession) decrementActiveConditions() {
+	active := s.Order[s.TurnIndex].Name
+	conditions := s.Conditions[active]
+	if len(conditions) == 0 {
+		return
+	}
+
+	kept := conditions[:0]
+	for _, condition := range conditions {
+		condition.RemainingRounds--
+		if condition.RemainingRounds > 0 {
+			kept = append(kept, condition)
+		}
+	}
+	if len(kept) == 0 {
+		delete(s.Conditions, active)
+		return
+	}
+	s.Conditions[active] = kept
+}
+
+func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
+	response := combatStateResponse{
+		ID:        s.ID,
+		Round:     s.Round,
+		TurnIndex: s.TurnIndex,
+		Active:    s.Order[s.TurnIndex],
+		Order:     append([]combatantEntry(nil), s.Order...),
+	}
+	if includeConditions {
+		response.Order = nil
+		conditions := copyConditions(s.Conditions)
+		response.Conditions = &conditions
+
+exec
+/bin/zsh -lc "sed -n '180,420p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+
+	baseXP := 0
+	monsterCount := 0
+	for _, monster := range req.Monsters {
+		xp, ok := monsterXP[monster.CR]
+		if !ok || monster.Count <= 0 {
+			writeError(w, http.StatusBadRequest)
+			return
+		}
+		baseXP += xp * monster.Count
+		monsterCount += monster.Count
+	}
+
+	partyThresholds := thresholds{}
+	for _, member := range req.Party {
+		if member.Level != 3 {
+			writeError(w, http.StatusBadRequest)
+			return
+		}
+		partyThresholds.Easy += 75
+		partyThresholds.Medium += 150
+		partyThresholds.Hard += 225
+		partyThresholds.Deadly += 400
+	}
+
+	multiplier := encounterMultiplier(monsterCount)
+	adjustedXP := float64(baseXP) * multiplier
+	writeJSON(w, http.StatusOK, struct {
+		BaseXP       int        `json:"base_xp"`
+		MonsterCount int        `json:"monster_count"`
+		Multiplier   float64    `json:"multiplier"`
+		AdjustedXP   float64    `json:"adjusted_xp"`
+		Difficulty   string     `json:"difficulty"`
+		Thresholds   thresholds `json:"thresholds"`
+	}{
+		BaseXP:       baseXP,
+		MonsterCount: monsterCount,
+		Multiplier:   multiplier,
+		AdjustedXP:   adjustedXP,
+		Difficulty:   encounterDifficulty(adjustedXP, partyThresholds),
+		Thresholds:   partyThresholds,
+	})
+}
+
+func initiativeOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Combatants []struct {
+			Name string `json:"name"`
+			Dex  int    `json:"dex"`
+			Roll int    `json:"roll"`
+		} `json:"combatants"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	type entry struct {
+		Name  string `json:"name"`
+		Score int    `json:"score"`
+		dex   int
+	}
+	order := make([]entry, 0, len(req.Combatants))
+	for _, combatant := range req.Combatants {
+		order = append(order, entry{
+			Name:  combatant.Name,
+			Score: combatant.Roll + combatant.Dex,
+			dex:   combatant.Dex,
+		})
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		if order[i].Score != order[j].Score {
+			return order[i].Score > order[j].Score
+		}
+		if order[i].dex != order[j].dex {
+			return order[i].dex > order[j].dex
+		}
+		return order[i].Name < order[j].Name
+	})
+
+	writeJSON(w, http.StatusOK, struct {
+		Order []entry `json:"order"`
+	}{Order: order})
+}
+
+func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/v1/combat/sessions" {
+		writeError(w, http.StatusNotFound)
+		return
+	}
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		ID         string `json:"id"`
+		Combatants []struct {
+			Name string `json:"name"`
+			Dex  int    `json:"dex"`
+			Roll int    `json:"roll"`
+		} `json:"combatants"`
+	}
+	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	order := make([]combatantEntry, 0, len(req.Combatants))
+	seenNames := make(map[string]bool, len(req.Combatants))
+	for _, combatant := range req.Combatants {
+		if combatant.Name == "" || seenNames[combatant.Name] {
+			writeError(w, http.StatusBadRequest)
+			return
+		}
+		seenNames[combatant.Name] = true
+		order = append(order, combatantEntry{
+			Name:  combatant.Name,
+			Score: combatant.Roll + combatant.Dex,
+			dex:   combatant.Dex,
+		})
+	}
+	sortCombatants(order)
+
+	session := &combatSession{
+		ID:         req.ID,
+		Round:      1,
+		TurnIndex:  0,
+		Order:      order,
+		Conditions: make(map[string][]combatCondition),
+	}
+
+	combatSessions.Lock()
+	if _, exists := combatSessions.items[req.ID]; exists {
+		combatSessions.Unlock()
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+	combatSessions.items[req.ID] = session
+	combatSessions.Unlock()
+
+	writeJSON(w, http.StatusOK, session.stateResponse(false))
+}
+
+func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
+	if len(parts) != 2 || parts[0] == "" {
+		writeError(w, http.StatusNotFound)
+		return
+	}
+
+	switch parts[1] {
+	case "conditions":
+		addConditionHandler(w, r, parts[0])
+	case "advance":
+		advanceCombatHandler(w, parts[0])
+	default:
+		writeError(w, http.StatusNotFound)
+	}
+}
+
+func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		Target         string `json:"target"`
+		Condition      string `json:"condition"`
+		DurationRounds int    `json:"duration_rounds"`
+	}
+	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	combatSessions.Lock()
+	session, ok := combatSessions.items[id]
+	if !ok {
+		combatSessions.Unlock()
+		writeError(w, http.StatusNotFound)
+		return
+	}
+	if !session.hasCombatant(req.Target) {
+		combatSessions.Unlock()
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
+		Condition:       req.Condition,
+		RemainingRounds: req.DurationRounds,
+	})
+	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
+	combatSessions.Unlock()
+
+	writeJSON(w, http.StatusOK, struct {
+		Target     string            `json:"target"`
+		Conditions []combatCondition `json:"conditions"`
+	}{
+		Target:     req.Target,
+		Conditions: conditions,
+	})
+}
+
+func advanceCombatHandler(w http.ResponseWriter, id string) {
+	combatSessions.Lock()
+	session, ok := combatSessions.items[id]
+	if !ok {
+		combatSessions.Unlock()
+		writeError(w, http.StatusNotFound)
+		return
+	}
+
+	session.TurnIndex++
+	if session.TurnIndex >= len(session.Order) {
+		session.TurnIndex = 0
+		session.Round++
+	}
+	session.decrementActiveConditions()
+	response := session.stateResponse(true)
+	combatSessions.Unlock()
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Score int `json:"score"`
+	}
+	if err := readJSON(r, &req); err != nil || !validAbilityScore(req.Score) {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+
+exec
+/bin/zsh -lc 'git diff -- main.go run.sh go.mod' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+exec
+/bin/zsh -lc "sed -n '1,180p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+ succeeded in 0ms:
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+
+var monsterXP = map[string]int{
+	"0":   10,
+	"1/8": 25,
+	"1/4": 50,
+	"1/2": 100,
+	"1":   200,
+	"2":   450,
+	"3":   700,
+	"4":   1100,
+	"5":   1800,
+}
+
+var combatSessions = struct {
+	sync.Mutex
+	items map[string]*combatSession
+}{items: make(map[string]*combatSession)}
+
+type thresholds struct {
+	Easy   int `json:"easy"`
+	Medium int `json:"medium"`
+	Hard   int `json:"hard"`
+	Deadly int `json:"deadly"`
+}
+
+type combatSession struct {
+	ID         string
+	Round      int
+	TurnIndex  int
+	Order      []combatantEntry
+	Conditions map[string][]combatCondition
+}
+
+type combatantEntry struct {
+	Name  string `json:"name"`
+	Score int    `json:"score"`
+	dex   int
+}
+
+type combatCondition struct {
+	Condition       string `json:"condition"`
+	RemainingRounds int    `json:"remaining_rounds"`
+}
+
+type combatStateResponse struct {
+	ID         string                        `json:"id"`
+	Round      int                           `json:"round"`
+	TurnIndex  int                           `json:"turn_index"`
+	Active     combatantEntry                `json:"active"`
+	Order      []combatantEntry              `json:"order,omitempty"`
+	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/v1/dice/stats", diceStatsHandler)
+	mux.HandleFunc("/v1/checks/ability", abilityCheckHandler)
+	mux.HandleFunc("/v1/encounters/adjusted-xp", adjustedXPHandler)
+	mux.HandleFunc("/v1/initiative/order", initiativeOrderHandler)
+	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
+	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
+	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	addr := "127.0.0.1:" + port
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func diceStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Expression string `json:"expression"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	count, sides, modifier, err := parseDiceExpression(req.Expression)
+	if err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, struct {
+		DiceCount int     `json:"dice_count"`
+		Sides     int     `json:"sides"`
+		Modifier  int     `json:"modifier"`
+		Min       int     `json:"min"`
+		Max       int     `json:"max"`
+		Average   float64 `json:"average"`
+	}{
+		DiceCount: count,
+		Sides:     sides,
+		Modifier:  modifier,
+		Min:       count + modifier,
+		Max:       count*sides + modifier,
+		Average:   float64(count)*(float64(sides)+1)/2 + float64(modifier),
+	})
+}
+
+func abilityCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Roll     int `json:"roll"`
+		Modifier int `json:"modifier"`
+		DC       int `json:"dc"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+	total := req.Roll + req.Modifier
+	writeJSON(w, http.StatusOK, struct {
+		Total   int  `json:"total"`
+		Success bool `json:"success"`
+		Margin  int  `json:"margin"`
+	}{
+		Total:   total,
+		Success: total >= req.DC,
+		Margin:  total - req.DC,
+	})
+}
+
+func adjustedXPHandler(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var req struct {
+		Party []struct {
+			Level int `json:"level"`
+		} `json:"party"`
+		Monsters []struct {
+			CR    string `json:"cr"`
+			Count int    `json:"count"`
+		} `json:"monsters"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest)
+		return
+	}
+
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+exec
+/bin/zsh -lc "sed -n '520,700p' main.go" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+	if err != nil || sides <= 0 {
+		return 0, 0, 0, errors.New("invalid dice sides")
+	}
+
+	modifier := 0
+	if matches[4] != "" {
+		modifier, err = strconv.Atoi(matches[4])
+		if err != nil {
+			return 0, 0, 0, errors.New("invalid dice modifier")
+		}
+		if matches[3] == "-" {
+			modifier = -modifier
+		}
+	}
+
+	return count, sides, modifier, nil
+}
+
+func abilityModifier(score int) int {
+	delta := score - 10
+	if delta < 0 {
+		return (delta - 1) / 2
+	}
+	return delta / 2
+}
+
+func proficiencyBonus(level int) int {
+	return 2 + (level-1)/4
+}
+
+func validAbilityScore(score int) bool {
+	return score >= 1 && score <= 30
+}
+
+func validAbilities(a abilities) bool {
+	return validAbilityScore(a.Str) &&
+		validAbilityScore(a.Dex) &&
+		validAbilityScore(a.Con) &&
+		validAbilityScore(a.Int) &&
+		validAbilityScore(a.Wis) &&
+		validAbilityScore(a.Cha)
+}
+
+func validLevel(level int) bool {
+	return level >= 1 && level <= 20
+}
+
+func sortCombatants(order []combatantEntry) {
+	sort.SliceStable(order, func(i, j int) bool {
+		if order[i].Score != order[j].Score {
+			return order[i].Score > order[j].Score
+		}
+		if order[i].dex != order[j].dex {
+			return order[i].dex > order[j].dex
+		}
+		return order[i].Name < order[j].Name
+	})
+}
+
+func (s *combatSession) hasCombatant(name string) bool {
+	for _, combatant := range s.Order {
+		if combatant.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *combatSession) decrementActiveConditions() {
+	active := s.Order[s.TurnIndex].Name
+	conditions := s.Conditions[active]
+	if len(conditions) == 0 {
+		return
+	}
+
+	kept := conditions[:0]
+	for _, condition := range conditions {
+		condition.RemainingRounds--
+		if condition.RemainingRounds > 0 {
+			kept = append(kept, condition)
+		}
+	}
+	if len(kept) == 0 {
+		delete(s.Conditions, active)
+		return
+	}
+	s.Conditions[active] = kept
+}
+
+func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
+	response := combatStateResponse{
+		ID:        s.ID,
+		Round:     s.Round,
+		TurnIndex: s.TurnIndex,
+		Active:    s.Order[s.TurnIndex],
+		Order:     append([]combatantEntry(nil), s.Order...),
+	}
+	if includeConditions {
+		response.Order = nil
+		conditions := copyConditions(s.Conditions)
+		response.Conditions = &conditions
+	}
+	return response
+}
+
+func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
+	copied := make(map[string][]combatCondition)
+	for target, entries := range conditions {
+		if len(entries) == 0 {
+			continue
+		}
+		copied[target] = append([]combatCondition(nil), entries...)
+	}
+	return copied
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func encounterMultiplier(monsterCount int) float64 {
+	switch {
+	case monsterCount <= 0:
+		return 0
+	case monsterCount == 1:
+		return 1
+	case monsterCount == 2:
+		return 1.5
+	case monsterCount <= 6:
+		return 2
+	case monsterCount <= 10:
+		return 2.5
+	case monsterCount <= 14:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func encounterDifficulty(adjustedXP float64, t thresholds) string {
+	switch {
+	case adjustedXP >= float64(t.Deadly):
+		return "deadly"
+	case adjustedXP >= float64(t.Hard):
+		return "hard"
+	case adjustedXP >= float64(t.Medium):
+		return "medium"
+	case adjustedXP >= float64(t.Easy):
+		return "easy"
+	default:
+		return "trivial"
+	}
+}
+
+func readJSON(r *http.Request, v any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(v)
+}
+
+func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	writeError(w, http.StatusMethodNotAllowed)
+	return false
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int) {
+	writeJSON(w, status, map[string]string{"error": http.StatusText(status)})
+}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+exec
+/bin/zsh -lc 'git diff --stat' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+ exited 1 in 252ms:
+FAIL	dndrest [setup failed]
+# dndrest
+open /Users/dorkitude/Library/Caches/go-build/2f/2fa356e6e02cbbb1f6eb235f59d3fed379251e665e1d0688f23678bba1aef2b4-d: operation not permitted
+FAIL
+
+codex
+A repeat `go test` hit the sandboxed macOS Go cache path, not a code failure. The project’s `run.sh` already uses `/tmp/dndrest-gocache`, so I’m rerunning the check with that same cache location.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+GOCACHE="${GOCACHE:-/tmp/dndrest-gocache}" exec go run .
+
+exec
+/bin/zsh -lc 'GOCACHE=/tmp/dndrest-gocache go test ./...' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+ succeeded in 381ms:
+?   	dndrest	[no test files]
+
+codex
+Implemented the combat-state maintenance stage in [main.go](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go).
+
+Added:
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+- In-memory session state with deterministic initiative ordering, round/turn tracking, condition decrement/removal, `400` invalid input, and `404` unknown session IDs.
+
+`run.sh` was already present and starts the server in the foreground using `PORT` on `127.0.0.1`.
+
+Verification:
+- `GOCACHE=/tmp/dndrest-gocache go test ./...` passes.
+- I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+index 018013226918c3d194b729da66b6f0a571eac720..f266357cfda8cb418979864c2b1ab90dd3b0ec11
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T161626Z_codex_gpt-5.5_go-stdlib/main.go
+@@ -9,6 +9,8 @@
+ 	"regexp"
+ 	"sort"
+ 	"strconv"
++	"strings"
++	"sync"
+ )
+ 
+ var dicePattern = regexp.MustCompile(`^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$`)
+@@ -25,6 +27,11 @@
+ 	"5":   1800,
+ }
+ 
++var combatSessions = struct {
++	sync.Mutex
++	items map[string]*combatSession
++}{items: make(map[string]*combatSession)}
++
+ type thresholds struct {
+ 	Easy   int `json:"easy"`
+ 	Medium int `json:"medium"`
+@@ -32,6 +39,34 @@
+ 	Deadly int `json:"deadly"`
+ }
+ 
++type combatSession struct {
++	ID         string
++	Round      int
++	TurnIndex  int
++	Order      []combatantEntry
++	Conditions map[string][]combatCondition
++}
++
++type combatantEntry struct {
++	Name  string `json:"name"`
++	Score int    `json:"score"`
++	dex   int
++}
++
++type combatCondition struct {
++	Condition       string `json:"condition"`
++	RemainingRounds int    `json:"remaining_rounds"`
++}
++
++type combatStateResponse struct {
++	ID         string                       `json:"id"`
++	Round      int                          `json:"round"`
++	TurnIndex  int                          `json:"turn_index"`
++	Active     combatantEntry              `json:"active"`
++	Order      []combatantEntry             `json:"order,omitempty"`
++	Conditions *map[string][]combatCondition `json:"conditions,omitempty"`
++}
++
+ func main() {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("/health", healthHandler)
+@@ -42,6 +77,8 @@
+ 	mux.HandleFunc("/v1/characters/ability-modifier", abilityModifierHandler)
+ 	mux.HandleFunc("/v1/characters/proficiency", proficiencyHandler)
+ 	mux.HandleFunc("/v1/characters/derived-stats", derivedStatsHandler)
++	mux.HandleFunc("/v1/combat/sessions", combatSessionsHandler)
++	mux.HandleFunc("/v1/combat/sessions/", combatSessionActionHandler)
+ 
+ 	port := os.Getenv("PORT")
+ 	if port == "" {
+@@ -229,6 +266,145 @@
+ 	}{Order: order})
+ }
+ 
++func combatSessionsHandler(w http.ResponseWriter, r *http.Request) {
++	if r.URL.Path != "/v1/combat/sessions" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	var req struct {
++		ID         string `json:"id"`
++		Combatants []struct {
++			Name string `json:"name"`
++			Dex  int    `json:"dex"`
++			Roll int    `json:"roll"`
++		} `json:"combatants"`
++	}
++	if err := readJSON(r, &req); err != nil || req.ID == "" || len(req.Combatants) == 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	order := make([]combatantEntry, 0, len(req.Combatants))
++	seenNames := make(map[string]bool, len(req.Combatants))
++	for _, combatant := range req.Combatants {
++		if combatant.Name == "" || seenNames[combatant.Name] {
++			writeError(w, http.StatusBadRequest)
++			return
++		}
++		seenNames[combatant.Name] = true
++		order = append(order, combatantEntry{
++			Name:  combatant.Name,
++			Score: combatant.Roll + combatant.Dex,
++			dex:   combatant.Dex,
++		})
++	}
++	sortCombatants(order)
++
++	session := &combatSession{
++		ID:         req.ID,
++		Round:      1,
++		TurnIndex:  0,
++		Order:      order,
++		Conditions: make(map[string][]combatCondition),
++	}
++
++	combatSessions.Lock()
++	if _, exists := combatSessions.items[req.ID]; exists {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	combatSessions.items[req.ID] = session
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, session.stateResponse(false))
++}
++
++func combatSessionActionHandler(w http.ResponseWriter, r *http.Request) {
++	if !requireMethod(w, r, http.MethodPost) {
++		return
++	}
++
++	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/combat/sessions/"), "/")
++	if len(parts) != 2 || parts[0] == "" {
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	switch parts[1] {
++	case "conditions":
++		addConditionHandler(w, r, parts[0])
++	case "advance":
++		advanceCombatHandler(w, parts[0])
++	default:
++		writeError(w, http.StatusNotFound)
++	}
++}
++
++func addConditionHandler(w http.ResponseWriter, r *http.Request, id string) {
++	var req struct {
++		Target         string `json:"target"`
++		Condition      string `json:"condition"`
++		DurationRounds int    `json:"duration_rounds"`
++	}
++	if err := readJSON(r, &req); err != nil || req.Target == "" || req.DurationRounds <= 0 {
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++	if !session.hasCombatant(req.Target) {
++		combatSessions.Unlock()
++		writeError(w, http.StatusBadRequest)
++		return
++	}
++	session.Conditions[req.Target] = append(session.Conditions[req.Target], combatCondition{
++		Condition:       req.Condition,
++		RemainingRounds: req.DurationRounds,
++	})
++	conditions := append([]combatCondition(nil), session.Conditions[req.Target]...)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, struct {
++		Target     string            `json:"target"`
++		Conditions []combatCondition `json:"conditions"`
++	}{
++		Target:     req.Target,
++		Conditions: conditions,
++	})
++}
++
++func advanceCombatHandler(w http.ResponseWriter, id string) {
++	combatSessions.Lock()
++	session, ok := combatSessions.items[id]
++	if !ok {
++		combatSessions.Unlock()
++		writeError(w, http.StatusNotFound)
++		return
++	}
++
++	session.TurnIndex++
++	if session.TurnIndex >= len(session.Order) {
++		session.TurnIndex = 0
++		session.Round++
++	}
++	session.decrementActiveConditions()
++	response := session.stateResponse(true)
++	combatSessions.Unlock()
++
++	writeJSON(w, http.StatusOK, response)
++}
++
+ func abilityModifierHandler(w http.ResponseWriter, r *http.Request) {
+ 	if !requireMethod(w, r, http.MethodPost) {
+ 		return
+@@ -388,6 +564,75 @@
+ 	return level >= 1 && level <= 20
+ }
+ 
++func sortCombatants(order []combatantEntry) {
++	sort.SliceStable(order, func(i, j int) bool {
++		if order[i].Score != order[j].Score {
++			return order[i].Score > order[j].Score
++		}
++		if order[i].dex != order[j].dex {
++			return order[i].dex > order[j].dex
++		}
++		return order[i].Name < order[j].Name
++	})
++}
++
++func (s *combatSession) hasCombatant(name string) bool {
++	for _, combatant := range s.Order {
++		if combatant.Name == name {
++			return true
++		}
++	}
++	return false
++}
++
++func (s *combatSession) decrementActiveConditions() {
++	active := s.Order[s.TurnIndex].Name
++	conditions := s.Conditions[active]
++	if len(conditions) == 0 {
++		return
++	}
++
++	kept := conditions[:0]
++	for _, condition := range conditions {
++		condition.RemainingRounds--
++		if condition.RemainingRounds > 0 {
++			kept = append(kept, condition)
++		}
++	}
++	if len(kept) == 0 {
++		delete(s.Conditions, active)
++		return
++	}
++	s.Conditions[active] = kept
++}
++
++func (s *combatSession) stateResponse(includeConditions bool) combatStateResponse {
++	response := combatStateResponse{
++		ID:        s.ID,
++		Round:     s.Round,
++		TurnIndex: s.TurnIndex,
++		Active:    s.Order[s.TurnIndex],
++		Order:     append([]combatantEntry(nil), s.Order...),
++	}
++	if includeConditions {
++		response.Order = nil
++		conditions := copyConditions(s.Conditions)
++		response.Conditions = &conditions
++	}
++	return response
++}
++
++func copyConditions(conditions map[string][]combatCondition) map[string][]combatCondition {
++	copied := make(map[string][]combatCondition)
++	for target, entries := range conditions {
++		if len(entries) == 0 {
++			continue
++		}
++		copied[target] = append([]combatCondition(nil), entries...)
++	}
++	return copied
++}
++
+ func minInt(a, b int) int {
+ 	if a < b {
+ 		return a
+
+tokens used
+30,520

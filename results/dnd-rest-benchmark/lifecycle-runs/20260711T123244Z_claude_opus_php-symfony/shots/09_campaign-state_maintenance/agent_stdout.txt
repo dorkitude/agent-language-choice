@@ -1,0 +1,25 @@
+Done, Chef! 🎲✨
+
+Campaign State APIs are implemented and verified end-to-end. Here's what I added to `index.php`:
+
+**New tables** (in `init_schema`, idempotent): `campaigns`, `campaign_characters`, `campaign_events` — child rows carry a `seq` column so characters return in insertion order.
+
+**Four handlers + routes** (Symfony Routing, matching the existing style):
+- `POST /v1/campaigns` → 201, `409` on duplicate id
+- `POST /v1/campaigns/{id}/characters` → 201, `404` unknown campaign, `409` duplicate char id
+- `POST /v1/campaigns/{id}/events` → 201 returning `{id, kind}`, `404`/`409` as above
+- `GET /v1/campaigns/{id}/state` → full state with `characters` array + `log_count`, `404` unknown
+
+Malformed input returns `400`. Also extended `storage_reset` to drop the new tables.
+
+Test results (all ✅):
+| Case | Status |
+|---|---|
+| create / dup campaign | 201 / 409 |
+| add / dup char | 201 / 409 |
+| char in unknown campaign | 404 |
+| add event / read state | 201 / 200 |
+| bad input | 400 |
+| `/health` preserved | 200 |
+
+`./run.sh` is unchanged and still valid — it starts the server in the foreground on `127.0.0.1:$PORT` after a fresh DB init. All prior-stage behavior is preserved. 🐭

@@ -1,0 +1,22 @@
+Done, Chef! 🎲✨
+
+I added the SQLite storage stage while preserving every existing endpoint. Here’s what changed:
+
+**New files**
+- `app/lib/db.ts` — SQLite module using Node 26’s built-in `node:sqlite`. It creates `game.db` in the project directory, sets `PRAGMA foreign_keys`, and initializes the schema for `users` and `combat_sessions`.
+- `app/v1/storage/status/route.ts` — `GET /v1/storage/status` returns `{ "driver": "sqlite", "schema_version": 1, "initialized": true }`.
+- `app/v1/storage/reset/route.ts` — `POST /v1/storage/reset` drops durable tables, recreates the schema, and returns `{ "ok": true, "schema_version": 1 }`.
+- `instrumentation.ts` — Next.js server-start hook that eagerly initializes the DB so the file exists and the schema is ready on startup.
+
+**Updated files**
+- `app/lib/auth.ts` — moved users from an in-memory `Map` to SQLite; keeps the same validation, hashing, and response contract.
+- `app/lib/combat.ts` — moved combat sessions from an in-memory `Map` to SQLite; order and conditions are stored as JSON columns.
+- `tsconfig.json` — includes `instrumentation.ts` for type checking.
+
+**Verified**
+- `npx tsc --noEmit` passes.
+- All existing endpoints (health, characters, checks, dice, encounters, initiative, auth, combat) still return the same responses/status codes.
+- `game.db` is created on server startup.
+- `/v1/storage/reset` clears both users and combat sessions, and the process stays healthy.
+
+`./run.sh` is ready and unchanged — it starts the Next.js dev server in the foreground on `127.0.0.1:$PORT`.

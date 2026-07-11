@@ -1,0 +1,19 @@
+Done, Chef! 🎲⚔️
+
+## Summary
+
+I added the **Stateful Combat** stage to the existing PHP stdlib D&D API while preserving all prior-stage endpoints.
+
+### Root cause found 🎯
+PHP's built-in server (`php -S`) **re-executes the router script for every request**, so globals/statics do **not** persist across requests. A naive in-memory `$sessions = []` would lose state between `create → add-condition → advance` (three separate HTTP requests). I verified this empirically with a counter test (always returned `1`).
+
+### Fix
+Combat sessions are stored in a JSON file (`.combat_sessions.json`) on disk, loaded/saved per request via `load_combat_sessions()` / `save_combat_sessions()`. `run.sh` wipes the file at startup so state lives only for the server process lifetime — matching the spec's "state only needs to last for the lifetime of the server process."
+
+### Endpoints added
+- **`POST /v1/combat/sessions`** — sorts by score↓, dex↓, name↑; starts `round=1`, `turn_index=0`; returns `active` + `order`.
+- **`POST /v1/combat/sessions/{id}/conditions`** — validates target exists (400), positive-integer duration (400), unknown session (404).
+- **`POST /v1/combat/sessions/{id}/advance`** — advances turn, wraps + increments round, decrements only the **newly active** combatant's conditions at the start of their turn, removes expired ones; unknown session → 404.
+
+### Verification
+All three spec examples return **byte-exact** matching JSON, including the empty-conditions map serializing as `{}` (via `(object)` cast). I traced the full 6-advance lifecycle (blessed: 2→1 at fighter's turn, removed at 0, round increments on wrap) and confirmed all error cases (404/400). Prior-stage endpoints (health, dice, ability check, adjusted-xp, initiative order, ability-modifier, proficiency, derived-stats) remain untouched and passing. `php -l` is clean. ✨

@@ -1,0 +1,32 @@
+Done, Chef! 🎲 The D&D REST engine is live and verified.
+
+## What I built
+
+A single front-controller `index.php` using **Symfony HttpFoundation 8.1.1** + **Symfony Routing 8.1.0** (no framework downgrade — exact pinned versions), served by PHP 8.5.8's built-in server via `run.sh`.
+
+### Endpoints (all spec samples matched byte-for-byte)
+
+| Endpoint | Status |
+|---|---|
+| `GET /health` → `{"ok":true}` | ✅ |
+| `POST /v1/dice/stats` — regex-parsed `<count>d<sides>[±<mod>]`, 400 on invalid | ✅ |
+| `POST /v1/checks/ability` — total/success/margin | ✅ |
+| `POST /v1/encounters/adjusted-xp` — XP table, count multipliers, level-3 thresholds, difficulty cascade | ✅ |
+| `POST /v1/initiative/order` — score↓, dex↓, name↑ tie-breaks | ✅ |
+
+### Design notes
+- **Routing via Symfony components**: `RouteCollection` + `UrlMatcher` + `RequestContext::fromRequest()`, with `ResourceNotFoundException`→404 and `MethodNotAllowedException`→405.
+- **Clean JSON numbers**: a `num()` helper collapses whole-valued floats to ints so `2.0`→`2`, `1700.0`→`1700` (matching the spec), while `3.5`/`1.5`/`2.5`/`437.5` stay as floats. PHP's `serialize_precision=-1` already does this, but the helper makes it explicit.
+- **Average** = `(min+max)/2` — exact mean (e.g. `1d6`→`3.5`, `2d6+3`→`10`).
+- **Difficulty** cascades `deadly→hard→medium→easy→trivial` against summed party thresholds.
+- **Validation**: dice returns 400 on non-positive count/sides, malformed grammar, or extra tokens; encounter returns 400 on unknown CR or unsupported level (the spec's finite tables).
+
+### Verified edge cases
+- All 5 difficulty tiers (trivial/easy/medium/hard/deadly)
+- Multiplier tiers 1, 1.5, 2, 2.5, 3, 4
+- CR fractions `1/8`, `1/4`, `1/2` + integer CRs `0`–`5`
+- Initiative tie-breaks (score, then dex, then name)
+- Dice: uppercase `D`, negative modifiers, fractional averages, invalid expressions
+- 404 + 405 handling, `run.sh` foreground startup on `127.0.0.1:$PORT`
+
+`./run.sh` is ready to go — just set `PORT` and run. 🐉

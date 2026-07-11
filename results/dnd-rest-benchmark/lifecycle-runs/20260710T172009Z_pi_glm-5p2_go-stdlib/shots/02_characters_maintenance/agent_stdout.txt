@@ -1,0 +1,26 @@
+Everything is wired up and verified. Here's the summary, Chef! 🎲
+
+## What I added
+
+Inherited the existing Go stdlib D&D REST API (core suite 8/8 passing) and added **three new character endpoints** to `main.go`, preserving all prior behavior:
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/characters/ability-modifier` | Validates `score` ∈ [1,30] → `modifier = floor((score-10)/2)` with correct negative-half flooring (score 9 → -1) |
+| `POST /v1/characters/proficiency` | Validates `level` ∈ [1,20] → tiered bonus 2→6 |
+| `POST /v1/characters/derived-stats` | Validates level + all 6 ability scores; computes modifiers, proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` |
+
+## Key implementation notes
+
+- **Floor division**: Go's `/` truncates toward zero, so I added an explicit adjustment (`if diff < 0 && diff%2 != 0 { m-- }`) to correctly floor negative halves — score 8 and 9 both yield -1. ✅
+- **Validation**: Out-of-range `score`/`level` and invalid JSON return `400`, matching the spec. Ability scores in derived-stats are validated 1-30 for consistency with the standalone endpoint.
+- **No third-party deps** — pure `net/http` + `encoding/json`, Go 1.26.5.
+
+## Verification
+
+- `go vet` ✅ and `go build` ✅
+- All 6 existing core endpoints still respond correctly (health, dice-stats, ability check, encounter XP, initiative order).
+- The derived-stats example produces **exactly** the spec output: `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}` 🎯
+- Boundary cases checked: proficiency tiers (1/4/5/20), ability floor (8/9/10), and all invalid inputs return 400.
+
+`./run.sh` is unchanged and ready (`go run .` in foreground, listens on `127.0.0.1:$PORT`). Done! 🐉

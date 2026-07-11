@@ -1,0 +1,35 @@
+Everything is wired up correctly, Chef 🍳. Here's a summary of what I did:
+
+## Summary
+
+Added SQLite-backed **Monster & Item Compendium** APIs while preserving all prior-stage behavior.
+
+### `db.php` changes
+- Added two new tables to `db_init_schema()`: `monsters` (slug, name, cr, armor_class, hit_points, tags-as-JSON) and `items` (slug, name, type, rarity, cost_gp).
+- Updated `db_reset()` to drop the new tables too, so `/v1/storage/reset` now also clears compendium data.
+- Kept `schema_version` at `1` so `/v1/storage/status` and `/v1/storage/reset` responses remain byte-identical to the prior stage.
+
+### `index.php` changes
+Four new handlers + routes:
+| Endpoint | Status | Behavior |
+|---|---|---|
+| `POST /v1/compendium/monsters` | 201 | Creates monster; response omits `tags` |
+| `GET /v1/compendium/monsters/{slug}` | 200 | Reads monster; response includes `tags` array |
+| `POST /v1/compendium/items` | 201 | Creates item |
+| `GET /v1/compendium/items/{slug}` | 200 | Reads item |
+
+Validation:
+- `400` for malformed input (missing/wrong-typed fields; non-array `tags` or non-string tag elements)
+- `404` for unknown slugs on reads
+- `409` for duplicate slugs on creates
+- `tags` optional (defaults to `[]`) but must be an array of strings when present
+
+### `run.sh`
+Unchanged and executable — wipes `game.db` on startup, pre-inits the schema via `php db.php`, then runs `php -S 127.0.0.1:$PORT index.php` in the foreground.
+
+### Verification
+- PHP 8.5.8, `php -l` clean on both files.
+- All 4 new compendium endpoints tested: create/read/duplicate(409)/missing(404)/malformed(400) for both monsters and items.
+- Full cumulative regression: **20/20 prior-stage checks pass**, including combat, auth, and the unchanged storage status/reset bodies. Storage reset correctly wipes compendium data (reads 404 afterward).
+
+The server is **not** running — `./run.sh` is ready to go. ✅

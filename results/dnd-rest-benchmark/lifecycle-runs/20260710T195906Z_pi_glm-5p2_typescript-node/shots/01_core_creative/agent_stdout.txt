@@ -1,0 +1,21 @@
+Done, Chef! 🎲✨ The core D&D REST engine is ready.
+
+## What I built
+
+**`src/server.ts`** — a single-file TypeScript server using only Node 26.4.0's built-in `http` module (no frameworks), implementing all five endpoints:
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parsed `NdS[+/-M]`; validates count/sides > 0; returns `dice_count, sides, modifier, min, max, average` (= `(min+max)/2`); 400 on invalid |
+| `POST /v1/checks/ability` | `total=roll+modifier`, `success=total>=dc`, `margin=total-dc`; 400 on non-integer inputs |
+| `POST /v1/encounters/adjusted-xp` | XP-by-CR map, monster-count multipliers (1/1.5/2/2.5/3/4), summed party thresholds (level 3), difficulty `trivial→deadly`; 400 on unsupported CR/level |
+| `POST /v1/initiative/order` | `score=roll+dex`, sorted by score desc → dex desc → name asc |
+
+**`run.sh`** — starts the server in the foreground on `127.0.0.1:$PORT`. It compiles with the pinned local **tsc 7.0.2** (`./node_modules/.bin/tsc`) then runs `dist/server.js`, with a robust fallback to Node 26's native TypeScript type-stripping (`node src/server.ts`) if `node_modules` is ever absent.
+
+**`tsconfig.json`** — added `"rootDir": "src"` (tsc 7.0.2 now requires it explicitly) and `"types": ["node"]` so `@types/node` 26.1.1 globals (`process`, `Buffer`, `node:http`) resolve.
+
+## Verification
+
+All spec samples reproduce **byte-for-byte**, plus edge cases: invalid dice expressions → 400, all multiplier tiers, `trivial`/`easy`/`medium`/`deadly` boundaries, initiative tie-breaking (score→dex→name), unknown routes → 404, trailing-slash normalization, and invalid JSON → 400. The server is stopped — `./run.sh` is ready for the evaluator. 🐉

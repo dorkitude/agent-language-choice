@@ -1,0 +1,32 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I inherited a Vite 8.1.3 + TypeScript REST API that uses a custom Vite plugin (`src/dndPlugin.ts`) wired into the dev-server middleware. All 34 prior-stage tests were passing, and I added the three new PHB-rules endpoints without touching any existing behavior.
+
+### Changes — `src/dndPlugin.ts` only
+
+**1. New helper functions** (placed before the router):
+
+- **`spellSlots`** — full wizard spell-slot table for levels 1–20 (the spec requires wizard level 5 → `{"1":4,"2":3,"3":2}`). Non-wizard class or out-of-range level → `null` (→ 400).
+- **`longRest`** — restores `hp_current` → `hp_max`; restores `max(1, floor(level/2))` hit dice (so `hit_dice_spent` drops `3 → 1` at level 5); reduces exhaustion by 1 (min 0). Validates all five integer fields.
+- **`equipmentLoad`** — `capacity = strength * 15`, `encumbered = weight > capacity`. Validates `strength`/`weight` are non-negative integers.
+
+**2. New route handlers** (inside the existing POST block, after the campaign-events handler):
+
+- `POST /v1/phb/spell-slots`
+- `POST /v1/phb/rests/long`
+- `POST /v1/phb/equipment-load`
+
+Each returns `200` + JSON on success, `400` on invalid input — matching the established `result | null` → 200/400 pattern used by the other computed endpoints.
+
+### Verification
+
+- `tsc --noEmit` → clean ✅
+- Live-tested all three new endpoints (exact spec payloads) → exact expected JSON ✅
+- Edge cases: invalid class, out-of-range level, missing fields, malformed JSON → all `400` ✅
+- Regression: `/health`, `/v1/storage/status`, `/v1/storage/reset`, `/v1/dice/stats`, `/v1/characters/ability-modifier` → all still correct ✅
+- `./run.sh` is intact & executable (starts `vite` in the foreground on `127.0.0.1:$PORT`) ✅
+- No server left running (cleaned up my ephemeral test process) ✅
+
+`./run.sh` is ready. 🚀

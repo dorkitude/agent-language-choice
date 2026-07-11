@@ -1,0 +1,22 @@
+Fixed it, Chef! 🎉
+
+The bug was in the middleware dispatch at `vite.config.ts:701` — only `POST /v1/auth/register` was hardcoded to return `201`, while every other POST (including the new compendium create routes) fell back to `200`. The evaluator wanted `201 Created` for the new monster/item creates.
+
+**The fix** 🔧: replaced the single-route check with a `CREATED_ROUTES` set covering register + the two compendium creates:
+
+```ts
+const CREATED_ROUTES = new Set([
+  'POST /v1/auth/register',
+  'POST /v1/compendium/monsters',
+  'POST /v1/compendium/items',
+]);
+const successStatus = CREATED_ROUTES.has(route) ? 201 : 200;
+```
+
+**Verified live** ✅:
+- `monster create: 201` ✨
+- `item create: 201` ✨
+- `monster get: 200`, `health: 200` (prior behavior preserved)
+- `dup monster: 409` (conflict handling intact)
+
+`./run.sh` is unchanged and ready — it still starts Vite in the foreground on `127.0.0.1:$PORT`. No packages touched, minimal deterministic change. 🐹

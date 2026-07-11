@@ -1,0 +1,12 @@
+All three suites green: `core` 8/8, `characters` 13/13, `combat-state` 20/20. 🎲✨
+
+## Summary, Chef
+
+**Root cause:** The spec for *Advance Turn* says to "remove a **condition** when its remaining duration reaches 0" — but the code was also removing the combatant's entire entry from the conditions map, and the snapshot helper was filtering out any empty list. So once `fighter`'s `blessed` condition expired on their second turn, the `fighter` key vanished from the response (`conditions: {}`), and the `combat-advance-expired-removed` test failed because it expects the key to still be present (now `[]`).
+
+**Fix** (in `src/server.ts`):
+
+1. `handleAdvance` — stopped deleting the combatant's key when its condition list empties; now it keeps an empty array via `session.conditions.set(active.name, kept)`.
+2. `conditionsSnapshot` — removed the `if (list.length > 0)` filter so combatants who once had conditions still appear with `[]` after expiry.
+
+This keeps every prior-stage behavior intact (verified by re-running `core` + `characters`), and `./run.sh` already recompiles with the pinned `tsc` 7.0.2 then runs `node dist/server.js` in the foreground — ready to go. 🛡️

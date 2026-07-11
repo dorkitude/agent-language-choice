@@ -1,0 +1,15 @@
+Fixed it, Chef! 🎲✨
+
+**Root cause:** When the `advance` handler decremented a condition to `0`, it called `session.conditions.delete(active.name)`, wiping the combatant's key out of the map entirely. Then `conditionsObject` only emitted keys with non-empty lists — so once fighter's `blessed` expired, the `fighter` key disappeared and the evaluator saw `conditions: {}` instead of `conditions: {"fighter": []}`.
+
+**Two-line fix:**
+1. `advance/route.ts` — always `session.conditions.set(active.name, kept)` (even when `kept` is empty) instead of deleting the entry. 🗝️
+2. `lib/combat.ts` — `conditionsObject` now emits any combatant that has a map entry (`if (list)`), including empty arrays.
+
+The key is still only created once a condition is actually added, so fresh sessions/combatants stay absent from the output — no regression to the other 19 passing tests.
+
+**Verified live** against the exact failing sequence:
+- advance 2 → `blessed` decrements 2→1 (fighter's turn) ✅
+- advance 5 (round 2, turn_index 2, fighter active) → `{"fighter":[]}` — key persists, condition expired 🎯
+
+`./run.sh` is unchanged and ready (starts `next dev` on `127.0.0.1:$PORT` in the foreground). Test server has been stopped. 🛑

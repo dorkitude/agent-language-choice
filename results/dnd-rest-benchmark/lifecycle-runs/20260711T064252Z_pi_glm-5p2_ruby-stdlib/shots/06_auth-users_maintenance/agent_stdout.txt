@@ -1,0 +1,51 @@
+Everything passes cleanly — all new auth endpoints behave per spec and all prior-stage endpoints are preserved. No server errors. 🎲✨
+
+Here's a summary of what I added, Chef:
+
+## Changes to `server.rb`
+
+**1. Stdlib password hashing (real hashing, no gems)**
+- `require "openssl"` — uses `OpenSSL::KDF.pbkdf2_hmac` (PBKDF2-HMAC-SHA256, 100k iterations, random 16-byte salt).
+- `hash_password` → stores a self-describing verifier `pbkdf2$<iter>$<salt_hex>$<hash_hex>`.
+- `verify_password` → parses the verifier and uses `OpenSSL.fixed_length_secure_compare` (constant-time). Plain passwords are never stored or echoed.
+
+**2. `POST /v1/auth/register`**
+- Validates `username` against `\A[a-z0-9_-]{2,32}\z` → `400` if bad.
+- Validates `password` is a string ≥ 8 chars → `400` if bad.
+- Validates `role` ∈ `{dm, player}` → `400` if bad.
+- Duplicate username → `409`.
+- Success → `200 {"username": ..., "role": ...}`.
+
+**3. `POST /v1/auth/login`**
+- Malformed input (non-string/missing fields, unparseable JSON) → `400`.
+- Bad credentials (unknown user or wrong password) → `401`.
+- Success → `200 {"username": ..., "token": "session-<username>"}` (deterministic token).
+
+**4. Routing & status map**
+- Added `401`/`409` to `STATUS_TEXT`.
+- Added the two new `when` cases in the router. All existing routes (health, dice, ability checks, encounters, initiative, characters, combat sessions/conditions/advance) are untouched and still pass.
+
+## `run.sh` — unchanged
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+```
+Starts the server in the foreground on `127.0.0.1:$PORT`. ✅
+
+### Smoke-test results (all green)
+| Test | Expected | Got |
+|---|---|---|
+| register dm | 200 `{username,role}` | ✅ |
+| register player | 200 | ✅ |
+| duplicate username | 409 | ✅ |
+| bad username (too short / uppercase / 33 chars) | 400 | ✅ |
+| short password | 400 | ✅ |
+| bad role | 400 | ✅ |
+| login correct | 200 `session-dm` | ✅ |
+| login wrong password | 401 | ✅ |
+| login unknown user | 401 | ✅ |
+| login/register malformed | 400 | ✅ |
+| prior dice/characters endpoints | 200 | ✅ |
+
+`./run.sh` is ready — the server is not running. 🛡️

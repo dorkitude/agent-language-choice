@@ -1,0 +1,23 @@
+Done, Chef! 🎲⚔️
+
+## Summary
+
+I inherited the existing Sinatra D&D REST API (Ruby 4.0.5 / Sinatra 4.2.1 / Rack 3.2.6 / Puma 8.0.2) and added the three **Stateful Combat** endpoints for this maintenance stage, preserving all prior core + character-rules behavior.
+
+### What I added (`app.rb`)
+
+An in-memory session store (`COMBAT_SESSIONS` hash + `COMBAT_LOCK` mutex for Puma thread-safety) and three routes:
+
+- **`POST /v1/combat/sessions`** — validates `id` (non-empty string) and a non-empty `combatants` array (each with string `name`, int `dex`, int `roll`). Computes `score = roll + dex`, sorts by **score desc, dex desc, name asc**, stores `round=1`, `turn_index=0`, and returns `id`/`round`/`turn_index`/`active`/`order`.
+- **`POST /v1/combat/sessions/:id/conditions`** — 404 on unknown session; validates `target` (string naming a real combatant), `condition` (arbitrary string), `duration_rounds` (positive int). Appends to the target's condition list and returns the full list.
+- **`POST /v1/combat/sessions/:id/advance`** — 404 on unknown session; bumps `turn_index`, wraps to `0` and increments `round` at the end, then **decrements only the newly-active combatant's conditions**, removing any that hit `0`. Returns the full conditions map (only combatants with remaining conditions).
+
+### Verification
+
+- **Spec examples reproduce byte-for-byte**: create → `{rogue:17, mage:16, fighter:14}`, add condition → `fighter/blessed:2`, advance → `mage` active with `fighter/blessed:2`.
+- **Full lifecycle trace**: blessed ticks `2→1` on fighter's turn, survives the round-wrap to round 2, then expires to `{}` on fighter's next turn. ✅
+- **Tie-breaker**: equal scores order by dex desc then name asc (verified `[m, a, z]`).
+- **Errors**: unknown session → `404`; bad/missing/non-positive/non-integer fields, empty combatants, malformed JSON, missing/non-string `id` → `400`.
+- **Prior stages intact**: `health`, `dice-stats` (1d20-1 → `9.5`), `initiative/order`, `derived-stats` all still respond correctly.
+
+`run.sh` is unchanged and executable — starts the server in the foreground on `127.0.0.1:$PORT`. 🚀

@@ -1,0 +1,24 @@
+Everything is in place and tested. Here's a summary of what I did, Chef 🎲
+
+## Changes to `index.php`
+
+**1. Schema (3 new SQLite tables)** in `initSchema()`:
+- `campaigns` — `id`, `name`, `dm` (PK: `id`)
+- `campaign_characters` — `campaign_id`, `id`, `name`, `level`, `class` (composite PK: `campaign_id, id`)
+- `campaign_events` — `campaign_id`, `id`, `kind`, `summary` (composite PK: `campaign_id, id`)
+
+**2. Reset cleanup** — added `DELETE FROM` for the three new tables in `resetDb()` (children first).
+
+**3. Four new handlers**:
+| Handler | Route | Status |
+|---|---|---|
+| `createCampaign` | `POST /v1/campaigns` | 201 (409 dup, 400 malformed) |
+| `addCampaignCharacter` | `POST /v1/campaigns/{campaignId}/characters` | 201 (404 unknown campaign, 409 dup, 400 malformed) |
+| `addCampaignEvent` | `POST /v1/campaigns/{campaignId}/events` | 201 (404, 409, 400) — response omits `summary` per spec |
+| `readCampaignState` | `GET /v1/campaigns/{campaignId}/state` | 200 (404 unknown) — returns campaign + `characters[]` + `log_count` |
+
+**4. Four new routes** registered with Symfony Routing.
+
+**`run.sh`** was already correct — it wipes `game.db`, runs `init-schema` (now creates campaign tables too), and serves in the foreground on `127.0.0.1:$PORT`.
+
+All existing endpoints (health, dice, combat, auth, compendium, storage) remain fully functional — verified with live curl tests. ✨

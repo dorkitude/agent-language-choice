@@ -1,0 +1,31 @@
+Everything is in place, Chef! 🎲⚔️
+
+## Summary
+
+I added the **Stateful Combat** stage to the existing Ruby stdlib D&D REST API while preserving all prior endpoints (health, dice, ability checks, encounter XP, initiative, character rules).
+
+### New endpoints in `server.rb`
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Creates an in-memory session: sorts combatants by score desc → dex desc → name asc, starts at round=1, turn_index=0 |
+| `POST /v1/combat/sessions/{id}/conditions` | Attaches a timed condition to a named combatant (validates target exists, condition is a string, duration is a positive int) |
+| `POST /v1/combat/sessions/{id}/advance` | Advances turn_index, wraps + increments round at end, decrements conditions on the **new active** combatant only, removes at 0 |
+
+### Key design choices
+- **In-memory state**: `SESSIONS` hash + `SESSION_MUTEX` (thread-safe, since the server spawns a thread per request)
+- **Status codes**: `404` for unknown session IDs, `400` for malformed input (missing/invalid id, combatants, target, duration, etc.), `404` for unknown routes
+- **Conditions view**: only includes combatants with non-empty condition lists (matching the spec example)
+- **Routing**: added regex `when` clauses alongside the existing exact-match cases to handle `{id}` path parameters
+- **No gems** — pure stdlib (`socket`, `json`, `thread` mutex), Ruby 4.0.5
+
+### Verified
+- ✅ All existing endpoints still pass (health, dice, ability check, encounter XP, initiative, ability modifier, proficiency, derived stats)
+- ✅ Create session response matches spec exactly
+- ✅ Add condition response matches spec exactly
+- ✅ Advance turn response matches spec exactly (traced the full condition lifecycle: add → skip on other turns → decrement on target's turn → remove at 0 → round wrap)
+- ✅ Tie-breaking: score desc → dex desc → name asc
+- ✅ Error cases: 404 (unknown session/route), 400 (missing id, empty combatants, bad JSON, unknown target, non-positive duration, missing fields)
+- ✅ `ruby -c` syntax valid, `run.sh` intact and executable
+
+`./run.sh` starts the server in the foreground on `127.0.0.1:$PORT` — ready to go! 🚀

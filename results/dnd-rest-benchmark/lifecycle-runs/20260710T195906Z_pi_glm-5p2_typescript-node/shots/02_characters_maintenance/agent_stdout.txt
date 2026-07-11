@@ -1,0 +1,18 @@
+Done! 🎉
+
+## Summary
+
+I inherited the existing D&D REST API (core suite: `/health`, `/v1/dice/stats`, `/v1/checks/ability`, `/v1/encounters/adjusted-xp`, `/v1/initiative/order` — all 8/8 passing) and added the **characters** stage to `src/server.ts`:
+
+**New endpoints:**
+- `POST /v1/characters/ability-modifier` — validates `score` ∈ [1,30] integer, returns `floor((score-10)/2)` (correctly floors negative halves: 9→-1, 8→-1).
+- `POST /v1/characters/proficiency` — validates `level` ∈ [1,20] integer, returns `2 + floor((level-1)/4)` (1-4→2, 5-8→3, 9-12→4, 13-16→5, 17-20→6).
+- `POST /v1/characters/derived-stats` — computes all six ability modifiers, proficiency, `hp_max = level*(6+con_mod)`, and `armor_class = base + min(dex_mod, dex_cap) + (shield?2:0)`, echoing the request shape from the spec.
+
+**Design notes:**
+- Shared `abilityModifier`/`proficiencyBonus` helpers keep the formula identical between standalone and derived-stats endpoints.
+- `shield === true` is the literal interpretation of "when armor.shield is true" — lenient on absence, strict on the bonus.
+- Validation mirrors the existing code style (`isObj`/`isInt` helpers), returning `400` for invalid inputs.
+- No frameworks added — pure Node 26 `node:http`, TypeScript 7.0.2, pinned versions untouched.
+
+`run.sh` compiles via `tsc` and runs `node dist/server.js` in the foreground on `127.0.0.1:$PORT`. Server is **not** started (per contract) — ready for the evaluator to launch. 🐉

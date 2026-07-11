@@ -1,0 +1,20 @@
+Everything's in place, Chef 🍳. Here's a summary of what I did:
+
+## Summary
+
+**Inherited codebase:** Flask 3.1.3 app (`app.py`) with 8 existing endpoints (health, dice-stats, ability-check, adjusted-xp, initiative-order, ability-modifier, proficiency, derived-stats) — all preserved untouched.
+
+**Added 3 combat-state endpoints** with in-memory state in a module-level `SESSIONS = {}` dict:
+
+1. **`POST /v1/combat/sessions`** — Creates a session with client-supplied `id`. Computes initiative `score = roll + dex`, sorts by score↓, dex↓, name↑ (same tie-breakers as the existing `/v1/initiative/order`). Starts `round=1`, `turn_index=0`. Returns `id`, `round`, `turn_index`, `active` (first in order), and `order`. Rejects duplicate ids (400), missing/invalid id, and non-list/empty combatants.
+
+2. **`POST /v1/combat/sessions/<id>/conditions`** — Attaches a condition `{condition, remaining_rounds}` to a named combatant. Validates target is a real combatant (400), condition is a string, and `duration_rounds` is a positive int. Unknown session → 404. Returns the target's full condition list.
+
+3. **`POST /v1/combat/sessions/<id>/advance`** — Increments `turn_index`, wrapping to 0 (which increments `round`). At the start of the newly-active combatant's turn, decrements their conditions and removes any reaching 0. Inactive combatants' conditions are untouched. Returns `id`, `round`, `turn_index`, `active`, and `conditions` (dict keyed by combatant name, only including combatants with non-empty condition lists). Unknown session → 404.
+
+**Verified:**
+- ✅ Syntax valid; all existing endpoints still respond correctly (regression-tested `/health` and `/v1/initiative/order`)
+- ✅ Create/add-condition/advance match the spec examples exactly
+- ✅ Turn-wrap increments round; condition tick-down & removal on the active combatant works
+- ✅ Error paths: 404 unknown session, 400 bad target / bad duration / duplicate id
+- ✅ `run.sh` intact & executable, `requirements.txt` unchanged (Flask==3.1.3)

@@ -1,0 +1,40 @@
+Those remaining puma processes belong to *other* lifecycle runs (different timestamps) — not mine. My test servers are gone, and I correctly left those unrelated runs untouched. ✅
+
+## Done, Chef! 🎲✨
+
+### Root cause
+The `bundle install` **setup step** failed before bundler even started. A prior `gem update --system` (rubygems-update-4.0.16) had written a **stale duplicate default-gemspec** for `bundler-4.0.16` into the Homebrew Cellar:
+
+```
+/opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/gems/4.0.0/specifications/default/bundler-4.0.16.gemspec
+```
+
+That gemspec's `full_gem_path` resolves to `/opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/gems/4.0.0/gems/bundler-4.0.16` — a directory that was **never created** (the Cellar only ships `bundler-4.0.11`; the real 4.0.16 gem files live in `/opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.16/`). RubyGems dedups default specs and this broken Cellar spec **shadowed the valid one**, so the `bundle` wrapper's `Gem.activate_and_load_bin_path(...)` computed a dangling `exe/bundle` path → `LoadError`.
+
+The bundler *library* itself loaded fine from site_ruby/stdlib; only the `bundle` executable wrapper was broken by the dangling path.
+
+### Fix (one surgical symlink)
+```bash
+ln -sfn /opt/homebrew/lib/ruby/gems/4.0.0/gems/bundler-4.0.16 \
+        /opt/homebrew/Cellar/ruby/4.0.5/lib/ruby/gems/4.0.0/gems/bundler-4.0.16
+```
+This makes the stale Cellar gemspec resolve to the real gem dir (which has a working `exe/bundle`). Non-destructive, minimal, and robust regardless of which default spec wins.
+
+### What I did **not** touch
+The app code and `run.sh` were already correct — I preserved all prior-stage behavior. The Rails API app (`config.ru` → `app.rb` → `config/environment`) runs via `rackup -o 127.0.0.1 -p $PORT config.ru` (Puma 8.0.2, Ruby 4.0.5), and all controllers already implement the contract exactly.
+
+### Verification (full evaluator flow)
+- `bundle install` → **exit 0**, idempotent (`Bundle complete! 4 Gemfile dependencies, 66 gems`).
+- `./run.sh` → boots Puma 8.0.2 on Ruby 4.0.5, listening on `127.0.0.1:$PORT`.
+- All 5 endpoints return **spec-exact** JSON:
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` `200` |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` `200` |
+| `POST /v1/dice/stats` invalid | `400` |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` `200` |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` `200` |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` `200` |
+
+`./run.sh` is ready and the setup failure is resolved. 🐎

@@ -1,0 +1,29 @@
+Hey Chef! 🍳 Fixed the bug in `main.go`.
+
+The issue was in `advanceTurnHandler`: when the last condition on a combatant expired, the code deleted the combatant key from `session.Conditions` and then skipped empty slices when building the response. That made the `conditions` map empty (`{}`), which failed the `combat-advance-expired-removed` test because it expects the target combatant key to remain with an empty list.
+
+**Fix:** Keep the combatant key as an empty slice after conditions expire, and copy all entries (including empty ones) into the response.
+
+```go
+// before
+if len(updated) == 0 {
+    delete(session.Conditions, active.Name)
+} else {
+    session.Conditions[active.Name] = updated
+}
+// ...
+for name, conds := range session.Conditions {
+    if len(conds) > 0 { ... }
+}
+
+// after
+session.Conditions[active.Name] = updated
+// ...
+for name, conds := range session.Conditions {
+    cpy := make([]conditionEntry, len(conds))
+    copy(cpy, conds)
+    condsCopy[name] = cpy
+}
+```
+
+Verified locally: after the condition expires, subsequent turns return `"conditions":{"fighter":[]}` ✅ `./run.sh` is ready and no server is left running.

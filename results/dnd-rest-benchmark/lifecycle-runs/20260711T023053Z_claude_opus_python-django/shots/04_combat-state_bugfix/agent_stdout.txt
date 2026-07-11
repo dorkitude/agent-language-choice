@@ -1,0 +1,5 @@
+The fix works. The final advance now shows `{"conditions": {"fighter": []}}` — the `fighter` key is preserved with an empty list after its condition expires, which is exactly what the evaluator's `combat-advance-expired-removed` test expected. All prior decrement/expiry behavior is intact.
+
+`run.sh` is unchanged and already satisfies the contract (foreground server on `127.0.0.1:$PORT`). 🎲✨
+
+Summary of the root cause, Chef: `_conditions_map` used `if conds:` to decide whether to emit a combatant, so any combatant whose conditions all expired silently dropped out of the map. I added a `conditioned` set per session (populated when a condition is first added) and gated the map on membership in that set instead — so a combatant that *has had* a condition stays in the response with `[]` once it expires, while combatants that never had one (rogue, mage) still stay out. Nothing else changed.

@@ -1,0 +1,945 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4fcf-fb0e-74f2-9b09-043fc20bcf3e
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: auth-users
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 3: Users and Password Login
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core, character-rule, and combat-state suites and add deterministic
+username/password APIs.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status: use `400` for malformed input, `401` for bad credentials, and `409` for
+duplicate usernames.
+
+Security note for this benchmark: implement real password hashing when the
+language/framework gives you a reasonable standard or framework-provided option.
+If the target has no reasonable built-in option, isolate password handling
+behind a small helper so a production hash can replace it. Do not store or echo
+the plain password in API responses.
+
+## Register User
+
+`POST /v1/auth/register`
+
+Request:
+
+```json
+{"username": "dm", "password": "swordfish", "role": "dm"}
+```
+
+Rules:
+
+- `username` must be 2-32 characters, lowercase letters, digits, `_`, or `-`.
+- `password` must be at least 8 characters.
+- `role` must be either `dm` or `player`.
+- A duplicate `username` returns HTTP 409.
+
+Response:
+
+```json
+{"username": "dm", "role": "dm"}
+```
+
+## Login
+
+`POST /v1/auth/login`
+
+Request:
+
+```json
+{"username": "dm", "password": "swordfish"}
+```
+
+Rules:
+
+- Correct credentials return a deterministic token for the benchmark:
+  `session-<username>`.
+- Bad credentials return HTTP 401.
+
+Response:
+
+```json
+{"username": "dm", "token": "session-dm"}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=auth-users base_url=http://127.0.0.1:61643 passed=false tests=23/24
+PASS	health	0ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+PASS	combat-advance-expired-removed	0ms	HTTP 200
+FAIL	auth-register-user	12ms	HTTP 200	status 200, want 201
+  response: {"username":"dm","role":"dm"}
+PASS	auth-register-duplicate	0ms	HTTP 409
+PASS	auth-login-user	11ms	HTTP 200
+PASS	auth-login-bad-password	10ms	HTTP 401
+
+
+Error: suite failed: 23/24 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: auth-register-user
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Ruby server and auth route first, then make the smallest change needed for the register status code while checking the surrounding behavior stays intact.
+exec
+/bin/zsh -lc 'pwd && ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+total 328
+drwxr-xr-x@  18 dorkitude  staff    576 Jul 10 23:14 .
+drwxr-xr-x@ 115 dorkitude  staff   3680 Jul 10 23:07 ..
+-rw-r--r--@   1 dorkitude  staff   5037 Jul 10 23:14 PROMPT.md
+-rw-r--r--@   1 dorkitude  staff    635 Jul 10 23:07 VERSION-PINS.json
+-rw-r--r--@   1 dorkitude  staff    727 Jul 10 23:14 agent_last_message.txt
+-rw-r--r--@   1 dorkitude  staff  66717 Jul 10 23:14 agent_stderr.txt
+-rw-r--r--@   1 dorkitude  staff    728 Jul 10 23:14 agent_stdout.txt
+-rw-r--r--@   1 dorkitude  staff   4266 Jul 10 23:14 dndeval-auth-users-report.json
+-rw-r--r--@   1 dorkitude  staff   2270 Jul 10 23:09 dndeval-characters-report.json
+-rw-r--r--@   1 dorkitude  staff   3496 Jul 10 23:12 dndeval-combat-state-report.json
+-rw-r--r--@   1 dorkitude  staff   1422 Jul 10 23:08 dndeval-core-report.json
+-rw-r--r--@   1 dorkitude  staff  32661 Jul 10 23:14 lifecycle-result.json
+-rwxr-xr-x@   1 dorkitude  staff     53 Jul 10 23:07 run.sh
+-rw-r--r--@   1 dorkitude  staff  13530 Jul 10 23:13 server.rb
+-rw-r--r--@   1 dorkitude  staff      0 Jul 10 23:14 server_stderr.txt
+-rw-r--r--@   1 dorkitude  staff      0 Jul 10 23:14 server_stdout.txt
+-rw-r--r--@   1 dorkitude  staff      3 Jul 10 23:14 setup.json
+drwxr-xr-x@   8 dorkitude  staff    256 Jul 10 23:14 shots
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+shots/05_auth-users_maintenance/server_stderr.txt
+shots/05_auth-users_maintenance/agent_stderr.txt
+shots/05_auth-users_maintenance/dndeval-auth-users-report.json
+shots/05_auth-users_maintenance/server_stdout.txt
+shots/05_auth-users_maintenance/PROMPT.md
+shots/05_auth-users_maintenance/agent_stdout.txt
+shots/05_auth-users_maintenance/agent_last_message.txt
+shots/05_auth-users_maintenance/setup.json
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/06_auth-users_bugfix/PROMPT.md
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/server_stderr.txt
+shots/04_combat-state_bugfix/agent_stderr.txt
+shots/04_combat-state_bugfix/server_stdout.txt
+shots/04_combat-state_bugfix/PROMPT.md
+shots/04_combat-state_bugfix/agent_stdout.txt
+shots/04_combat-state_bugfix/agent_last_message.txt
+shots/04_combat-state_bugfix/setup.json
+shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+server.rb
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+dndeval-auth-users-report.json
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+dndeval-combat-state-report.json
+
+codex
+The failure is very narrow: register returns the expected JSON body but uses `200` instead of `201`. I’m reading the response helper and auth branch now so the patch matches the local structure.
+exec
+/bin/zsh -lc 'rg -n "auth|register|login|json|status|response" server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,260p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+4:require "json"
+31:def json_response(status, body)
+36:    401 => "Unauthorized",
+40:  }.fetch(status, "OK")
+43:    "HTTP/1.1 #{status} #{reason}",
+44:    "Content-Type: application/json",
+60:def parse_json_body(body)
+96:def register_user(params)
+109:def login_user(params)
+383:  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+386:    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+390:    return json_response(200, create_combat_session(parse_json_body(body)))
+393:  if path == "/v1/auth/register"
+394:    return json_response(200, register_user(parse_json_body(body)))
+397:  if path == "/v1/auth/login"
+398:    return json_response(200, login_user(parse_json_body(body)))
+403:    return json_response(404, { "error" => "not found" }) unless session
+405:    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+410:    return json_response(404, { "error" => "not found" }) unless session
+412:    return json_response(200, advance_combat_session(session))
+415:  params = parse_json_body(body)
+416:  response = case path
+425:               return json_response(404, { "error" => "not found" })
+428:  json_response(200, response)
+430:  json_response(401, { "error" => "bad credentials" })
+432:  json_response(409, { "error" => "duplicate username" })
+434:  json_response(400, { "error" => "bad request" })
+466:  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
+470:  client&.write(json_response(400, { "error" => "bad request" }))
+
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "openssl"
+require "socket"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+ABILITY_NAMES = %w[str dex con int wis cha].freeze
+COMBAT_SESSIONS = {}
+USERS = {}
+
+class DuplicateUsernameError < StandardError; end
+class BadCredentialsError < StandardError; end
+
+def json_response(status, body)
+  payload = JSON.generate(body)
+  reason = {
+    200 => "OK",
+    400 => "Bad Request",
+    401 => "Unauthorized",
+    404 => "Not Found",
+    405 => "Method Not Allowed",
+    409 => "Conflict"
+  }.fetch(status, "OK")
+
+  [
+    "HTTP/1.1 #{status} #{reason}",
+    "Content-Type: application/json",
+    "Content-Length: #{payload.bytesize}",
+    "Connection: close",
+    "",
+    payload
+  ].join("\r\n")
+end
+
+def integer_value?(value)
+  value.is_a?(Integer)
+end
+
+def integer_in_range?(value, range)
+  integer_value?(value) && range.cover?(value)
+end
+
+def parse_json_body(body)
+  parsed = JSON.parse(body)
+  raise ArgumentError unless parsed.is_a?(Hash)
+
+  parsed
+rescue JSON::ParserError
+  raise ArgumentError
+end
+
+def valid_username?(username)
+  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
+end
+
+def password_record(password)
+  raise ArgumentError unless password.is_a?(String) && password.length >= 8
+
+  salt = OpenSSL::Random.random_bytes(16)
+  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
+  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
+end
+
+def password_matches?(password, record)
+  return false unless password.is_a?(String)
+
+  salt = [record["salt"]].pack("H*")
+  expected = [record["hash"]].pack("H*")
+  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
+  secure_compare(actual, expected)
+end
+
+def secure_compare(left, right)
+  return false unless left.bytesize == right.bytesize
+
+  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
+end
+
+def register_user(params)
+  username = params["username"]
+  password = params["password"]
+  role = params["role"]
+  raise ArgumentError unless valid_username?(username)
+  raise ArgumentError unless password.is_a?(String) && password.length >= 8
+  raise ArgumentError unless %w[dm player].include?(role)
+  raise DuplicateUsernameError if USERS.key?(username)
+
+  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
+  { "username" => username, "role" => role }
+end
+
+def login_user(params)
+  username = params["username"]
+  password = params["password"]
+  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
+
+  user = USERS[username]
+  raise BadCredentialsError unless user && password_matches?(password, user["password"])
+
+  { "username" => username, "token" => "session-#{username}" }
+end
+
+def dice_stats(params)
+  expression = params["expression"]
+  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+  raise ArgumentError unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  average = (count * (sides + 1) / 2.0) + modifier
+  average = average.to_i if average == average.to_i
+
+  {
+    "dice_count" => count,
+    "sides" => sides,
+    "modifier" => modifier,
+    "min" => count + modifier,
+    "max" => (count * sides) + modifier,
+    "average" => average
+  }
+end
+
+def ability_check(params)
+  roll = params["roll"]
+  modifier = params["modifier"]
+  dc = params["dc"]
+  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
+
+  total = roll + modifier
+  {
+    "total" => total,
+    "success" => total >= dc,
+    "margin" => total - dc
+  }
+end
+
+def ability_modifier_for(score)
+  raise ArgumentError unless integer_in_range?(score, 1..30)
+
+  (score - 10) / 2
+end
+
+def character_ability_modifier(params)
+  score = params["score"]
+  {
+    "score" => score,
+    "modifier" => ability_modifier_for(score)
+  }
+end
+
+def proficiency_bonus_for(level)
+  raise ArgumentError unless integer_in_range?(level, 1..20)
+
+  2 + ((level - 1) / 4)
+end
+
+def character_proficiency(params)
+  level = params["level"]
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus_for(level)
+  }
+end
+
+def character_derived_stats(params)
+  level = params["level"]
+  abilities = params["abilities"]
+  armor = params["armor"]
+  raise ArgumentError unless abilities.is_a?(Hash) && armor.is_a?(Hash)
+
+  modifiers = {}
+  ABILITY_NAMES.each do |name|
+    modifiers[name] = ability_modifier_for(abilities[name])
+  end
+
+  armor_base = armor["base"]
+  shield = armor["shield"]
+  dex_cap = armor["dex_cap"]
+  raise ArgumentError unless integer_value?(armor_base) && [true, false].include?(shield) && integer_value?(dex_cap)
+
+  proficiency_bonus = proficiency_bonus_for(level)
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus,
+    "hp_max" => level * (6 + modifiers["con"]),
+    "armor_class" => armor_base + [modifiers["dex"], dex_cap].min + (shield ? 2 : 0),
+    "modifiers" => modifiers
+  }
+end
+
+def monster_multiplier(count)
+  case count
+  when 1 then 1
+  when 2 then 1.5
+  when 3..6 then 2
+  when 7..10 then 2.5
+  when 11..14 then 3
+  else 4
+  end
+end
+
+def adjusted_xp(params)
+  party = params["party"]
+  monsters = params["monsters"]
+  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
+
+  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
+  party.each do |member|
+    level = member.is_a?(Hash) && member["level"]
+    level_thresholds = LEVEL_THRESHOLDS[level]
+    raise ArgumentError unless level_thresholds
+
+    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
+  end
+
+  base_xp = 0
+  monster_count = 0
+  monsters.each do |monster|
+    raise ArgumentError unless monster.is_a?(Hash)
+
+    cr = monster["cr"]
+    count = monster["count"]
+    xp = CR_XP[cr]
+    raise ArgumentError unless xp && integer_value?(count) && count.positive?
+
+    base_xp += xp * count
+    monster_count += count
+  end
+
+  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
+  adjusted = base_xp * multiplier
+  adjusted = adjusted.to_i if adjusted == adjusted.to_i
+  difficulty = "trivial"
+  %w[easy medium hard deadly].each do |name|
+    difficulty = name if adjusted >= thresholds[name]
+  end
+
+  {
+    "base_xp" => base_xp,
+
+exec
+/bin/zsh -lc "sed -n '1,80p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+
+codex
+I found the issue in the route dispatch, not in registration itself. I’m going to add `201 Created` support to the shared JSON response helper and return that only for `POST /v1/auth/register`.
+exec
+/bin/zsh -lc "sed -n '340,490p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+    payload[name] = conditions if !conditions.empty? || include_empty.include?(name)
+  end
+end
+
+def add_combat_condition(session, params)
+  target = params["target"]
+  condition = params["condition"]
+  duration = params["duration_rounds"]
+  raise ArgumentError unless session["conditions"].key?(target)
+  raise ArgumentError unless condition.is_a?(String) && integer_value?(duration) && duration.positive?
+
+  session["conditions"][target] << { "condition" => condition, "remaining_rounds" => duration }
+  {
+    "target" => target,
+    "conditions" => session["conditions"][target]
+  }
+end
+
+def advance_combat_session(session)
+  session["turn_index"] += 1
+  if session["turn_index"] >= session["order"].length
+    session["turn_index"] = 0
+    session["round"] += 1
+  end
+
+  active_name = session["order"][session["turn_index"]]["name"]
+  active_had_conditions = !session["conditions"][active_name].empty?
+  session["conditions"][active_name].each do |condition|
+    condition["remaining_rounds"] -= 1
+  end
+  session["conditions"][active_name].reject! { |condition| condition["remaining_rounds"].zero? }
+
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "conditions" => combat_conditions_payload(session, include_empty: active_had_conditions ? [active_name] : [])
+  }
+end
+
+def route(method, path, body)
+  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+
+  unless method == "POST"
+    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/register"
+    return json_response(200, register_user(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/login"
+    return json_response(200, login_user(parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/advance\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, advance_combat_session(session))
+  end
+
+  params = parse_json_body(body)
+  response = case path
+             when "/v1/dice/stats" then dice_stats(params)
+             when "/v1/checks/ability" then ability_check(params)
+             when "/v1/characters/ability-modifier" then character_ability_modifier(params)
+             when "/v1/characters/proficiency" then character_proficiency(params)
+             when "/v1/characters/derived-stats" then character_derived_stats(params)
+             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
+             when "/v1/initiative/order" then initiative_order(params)
+             else
+               return json_response(404, { "error" => "not found" })
+             end
+
+  json_response(200, response)
+rescue BadCredentialsError
+  json_response(401, { "error" => "bad credentials" })
+rescue DuplicateUsernameError
+  json_response(409, { "error" => "duplicate username" })
+rescue ArgumentError
+  json_response(400, { "error" => "bad request" })
+end
+
+def read_request(client)
+  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
+  return unless request_line
+
+  method, raw_path, = request_line.split(" ", 3)
+  headers = {}
+  while (line = client.gets)
+    line = line.delete_suffix("\n").delete_suffix("\r")
+    break if line.empty?
+
+    key, value = line.split(":", 2)
+    headers[key.downcase] = value.strip if key && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? client.read(length) : ""
+  path = raw_path.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+port = Integer(ENV.fetch("PORT"))
+server = TCPServer.new("127.0.0.1", port)
+
+trap("INT") { server.close }
+trap("TERM") { server.close }
+
+loop do
+  client = server.accept
+  request = read_request(client)
+  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
+rescue IOError, Errno::EBADF
+  break
+rescue StandardError
+  client&.write(json_response(400, { "error" => "bad request" }))
+ensure
+  client&.close
+end
+
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 2a73f0009f1f0a22139fcdce2829de374b0d5675..8237076d10091ed0f626679c696a44137403ca1d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -32,6 +32,7 @@
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
++    201 => "Created",
+     400 => "Bad Request",
+     401 => "Unauthorized",
+     404 => "Not Found",
+@@ -391,7 +392,7 @@
+   end
+ 
+   if path == "/v1/auth/register"
+-    return json_response(200, register_user(parse_json_body(body)))
++    return json_response(201, register_user(parse_json_body(body)))
+   end
+ 
+   if path == "/v1/auth/login"
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 2a73f0009f1f0a22139fcdce2829de374b0d5675..8237076d10091ed0f626679c696a44137403ca1d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -32,6 +32,7 @@
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
++    201 => "Created",
+     400 => "Bad Request",
+     401 => "Unauthorized",
+     404 => "Not Found",
+@@ -391,7 +392,7 @@
+   end
+ 
+   if path == "/v1/auth/register"
+-    return json_response(200, register_user(parse_json_body(body)))
++    return json_response(201, register_user(parse_json_body(body)))
+   end
+ 
+   if path == "/v1/auth/login"
+
+codex
+The code change is in place. I’ll run a syntax check and then start the server only inside a short local test command so it can verify the fixed endpoint and shut itself down afterward.
+exec
+/bin/zsh -lc 'git diff -- server.rb run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 2a73f0009f1f0a22139fcdce2829de374b0d5675..8237076d10091ed0f626679c696a44137403ca1d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -32,6 +32,7 @@
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
++    201 => "Created",
+     400 => "Bad Request",
+     401 => "Unauthorized",
+     404 => "Not Found",
+@@ -391,7 +392,7 @@
+   end
+ 
+   if path == "/v1/auth/register"
+-    return json_response(200, register_user(parse_json_body(body)))
++    return json_response(201, register_user(parse_json_body(body)))
+   end
+ 
+   if path == "/v1/auth/login"
+
+codex
+Syntax passes. Because the benchmark contract says not to start the server before the final answer, I’m keeping verification to static checks and file inspection rather than launching `run.sh` locally.
+exec
+/bin/zsh -lc "sed -n '388,400p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/register"
+    return json_response(201, register_user(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/login"
+    return json_response(200, login_user(parse_json_body(body)))
+  end
+
+exec
+/bin/zsh -lc "sed -n '24,48p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+ABILITY_NAMES = %w[str dex con int wis cha].freeze
+COMBAT_SESSIONS = {}
+USERS = {}
+
+class DuplicateUsernameError < StandardError; end
+class BadCredentialsError < StandardError; end
+
+def json_response(status, body)
+  payload = JSON.generate(body)
+  reason = {
+    200 => "OK",
+    201 => "Created",
+    400 => "Bad Request",
+    401 => "Unauthorized",
+    404 => "Not Found",
+    405 => "Method Not Allowed",
+    409 => "Conflict"
+  }.fetch(status, "OK")
+
+  [
+    "HTTP/1.1 #{status} #{reason}",
+    "Content-Type: application/json",
+    "Content-Length: #{payload.bytesize}",
+    "Connection: close",
+    "",
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 2a73f0009f1f0a22139fcdce2829de374b0d5675..8237076d10091ed0f626679c696a44137403ca1d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -32,6 +32,7 @@
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
++    201 => "Created",
+     400 => "Bad Request",
+     401 => "Unauthorized",
+     404 => "Not Found",
+@@ -391,7 +392,7 @@
+   end
+ 
+   if path == "/v1/auth/register"
+-    return json_response(200, register_user(parse_json_body(body)))
++    return json_response(201, register_user(parse_json_body(body)))
+   end
+ 
+   if path == "/v1/auth/login"
+
+codex
+Implemented the auth register bugfix in [server.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb:31).
+
+Changed `POST /v1/auth/register` to return `201 Created` instead of `200 OK`, and added the `201` reason phrase to the shared JSON response helper. `./run.sh` is unchanged and still starts the Ruby stdlib server in the foreground.
+
+Verification: `ruby -c server.rb` passes. I did not start the server, per the benchmark contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 2a73f0009f1f0a22139fcdce2829de374b0d5675..8237076d10091ed0f626679c696a44137403ca1d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -32,6 +32,7 @@
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
++    201 => "Created",
+     400 => "Bad Request",
+     401 => "Unauthorized",
+     404 => "Not Found",
+@@ -391,7 +392,7 @@
+   end
+ 
+   if path == "/v1/auth/register"
+-    return json_response(200, register_user(parse_json_body(body)))
++    return json_response(201, register_user(parse_json_body(body)))
+   end
+ 
+   if path == "/v1/auth/login"
+
+tokens used
+15,426

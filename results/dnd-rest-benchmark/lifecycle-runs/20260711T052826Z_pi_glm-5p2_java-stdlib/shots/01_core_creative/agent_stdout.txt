@@ -1,0 +1,28 @@
+All done, Chef! 🎲⚡ Here's the final state:
+
+## Summary
+
+Built a Java stdlib-only D&D REST engine using `com.sun.net.httpserver.HttpServer` (OpenJDK 26.0.1, no external deps).
+
+**Files:**
+- `Main.java` — single-file implementation with a hand-written JSON parser + serializer
+- `run.sh` — compiles (`javac Main.java`) and runs server in foreground, binds `127.0.0.1:$PORT`
+
+**Endpoints verified against every spec example:**
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✓ |
+| `POST /v1/dice/stats` | `2d6+3` → exact match; `1d6`→avg `3.5`; `0d6`/bad expr → 400 ✓ |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` ✓ |
+| `POST /v1/encounters/adjusted-xp` | exact match (850/3/2/1700/deadly/300/600/900/1600) ✓ |
+| `POST /v1/initiative/order` | score desc → dex desc → name asc tie-breaking verified ✓ |
+
+**Edge cases confirmed:** fractional CRs (`1/8`,`1/4`,`1/2`), multiplier 1.5 → `adjusted_xp:52.5`, all 5 difficulty tiers (trivial→deadly), negative modifiers, 404 on unknown paths, 400 on empty/missing/invalid input.
+
+**Design notes:**
+- Deterministic key ordering via `LinkedHashMap` (matches spec field order)
+- Numbers serialize as ints when whole, decimals when fractional (e.g. `1.5`, `3.5`, `52.5`) so both integer and float references match
+- 16-thread pool executor for concurrent requests
+- Strict dice-expression regex (`<count>d<sides>[±<mod>]`); invalid → 400
+
+`./run.sh` is ready to go — server starts in the foreground on `PORT`. 🗡️

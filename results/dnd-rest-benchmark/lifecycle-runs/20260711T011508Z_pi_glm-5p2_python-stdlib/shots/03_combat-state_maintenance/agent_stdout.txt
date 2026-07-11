@@ -1,0 +1,19 @@
+`./run.sh` is ready and executable, starts the server in the foreground via `exec`. 🍳
+
+## Summary
+
+Added three stateful combat endpoints to `server.py` while preserving all prior core + character behavior:
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /v1/combat/sessions` | Creates an in-memory session with initiative sorted by score desc → dex desc → name asc. Starts at round 1, turn_index 0. |
+| `POST /v1/combat/sessions/{id}/conditions` | Attaches a condition (arbitrary string + positive int duration) to a named combatant. 404 if session unknown, 400 if target/condition/duration invalid. |
+| `POST /v1/combat/sessions/{id}/advance` | Advances turn_index, wraps + increments round at end of order, decrements conditions on the *new* active combatant only, removes conditions at 0. 404 if session unknown. |
+
+Key design choices:
+- **In-memory state** in a module-level dict guarded by a `threading.Lock` (server is `ThreadingHTTPServer`).
+- **Path-parameter routing** via regex, dispatched before the flat stateless route table.
+- **`conditions` dict in advance response** only includes combatants that currently have conditions (matching the spec example).
+- **Create is upsert** (resets if id exists) — robust for test reuse, spec doesn't require duplicate rejection.
+- **Bool rejection** on all integer fields (Python `bool` is a subclass of `int`).
+- **`unquote`** on path-captured session ids for URL-encoded characters.

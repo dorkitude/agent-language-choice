@@ -1,0 +1,27 @@
+All done, Chef! 🎲📦 Here's a summary of what I implemented for **Stage 4: SQLite Game Storage**:
+
+## Changes to `app.py`
+
+**New SQLite storage layer** (`game.db` in the project directory):
+- Three tables: `meta` (schema version stamp), `users` (proper columns: `username`, `role`, `password_hash`), `combat_sessions` (id + JSON blob for the nested order/conditions structure)
+- **Schema initialized on server startup** via module-level code — `init_schema()` creates tables (`CREATE TABLE IF NOT EXISTS`) then `clear_data()` wipes stale rows so every process start is deterministic across lifecycle shots
+- Per-request connections (`get_conn()`/`close()`) for thread safety
+
+**Durable data moved behind SQLite** (previously in-memory dicts `SESSIONS` / `USERS`):
+- Combat sessions (create / add-condition / advance) now read-modify-write through `combat_sessions` table
+- Auth users (register / login / duplicate check) now use the `users` table
+- All business logic, validation order, status codes, and JSON shapes preserved exactly
+
+**New endpoints:**
+- `GET /v1/storage/status` → `{"driver": "sqlite", "schema_version": 1, "initialized": true}`
+- `POST /v1/storage/reset` → drops + recreates all tables (full schema recreation), returns `{"ok": true, "schema_version": 1}`
+
+## What I verified
+- ✅ All 24 cumulative tests (core, characters, combat-state, auth-users) produce identical responses to before
+- ✅ Combat condition tick/expire flow matches prior behavior exactly
+- ✅ Storage status reports `initialized: true`, reset clears data (login fails after reset, re-register succeeds)
+- ✅ Fresh server start wipes stale data from a previous run → deterministic
+- ✅ `game.db` file created with correct schema (`combat_sessions`, `meta`, `users` tables, `schema_version=1`)
+- ✅ `run.sh` unchanged, valid, executable — starts Flask on `127.0.0.1:$PORT` in foreground
+
+`./run.sh` is ready. 🐍✨

@@ -1,0 +1,26 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the three DM-tools endpoints to `Main.java` while preserving every prior-stage behavior. The cumulative `dm-tools` evaluator suite passes **40/40**.
+
+### What I added
+
+**Routing** — three new `POST` cases in the `Router` switch:
+- `/v1/dm/encounter-builder`
+- `/v1/dm/loot-parcel`
+- `/v1/dm/session-recap`
+
+**Handlers** (stdlib-only, deterministic):
+
+1. **`dmEncounterBuilder`** — looks up each monster's CR from the in-memory compendium (`MONSTERS`), sums `CR_XP` for `base_xp`, reuses the existing `multiplierFor()` for `adjusted_xp`, sums per-level `LEVEL_THRESH` for party thresholds, and classifies difficulty. A deterministic `difficulty → recommendation` map yields `"safe warm-up"` for `easy`.
+   - goblin CR 1/4 = 50 XP × 3 = `base_xp 150`; 3 monsters → ×2.0 → `adjusted_xp 300`; 4×lvl3 easy thresh = 300 → `easy` → `"safe warm-up"` ✅
+
+2. **`dmLootParcel`** — deterministic tier-based loot. Tier 1 returns the pinned parcel (`75 gp` + 2 `healing-potion`). Tiers 2–4 supported; invalid tier → 400.
+
+3. **`dmSessionRecap`** — reads the campaign's most recent log event for `summary` (the `camp-1` event gives `"Nyx scouts the goblin trail."`), and derives `open_threads` deterministically (goblin-trail event → `"Resolve goblin trail ambush"`). Missing campaign → 404; malformed body → 400.
+
+### Validation
+- `javac Main.java` compiles clean (OpenJDK 26, stdlib only — `com.sun.net.httpserver`).
+- `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT`.
+- Ran the real `dndeval --suite dm-tools` → `passed=true tests=40/40`, including all 37 prior cumulative tests (core → characters → combat → auth → sqlite → compendium → campaign-state → phb-rules) and the 3 new DM tests. 🧙‍♂️

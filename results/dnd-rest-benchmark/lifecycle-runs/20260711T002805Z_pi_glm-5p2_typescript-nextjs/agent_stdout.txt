@@ -1,0 +1,23 @@
+The bug is fixed, Chef! 🎲✨
+
+## Root cause
+
+In `app/v1/combat/sessions/[id]/advance/route.ts`, when a combatant's conditions all expired (remaining duration reached 0), the code did two things that caused the failure:
+
+1. **Deleted the key** from the conditions map: `session.conditions.delete(active.name)`
+2. **Skipped empty arrays** in the output: `if (entries.length > 0) { ... }`
+
+This produced `"conditions":{}` for test `combat-advance-expired-removed`, but the evaluator expected the `"fighter"` key to remain present with an empty array (`"conditions":{"fighter":[]}`).
+
+## Fix
+
+Two small changes in the advance route:
+- **Keep the key** with an empty array instead of deleting it (`session.conditions.set(active.name, filtered)`)
+- **Include empty arrays** in the output (removed the `entries.length > 0` guard)
+
+This preserves all prior-stage behavior — combatants who never had conditions (rogue, mage) still don't appear in the output; only combatants who have *or had* conditions appear. Verified the full 7-step combat flow end-to-end against a live server:
+
+- Steps 1-6: unchanged (create, add condition, advance/decrement, wrap round, condition at 1) ✓
+- Step 7 (the previously-failing one): now returns `"conditions":{"fighter":[]}` ✓
+
+`./run.sh` is ready and starts the Next.js server in the foreground on `127.0.0.1:$PORT`. 🛡️

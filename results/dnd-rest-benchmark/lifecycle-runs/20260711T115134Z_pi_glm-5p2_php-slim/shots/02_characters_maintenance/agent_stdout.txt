@@ -1,0 +1,25 @@
+All tests pass, Chef! 🎲✨ The exit code 143 is just from killing the background server — harmless.
+
+## Summary
+
+Added three character endpoints to `index.php` while preserving all 5 existing endpoints (health, dice/stats, checks/ability, encounters/adjusted-xp, initiative/order all still return 200/404 correctly).
+
+**New endpoints & verification:**
+
+| Endpoint | Test | Result |
+|---|---|---|
+| `POST /v1/characters/ability-modifier` | score 9 → `{"score":9,"modifier":-1}` | ✅ floor works for negative halves |
+| | score 7 → -2, score 30 → 10 | ✅ |
+| | score 0/31/missing/9.5 → 400 | ✅ validates int 1–30 |
+| `POST /v1/characters/proficiency` | level 1→2, 4→2, 5→3, 9→4, 13→5, 17→6, 20→6 | ✅ all tiers |
+| | level 0/21 → 400 | ✅ validates int 1–20 |
+| `POST /v1/characters/derived-stats` | exact spec example → `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}` | ✅ byte-for-byte match |
+| | missing armor / bad level → 400 | ✅ |
+
+**Key implementation notes:**
+- `abilityModifier()` uses `(int) floor(($score - 10) / 2)` — not an `(int)` cast (which truncates toward zero), because PHP's int cast on `-0.5` gives `0`, not `-1`. `floor(-0.5)` correctly gives `-1`.
+- `proficiencyBonus()` uses `2 + intdiv($level - 1, 4)` — safe since `level >= 1` means no negative-division truncation issues.
+- `asInt()` helper accepts JSON ints and whole-number floats but rejects booleans, strings, and fractional floats — keeps validation strict per the "must be an integer" rule.
+- `./run.sh` already starts the PHP built-in server in the foreground on `127.0.0.1:$PORT`. ✅
+
+`./run.sh` is ready — no server started prematurely. 🛡️

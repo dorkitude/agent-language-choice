@@ -1,0 +1,20 @@
+All done, Chef! 🎲⚔️
+
+## Summary
+
+I added the **Stateful Combat** stage to the existing Django D&D REST API while preserving every prior-stage endpoint (core + character rules all still pass).
+
+### What changed
+
+**`dndsite/views.py`** — added an in-memory combat store (`_SESSIONS` + `threading.Lock`) and three views:
+
+- **`POST /v1/combat/sessions`** — validates `id` (non-empty str) + `combatants` list; computes `score = roll + dex`; sorts by score desc → dex desc → name asc; starts `round=1`, `turn_index=0`; `active` = combatant at `turn_index`. Returns 400 on malformed input.
+- **`POST /v1/combat/sessions/{id}/conditions`** — 404 for unknown session, 400 for unknown target / non-positive duration; attaches `{condition, remaining_rounds}` to the named combatant.
+- **`POST /v1/combat/sessions/{id}/advance`** — 404 for unknown session; bumps `turn_index` (wrapping to 0 increments `round`); at the start of the *new* active combatant's turn decrements only their conditions and removes any that hit 0; conditions on inactive combatants are untouched. Response includes only combatants with remaining conditions.
+
+**`dndsite/urls.py`** — registered the three new routes (`<str:sid>` converter).
+
+**`run.sh`** — unchanged and ready (foreground `runserver 127.0.0.1:$PORT --noreload`).
+
+### Verified against the spec
+The create / add-condition / advance outputs reproduce the spec examples byte-for-byte, the full advance cycle confirms condition decrement only on the active combatant's turn, round-wrap on wraparound, removal at 0, plus correct `404` (unknown session) and `400` (bad target / bad duration / malformed create) codes — and the existing `initiative/order` endpoint still works. 🛡️

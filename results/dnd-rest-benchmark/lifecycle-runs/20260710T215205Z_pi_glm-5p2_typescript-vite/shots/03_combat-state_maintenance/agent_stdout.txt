@@ -1,0 +1,25 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I inherited the existing Vite + TypeScript D&D REST API and added the **Stateful Combat** stage while preserving all prior core + character endpoints.
+
+### What I added (in `src/dndPlugin.ts`)
+
+A new in-memory combat section with three endpoints, all routed through the existing Vite dev-server middleware plugin (no server replacement):
+
+1. **`POST /v1/combat/sessions`** — creates a session from a client-supplied `id` + combatants. Computes `score = roll + dex`, sorts by score desc → dex desc → name asc, starts `round=1`, `turn_index=0`, returns `active` + `order`.
+
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition (arbitrary string) with a positive-integer `duration_rounds` to a named combatant. Validates the target exists in the session.
+
+3. **`POST /v1/combat/sessions/{id}/advance`** — advances `turn_index`, increments `round` on wrap, decrements conditions on the *newly active* combatant only, and removes conditions that hit `0`.
+
+### Error handling
+- Unknown session id → **404**
+- Malformed body / unknown target / non-positive duration / missing fields → **400**
+
+### Verification
+- `tsc --noEmit` passes clean ✅
+- Live smoke test against Vite dev server confirmed the spec example responses byte-for-byte (create, add-condition, advance→mage, advance→fighter decrements 2→1, wrap→round 2, advance→fighter removes condition, 404/400 cases), plus a pre-existing initiative-order call still works ✅
+
+`./run.sh` was already correct (foreground `vite` on `127.0.0.1:$PORT`) and remains untouched.

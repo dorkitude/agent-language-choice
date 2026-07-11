@@ -1,0 +1,27 @@
+Everything works. Here's the summary, Chef 🍳
+
+## Root cause
+
+The `auth-register-user` test expected **HTTP 201 Created** for a successful registration, but `handleRegister` in `src/server.ts` returned `200 OK`. The response body (`{"username":"dm","role":"dm"}`) was already correct — only the status code was off.
+
+## Fix
+
+One-line change in `src/server.ts`:
+
+```ts
+USERS.set(username, record);
+return { status: 201, body: { username, role } };  // was 200
+```
+
+## Verification
+
+| Test | Expected | Got |
+|---|---|---|
+| register | 201 | ✅ 201 |
+| duplicate | 409 | ✅ 409 |
+| login (good) | 200 | ✅ 200 |
+| login (bad pw) | 401 | ✅ 401 |
+| health | 200 | ✅ 200 |
+| prior stages (dice, combat, derived-stats) | 200 | ✅ 200 |
+
+The build passes via `tsc`, prior-stage behavior is preserved, `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT`, and password hashing (scrypt + salt, isolated behind `hashPassword`/`verifyPassword`) is unchanged. Ready to go! 🎲

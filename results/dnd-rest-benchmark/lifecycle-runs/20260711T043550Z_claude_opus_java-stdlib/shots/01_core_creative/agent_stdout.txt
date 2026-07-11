@@ -1,0 +1,21 @@
+`run.sh` works — the timeout is just the foreground server running as required (health returned `{"ok":true}`). Everything's ready. 🎲
+
+Done, Chef! Here's what I built:
+
+**`Main.java`** — a single-file Java implementation using only the standard library (`com.sun.net.httpserver.HttpServer`), including a hand-rolled minimal JSON parser/serializer since the JDK ships none.
+
+All five endpoints verified against the spec's exact sample outputs:
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` ✅ |
+| `POST /v1/dice/stats` | `2d6+3` → min 5, max 15, avg 10; invalid → 400 ✅ |
+| `POST /v1/checks/ability` | total 14, success false, margin -1 ✅ |
+| `POST /v1/encounters/adjusted-xp` | base 850, ×2, adjusted 1700, **deadly** ✅ |
+| `POST /v1/initiative/order` | score-desc, dex-desc, name-asc tiebreaks ✅ |
+
+Design notes:
+- **Listens on `127.0.0.1` + `PORT`** env var, foreground via `run.sh` (unchanged: `javac Main.java && java Main`).
+- **Whole-number doubles serialize cleanly** (`10`, `2`) so `average`/`multiplier` never leak a `.0`.
+- **Tables driven by lookup maps** (`CR_XP`, `LEVEL_THRESHOLDS`, multiplier tiers) so extending future suites means adding rows, not logic — keeping prior-stage behavior intact for the cumulative evaluator.
+- Bad JSON / bad expressions / unsupported CR or level → **HTTP 400**.

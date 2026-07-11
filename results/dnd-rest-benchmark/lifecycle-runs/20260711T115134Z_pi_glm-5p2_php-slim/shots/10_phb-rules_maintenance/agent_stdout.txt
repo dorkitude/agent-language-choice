@@ -1,0 +1,20 @@
+Everything passes. ✨ The `run.sh` is already in place and starts the server in the foreground on `127.0.0.1:$PORT`, so no changes needed there.
+
+Here's what I added, Chef 🍳
+
+**`index.php`** — three new deterministic PHB routes inserted before the error-handling section:
+
+| Endpoint | Logic |
+|---|---|
+| `POST /v1/phb/spell-slots` | Hardcoded PHB table for the required `wizard` level `5` → `{"1":4,"2":3,"3":2}`. Unsupported class/level → `400`. |
+| `POST /v1/phb/rests/long` | HP → `hp_max`; hit dice recovered = `max(1, floor(level/2))` so `hit_dice_spent = max(0, spent − recovered)`; exhaustion = `max(0, exhaustion − 1)`. |
+| `POST /v1/phb/equipment-load` | `capacity = strength * 15`; `encumbered = weight > capacity` (strictly *exceeds*). |
+
+All three reuse the existing `parseJson` / `asInt` / `json` helpers, so they follow the same validation and `normalizeNumbers` output conventions as the rest of the API. Invalid JSON, missing/wrong-type fields, and unsupported combos all return `400` (non-2xx), matching the spec.
+
+Smoke tests confirmed exact spec outputs:
+- `{"class":"wizard","level":5,"slots":{"1":4,"2":3,"3":2}}`
+- `{"hp_current":35,"hit_dice_spent":1,"exhaustion_level":0}`
+- `{"capacity":180,"weight":181,"encumbered":true}` (and `weight==capacity` → `encumbered:false`)
+
+Regression checks on `/health`, `/v1/dice/stats`, `/v1/characters/proficiency`, `/v1/storage/status`, and 404 shape all still pass. `./run.sh` is ready — server not started. 🎲

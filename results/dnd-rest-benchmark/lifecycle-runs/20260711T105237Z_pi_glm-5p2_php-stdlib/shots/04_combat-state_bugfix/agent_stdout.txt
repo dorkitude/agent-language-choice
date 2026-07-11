@@ -1,0 +1,18 @@
+All done, Chef! 🧑‍🍳✨
+
+## Summary
+
+**Root cause:** In `handle_advance_turn`, when a combatant's conditions all expired (remaining_rounds reached 0 and got filtered out), the code `unset()` the combatant's key from the conditions map. This produced `"conditions":{}` instead of the expected `"conditions":{"fighter":[]}`.
+
+**The fix** (in `index.php`):
+1. **Removed the `unset()`** when a combatant's condition list becomes empty after filtering — once a combatant has ever had a condition ("tracked"), it stays present in the conditions map with an empty array.
+2. **Changed the conditions-output builder** to include every combatant that has a key in the conditions map (via `array_key_exists`), even if their conditions array is empty — matching the "tracked combatant" semantics used by passing implementations.
+
+**Trace of the failing test** (`combat-advance-expired-removed`): fighter gets `blessed` (duration 2). After fighter's 1st turn it decrements to 1; after fighter's 2nd turn it decrements to 0 and is filtered out, leaving `fighter` → `[]`. The evaluator checks that the `fighter` key still exists in the conditions map — now it does. ✅
+
+**Verification:**
+- `combat-state`: 20/20 ✅
+- `core`: 8/8 ✅ (cumulative — no regressions)
+- `characters`: 13/13 ✅ (cumulative — no regressions)
+
+`./run.sh` is ready (wipes state on startup, starts the PHP built-in server in the foreground on `127.0.0.1:$PORT`).

@@ -1,0 +1,27 @@
+All done, Chef! 🎲⚔️ Here's the final state:
+
+## Summary
+
+Inherited the existing Java-stdlib D&D REST engine and added the **Maintenance Stage 1: Character Rules** endpoints while preserving all prior-stage behavior.
+
+**Files:**
+- `Main.java` — added 3 new route cases, 3 handlers, and a strict `asInt` helper
+- `run.sh` — unchanged (compiles `javac Main.java` + runs server in foreground on `127.0.0.1:$PORT`)
+
+**New endpoints (all verified against spec examples):**
+
+| Endpoint | Spec example result | Verified |
+|---|---|---|
+| `POST /v1/characters/ability-modifier` | `{"score":9,"modifier":-1}` | ✅ floor negatives correct (9→-1, 7→-2, 13→+1) |
+| `POST /v1/characters/proficiency` | `{"level":9,"proficiency_bonus":4}` | ✅ all 5 tier boundaries (1-4→2, 5-8→3, 9-12→4, 13-16→5, 17-20→6) |
+| `POST /v1/characters/derived-stats` | exact spec match | ✅ `{level:5,proficiency_bonus:3,hp_max:35,armor_class:16,modifiers:{str:3,dex:2,con:1,int:-1,wis:1,cha:0}}` |
+
+**Key implementation choices:**
+- **Floor semantics**: `Math.floorDiv(score - 10, 2)` — Java's integer division truncates toward zero, so `floorDiv` is required to correctly floor negative halves (e.g. score 9: `floorDiv(-1,2) = -1`, not `0`).
+- **Strict integer validation**: new `asInt` helper only accepts JSON integers (`Long`), rejecting doubles/strings/booleans so "must be an integer" rules are enforced exactly → `400` on `9.5`, `"9"`, missing, or out-of-range.
+- **Derived stats**: validates `level` (1-20), all 6 abilities present as integers, and `armor.base`/`armor.dex_cap` as integers; `shield` defaults to false when absent/falsy (per "otherwise 0").
+- **Field ordering**: `LinkedHashMap` preserves spec field order in responses.
+
+**Preservation confirmed:** all 8 core-suite endpoints (`/health`, dice stats, ability checks, adjusted-xp, initiative order) return byte-identical responses to before — only additive changes, no existing logic touched. 🗡️
+
+`./run.sh` is ready.

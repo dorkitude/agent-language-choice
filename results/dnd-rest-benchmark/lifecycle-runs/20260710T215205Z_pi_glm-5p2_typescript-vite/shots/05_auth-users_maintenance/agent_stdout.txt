@@ -1,0 +1,26 @@
+Everything's ready, Chef! 🎲✨
+
+## Summary
+
+I added the **Users & Password Login** stage to the existing Vite-based D&D REST API while preserving all prior behavior (core, character-rule, and combat-state suites all still pass).
+
+### What changed
+
+**`src/dndPlugin.ts`** — three additions:
+
+1. **Import** `scryptSync, randomBytes, timingSafeEqual` from `node:crypto`.
+
+2. **Auth section** (in-memory `users` map + helpers):
+   - `hashPassword` / `verifyPassword` — real password hashing via Node's **scrypt** with a per-user 16-byte random salt, constant-time comparison. Isolated behind helpers so a production hash could swap in. Plaintext is never stored or echoed.
+   - `registerUser` — validates `username` (`/^[a-z0-9_-]{2,32}$/`), `password` (≥8 chars), `role` (`dm`|`player`); returns `409` on duplicate; responds `{username, role}`.
+   - `loginUser` — malformed (non-string fields) → `400`; no match / wrong password → `401`; success → `{username, token: "session-<username>"}` (deterministic token).
+
+3. **Routes** wired into the POST router: `POST /v1/auth/register` and `POST /v1/auth/login`.
+
+### Verification
+- `tsc --noEmit` passes clean.
+- Live server tested: all new auth cases (valid register, duplicate→409, bad username/password/role→400, login success/bad-password/unknown-user→401, malformed→400, invalid JSON→400, 2/32/33-char boundary, 8-char password boundary).
+- Full regression pass on every prior endpoint (`dice/stats`, `checks/ability`, `encounters/adjusted-xp`, `initiative/order`, `characters/*`, `combat/sessions` + conditions + advance).
+
+### `./run.sh`
+Unchanged and ready — starts `vite --host 127.0.0.1 --port "$PORT"` in the foreground via `exec`. The server is **not** left running. 🛡️

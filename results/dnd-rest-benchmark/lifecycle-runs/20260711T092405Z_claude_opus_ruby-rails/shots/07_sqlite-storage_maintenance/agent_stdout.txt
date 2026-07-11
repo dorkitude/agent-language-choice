@@ -1,0 +1,19 @@
+Done, Chef! 🎲✨ Stage 4 (SQLite Game Storage) is complete and `./run.sh` is ready.
+
+## What I did 🛠️
+
+**Added `sqlite3` 2.9.5** to the Gemfile (installed into the `vendor/bundle`) and built a durable storage layer in `app.rb`:
+
+- **`Storage` module** — opens/creates `game.db` in the project dir, initializes schema (version `1`) on server startup, and holds symbol-keyed in-memory caches (`USERS`, `SESSIONS`) that front the DB.
+- **Write-through persistence** — every `auth/register` and combat session mutation (`create`, `add_condition`, `advance`) is written through to SQLite. On boot the caches are rebuilt from `game.db`, so game-world (users) and game-state (combat) data survive restarts. ♻️
+- **Two new endpoints:**
+  - `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+  - `POST /v1/storage/reset` → drops + recreates schema, clears caches, keeps the process alive → `{"ok":true,"schema_version":1}`
+
+## Why it's safe 🛡️
+
+The in-memory caches stay the working representation, so **prior-stage behavior is byte-identical** — I verified core (dice), characters, combat (create/condition/advance), and auth (register/login) all still respond exactly as before. I also confirmed:
+- Reset genuinely clears data (post-reset login → `401`) 🔒
+- State round-trips from SQLite across a full server restart (JSON blobs deep-symbolized back to the expected shape) 💾
+
+`run.sh` was already correct (foreground `rackup` on `127.0.0.1:$PORT`) so I left it untouched, and the working tree has no stray `game.db`. 🐉

@@ -1,0 +1,1980 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f50bd-638e-7061-9e66-9299f98b9923
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-stdlib
+        Language: php
+        Framework/runtime: stdlib
+        Lifecycle stage: core
+        Shot kind: creative
+
+        Create the first implementation from the seeded starter files.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8 and the built-in PHP server. Do not add Composer packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the starter files first, then implement the PHP stdlib router and keep `run.sh` as the foreground entrypoint the benchmark expects.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ../20260711T080759Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260711T083219Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260711T085934Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260711T092405Z_claude_opus_ruby-rails/
+?? ../20260711T093710Z_claude_sonnet_ruby-rails/
+?? ../20260711T093731Z_codex_gpt-5.5_ruby-rails/
+?? ../20260711T100327Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260711T102312Z_pi_glm-5p2_ruby-rails/
+?? ../20260711T103327Z_claude_opus_php-stdlib/
+?? ../20260711T103332Z_claude_sonnet_php-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files -uu' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 116ms:
+run.sh
+PROMPT.md
+VERSION-PINS.json
+shots/01_core_creative/PROMPT.md
+
+codex
+The workspace only has the prompt and `run.sh`; the broader repo is dirty outside this run directory, so I’ll leave that alone and create the implementation locally.
+exec
+/bin/zsh -lc "sed -n '1,240p' PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+exec
+/bin/zsh -lc "sed -n '1,200p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: php-stdlib
+        Language: php
+        Framework/runtime: stdlib
+        Lifecycle stage: core
+        Shot kind: creative
+
+        Create the first implementation from the seeded starter files.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8 and the built-in PHP server. Do not add Composer packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+exec
+/bin/zsh -lc 'ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+total 32
+drwxr-xr-x@   6 dorkitude  staff   192 Jul 11 03:33 .
+drwxr-xr-x@ 130 dorkitude  staff  4160 Jul 11 03:33 ..
+-rw-r--r--@   1 dorkitude  staff  4222 Jul 11 03:33 PROMPT.md
+-rw-r--r--@   1 dorkitude  staff   635 Jul 11 03:33 VERSION-PINS.json
+-rwxr-xr-x@   1 dorkitude  staff    73 Jul 11 03:33 run.sh
+drwxr-xr-x@   3 dorkitude  staff    96 Jul 11 03:33 shots
+
+codex
+I’m going to put the endpoint logic in a single `index.php`, with small helper functions for JSON parsing, validation failures, and response writing. I’ll keep `run.sh` unchanged because it already starts `php -S 127.0.0.1:$PORT index.php` in the foreground.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+new file mode 100644
+index 0000000000000000000000000000000000000000..03f2d7abac9a87822d2fa1489cdb43108ae91139
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -0,0 +1,223 @@
++<?php
++declare(strict_types=1);
++
++function send_json(mixed $body, int $status = 200): never
++{
++    http_response_code($status);
++    header('Content-Type: application/json');
++    echo json_encode($body, JSON_UNESCAPED_SLASHES);
++    exit;
++}
++
++function bad_request(string $message = 'bad request'): never
++{
++    send_json(['error' => $message], 400);
++}
++
++function read_json_body(): array
++{
++    $raw = file_get_contents('php://input');
++    $data = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
++        bad_request('invalid json');
++    }
++    return $data;
++}
++
++function require_int(mixed $value, string $field): int
++{
++    if (!is_int($value)) {
++        bad_request("invalid $field");
++    }
++    return $value;
++}
++
++function require_post(string $method): void
++{
++    if ($method !== 'POST') {
++        send_json(['error' => 'not found'], 404);
++    }
++}
++
++function monster_multiplier(int $count): float|int
++{
++    if ($count <= 1) {
++        return 1;
++    }
++    if ($count === 2) {
++        return 1.5;
++    }
++    if ($count <= 6) {
++        return 2;
++    }
++    if ($count <= 10) {
++        return 2.5;
++    }
++    if ($count <= 14) {
++        return 3;
++    }
++    return 4;
++}
++
++$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
++$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
++
++if ($method === 'GET' && $path === '/health') {
++    send_json(['ok' => true]);
++}
++
++if ($path === '/v1/dice/stats') {
++    require_post($method);
++    $data = read_json_body();
++    $expression = $data['expression'] ?? null;
++    if (!is_string($expression)) {
++        bad_request('invalid expression');
++    }
++    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
++        bad_request('invalid expression');
++    }
++
++    $count = (int)$matches[1];
++    $sides = (int)$matches[2];
++    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
++    if ($count <= 0 || $sides <= 0) {
++        bad_request('invalid expression');
++    }
++
++    send_json([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $count + $modifier,
++        'max' => ($count * $sides) + $modifier,
++        'average' => ($count * ($sides + 1) / 2) + $modifier,
++    ]);
++}
++
++if ($path === '/v1/checks/ability') {
++    require_post($method);
++    $data = read_json_body();
++    $roll = require_int($data['roll'] ?? null, 'roll');
++    $modifier = require_int($data['modifier'] ?? null, 'modifier');
++    $dc = require_int($data['dc'] ?? null, 'dc');
++    $total = $roll + $modifier;
++
++    send_json([
++        'total' => $total,
++        'success' => $total >= $dc,
++        'margin' => $total - $dc,
++    ]);
++}
++
++if ($path === '/v1/encounters/adjusted-xp') {
++    require_post($method);
++    $data = read_json_body();
++    $party = $data['party'] ?? null;
++    $monsters = $data['monsters'] ?? null;
++    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
++        bad_request('invalid encounter');
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($party as $member) {
++        if (!is_array($member)) {
++            bad_request('invalid party');
++        }
++        $level = require_int($member['level'] ?? null, 'level');
++        if (!isset($levelThresholds[$level])) {
++            bad_request('unsupported level');
++        }
++        foreach ($thresholds as $name => $_) {
++            $thresholds[$name] += $levelThresholds[$level][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($monsters as $monster) {
++        if (!is_array($monster)) {
++            bad_request('invalid monsters');
++        }
++        $cr = $monster['cr'] ?? null;
++        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
++            bad_request('unsupported cr');
++        }
++        $count = require_int($monster['count'] ?? null, 'count');
++        if ($count <= 0) {
++            bad_request('invalid count');
++        }
++        $baseXp += $xpByCr[$cr] * $count;
++        $monsterCount += $count;
++    }
++
++    $multiplier = monster_multiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    send_json([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++if ($path === '/v1/initiative/order') {
++    require_post($method);
++    $data = read_json_body();
++    $combatants = $data['combatants'] ?? null;
++    if (!is_array($combatants)) {
++        bad_request('invalid combatants');
++    }
++
++    $rows = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    send_json([
++        'order' => array_map(
++            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++            $rows
++        ),
++    ]);
++}
++
++send_json(['error' => 'not found'], 404);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+new file mode 100644
+index 0000000000000000000000000000000000000000..03f2d7abac9a87822d2fa1489cdb43108ae91139
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -0,0 +1,223 @@
++<?php
++declare(strict_types=1);
++
++function send_json(mixed $body, int $status = 200): never
++{
++    http_response_code($status);
++    header('Content-Type: application/json');
++    echo json_encode($body, JSON_UNESCAPED_SLASHES);
++    exit;
++}
++
++function bad_request(string $message = 'bad request'): never
++{
++    send_json(['error' => $message], 400);
++}
++
++function read_json_body(): array
++{
++    $raw = file_get_contents('php://input');
++    $data = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
++        bad_request('invalid json');
++    }
++    return $data;
++}
++
++function require_int(mixed $value, string $field): int
++{
++    if (!is_int($value)) {
++        bad_request("invalid $field");
++    }
++    return $value;
++}
++
++function require_post(string $method): void
++{
++    if ($method !== 'POST') {
++        send_json(['error' => 'not found'], 404);
++    }
++}
++
++function monster_multiplier(int $count): float|int
++{
++    if ($count <= 1) {
++        return 1;
++    }
++    if ($count === 2) {
++        return 1.5;
++    }
++    if ($count <= 6) {
++        return 2;
++    }
++    if ($count <= 10) {
++        return 2.5;
++    }
++    if ($count <= 14) {
++        return 3;
++    }
++    return 4;
++}
++
++$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
++$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
++
++if ($method === 'GET' && $path === '/health') {
++    send_json(['ok' => true]);
++}
++
++if ($path === '/v1/dice/stats') {
++    require_post($method);
++    $data = read_json_body();
++    $expression = $data['expression'] ?? null;
++    if (!is_string($expression)) {
++        bad_request('invalid expression');
++    }
++    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
++        bad_request('invalid expression');
++    }
++
++    $count = (int)$matches[1];
++    $sides = (int)$matches[2];
++    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
++    if ($count <= 0 || $sides <= 0) {
++        bad_request('invalid expression');
++    }
++
++    send_json([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $count + $modifier,
++        'max' => ($count * $sides) + $modifier,
++        'average' => ($count * ($sides + 1) / 2) + $modifier,
++    ]);
++}
++
++if ($path === '/v1/checks/ability') {
++    require_post($method);
++    $data = read_json_body();
++    $roll = require_int($data['roll'] ?? null, 'roll');
++    $modifier = require_int($data['modifier'] ?? null, 'modifier');
++    $dc = require_int($data['dc'] ?? null, 'dc');
++    $total = $roll + $modifier;
++
++    send_json([
++        'total' => $total,
++        'success' => $total >= $dc,
++        'margin' => $total - $dc,
++    ]);
++}
++
++if ($path === '/v1/encounters/adjusted-xp') {
++    require_post($method);
++    $data = read_json_body();
++    $party = $data['party'] ?? null;
++    $monsters = $data['monsters'] ?? null;
++    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
++        bad_request('invalid encounter');
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($party as $member) {
++        if (!is_array($member)) {
++            bad_request('invalid party');
++        }
++        $level = require_int($member['level'] ?? null, 'level');
++        if (!isset($levelThresholds[$level])) {
++            bad_request('unsupported level');
++        }
++        foreach ($thresholds as $name => $_) {
++            $thresholds[$name] += $levelThresholds[$level][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($monsters as $monster) {
++        if (!is_array($monster)) {
++            bad_request('invalid monsters');
++        }
++        $cr = $monster['cr'] ?? null;
++        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
++            bad_request('unsupported cr');
++        }
++        $count = require_int($monster['count'] ?? null, 'count');
++        if ($count <= 0) {
++            bad_request('invalid count');
++        }
++        $baseXp += $xpByCr[$cr] * $count;
++        $monsterCount += $count;
++    }
++
++    $multiplier = monster_multiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    send_json([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++if ($path === '/v1/initiative/order') {
++    require_post($method);
++    $data = read_json_body();
++    $combatants = $data['combatants'] ?? null;
++    if (!is_array($combatants)) {
++        bad_request('invalid combatants');
++    }
++
++    $rows = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    send_json([
++        'order' => array_map(
++            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++            $rows
++        ),
++    ]);
++}
++
++send_json(['error' => 'not found'], 404);
+
+codex
+The main implementation is in place. I’m checking syntax and the non-body health path without starting the built-in server, so the benchmark’s “don’t start server before finishing” constraint stays intact.
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+exec
+/bin/zsh -lc "php -r '"'$_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/health"; include "index.php";'"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 336ms:
+{"ok":true}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+new file mode 100644
+index 0000000000000000000000000000000000000000..03f2d7abac9a87822d2fa1489cdb43108ae91139
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -0,0 +1,223 @@
++<?php
++declare(strict_types=1);
++
++function send_json(mixed $body, int $status = 200): never
++{
++    http_response_code($status);
++    header('Content-Type: application/json');
++    echo json_encode($body, JSON_UNESCAPED_SLASHES);
++    exit;
++}
++
++function bad_request(string $message = 'bad request'): never
++{
++    send_json(['error' => $message], 400);
++}
++
++function read_json_body(): array
++{
++    $raw = file_get_contents('php://input');
++    $data = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
++        bad_request('invalid json');
++    }
++    return $data;
++}
++
++function require_int(mixed $value, string $field): int
++{
++    if (!is_int($value)) {
++        bad_request("invalid $field");
++    }
++    return $value;
++}
++
++function require_post(string $method): void
++{
++    if ($method !== 'POST') {
++        send_json(['error' => 'not found'], 404);
++    }
++}
++
++function monster_multiplier(int $count): float|int
++{
++    if ($count <= 1) {
++        return 1;
++    }
++    if ($count === 2) {
++        return 1.5;
++    }
++    if ($count <= 6) {
++        return 2;
++    }
++    if ($count <= 10) {
++        return 2.5;
++    }
++    if ($count <= 14) {
++        return 3;
++    }
++    return 4;
++}
++
++$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
++$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
++
++if ($method === 'GET' && $path === '/health') {
++    send_json(['ok' => true]);
++}
++
++if ($path === '/v1/dice/stats') {
++    require_post($method);
++    $data = read_json_body();
++    $expression = $data['expression'] ?? null;
++    if (!is_string($expression)) {
++        bad_request('invalid expression');
++    }
++    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
++        bad_request('invalid expression');
++    }
++
++    $count = (int)$matches[1];
++    $sides = (int)$matches[2];
++    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
++    if ($count <= 0 || $sides <= 0) {
++        bad_request('invalid expression');
++    }
++
++    send_json([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $count + $modifier,
++        'max' => ($count * $sides) + $modifier,
++        'average' => ($count * ($sides + 1) / 2) + $modifier,
++    ]);
++}
++
++if ($path === '/v1/checks/ability') {
++    require_post($method);
++    $data = read_json_body();
++    $roll = require_int($data['roll'] ?? null, 'roll');
++    $modifier = require_int($data['modifier'] ?? null, 'modifier');
++    $dc = require_int($data['dc'] ?? null, 'dc');
++    $total = $roll + $modifier;
++
++    send_json([
++        'total' => $total,
++        'success' => $total >= $dc,
++        'margin' => $total - $dc,
++    ]);
++}
++
++if ($path === '/v1/encounters/adjusted-xp') {
++    require_post($method);
++    $data = read_json_body();
++    $party = $data['party'] ?? null;
++    $monsters = $data['monsters'] ?? null;
++    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
++        bad_request('invalid encounter');
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($party as $member) {
++        if (!is_array($member)) {
++            bad_request('invalid party');
++        }
++        $level = require_int($member['level'] ?? null, 'level');
++        if (!isset($levelThresholds[$level])) {
++            bad_request('unsupported level');
++        }
++        foreach ($thresholds as $name => $_) {
++            $thresholds[$name] += $levelThresholds[$level][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($monsters as $monster) {
++        if (!is_array($monster)) {
++            bad_request('invalid monsters');
++        }
++        $cr = $monster['cr'] ?? null;
++        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
++            bad_request('unsupported cr');
++        }
++        $count = require_int($monster['count'] ?? null, 'count');
++        if ($count <= 0) {
++            bad_request('invalid count');
++        }
++        $baseXp += $xpByCr[$cr] * $count;
++        $monsterCount += $count;
++    }
++
++    $multiplier = monster_multiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    send_json([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++if ($path === '/v1/initiative/order') {
++    require_post($method);
++    $data = read_json_body();
++    $combatants = $data['combatants'] ?? null;
++    if (!is_array($combatants)) {
++        bad_request('invalid combatants');
++    }
++
++    $rows = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    send_json([
++        'order' => array_map(
++            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++            $rows
++        ),
++    ]);
++}
++
++send_json(['error' => 'not found'], 404);
+
+ succeeded in 509ms:
+No syntax errors detected in index.php
+
+codex
+Syntax and `/health` are clean. I’m doing one final local diff/status pass to confirm only the intended files in this run directory changed.
+exec
+/bin/zsh -lc 'git diff -- run.sh index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+exec
+/bin/zsh -lc 'ls -l run.sh index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+ succeeded in 0ms:
+-rw-r--r--@ 1 dorkitude  staff  6036 Jul 11 03:34 index.php
+-rwxr-xr-x@ 1 dorkitude  staff    73 Jul 11 03:33 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+new file mode 100644
+index 0000000000000000000000000000000000000000..03f2d7abac9a87822d2fa1489cdb43108ae91139
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -0,0 +1,223 @@
++<?php
++declare(strict_types=1);
++
++function send_json(mixed $body, int $status = 200): never
++{
++    http_response_code($status);
++    header('Content-Type: application/json');
++    echo json_encode($body, JSON_UNESCAPED_SLASHES);
++    exit;
++}
++
++function bad_request(string $message = 'bad request'): never
++{
++    send_json(['error' => $message], 400);
++}
++
++function read_json_body(): array
++{
++    $raw = file_get_contents('php://input');
++    $data = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
++        bad_request('invalid json');
++    }
++    return $data;
++}
++
++function require_int(mixed $value, string $field): int
++{
++    if (!is_int($value)) {
++        bad_request("invalid $field");
++    }
++    return $value;
++}
++
++function require_post(string $method): void
++{
++    if ($method !== 'POST') {
++        send_json(['error' => 'not found'], 404);
++    }
++}
++
++function monster_multiplier(int $count): float|int
++{
++    if ($count <= 1) {
++        return 1;
++    }
++    if ($count === 2) {
++        return 1.5;
++    }
++    if ($count <= 6) {
++        return 2;
++    }
++    if ($count <= 10) {
++        return 2.5;
++    }
++    if ($count <= 14) {
++        return 3;
++    }
++    return 4;
++}
++
++$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
++$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
++
++if ($method === 'GET' && $path === '/health') {
++    send_json(['ok' => true]);
++}
++
++if ($path === '/v1/dice/stats') {
++    require_post($method);
++    $data = read_json_body();
++    $expression = $data['expression'] ?? null;
++    if (!is_string($expression)) {
++        bad_request('invalid expression');
++    }
++    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
++        bad_request('invalid expression');
++    }
++
++    $count = (int)$matches[1];
++    $sides = (int)$matches[2];
++    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
++    if ($count <= 0 || $sides <= 0) {
++        bad_request('invalid expression');
++    }
++
++    send_json([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $count + $modifier,
++        'max' => ($count * $sides) + $modifier,
++        'average' => ($count * ($sides + 1) / 2) + $modifier,
++    ]);
++}
++
++if ($path === '/v1/checks/ability') {
++    require_post($method);
++    $data = read_json_body();
++    $roll = require_int($data['roll'] ?? null, 'roll');
++    $modifier = require_int($data['modifier'] ?? null, 'modifier');
++    $dc = require_int($data['dc'] ?? null, 'dc');
++    $total = $roll + $modifier;
++
++    send_json([
++        'total' => $total,
++        'success' => $total >= $dc,
++        'margin' => $total - $dc,
++    ]);
++}
++
++if ($path === '/v1/encounters/adjusted-xp') {
++    require_post($method);
++    $data = read_json_body();
++    $party = $data['party'] ?? null;
++    $monsters = $data['monsters'] ?? null;
++    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
++        bad_request('invalid encounter');
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($party as $member) {
++        if (!is_array($member)) {
++            bad_request('invalid party');
++        }
++        $level = require_int($member['level'] ?? null, 'level');
++        if (!isset($levelThresholds[$level])) {
++            bad_request('unsupported level');
++        }
++        foreach ($thresholds as $name => $_) {
++            $thresholds[$name] += $levelThresholds[$level][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($monsters as $monster) {
++        if (!is_array($monster)) {
++            bad_request('invalid monsters');
++        }
++        $cr = $monster['cr'] ?? null;
++        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
++            bad_request('unsupported cr');
++        }
++        $count = require_int($monster['count'] ?? null, 'count');
++        if ($count <= 0) {
++            bad_request('invalid count');
++        }
++        $baseXp += $xpByCr[$cr] * $count;
++        $monsterCount += $count;
++    }
++
++    $multiplier = monster_multiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    send_json([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++if ($path === '/v1/initiative/order') {
++    require_post($method);
++    $data = read_json_body();
++    $combatants = $data['combatants'] ?? null;
++    if (!is_array($combatants)) {
++        bad_request('invalid combatants');
++    }
++
++    $rows = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    send_json([
++        'order' => array_map(
++            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++            $rows
++        ),
++    ]);
++}
++
++send_json(['error' => 'not found'], 404);
+
+exec
+/bin/zsh -lc 'git status --short .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+new file mode 100644
+index 0000000000000000000000000000000000000000..03f2d7abac9a87822d2fa1489cdb43108ae91139
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -0,0 +1,223 @@
++<?php
++declare(strict_types=1);
++
++function send_json(mixed $body, int $status = 200): never
++{
++    http_response_code($status);
++    header('Content-Type: application/json');
++    echo json_encode($body, JSON_UNESCAPED_SLASHES);
++    exit;
++}
++
++function bad_request(string $message = 'bad request'): never
++{
++    send_json(['error' => $message], 400);
++}
++
++function read_json_body(): array
++{
++    $raw = file_get_contents('php://input');
++    $data = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
++        bad_request('invalid json');
++    }
++    return $data;
++}
++
++function require_int(mixed $value, string $field): int
++{
++    if (!is_int($value)) {
++        bad_request("invalid $field");
++    }
++    return $value;
++}
++
++function require_post(string $method): void
++{
++    if ($method !== 'POST') {
++        send_json(['error' => 'not found'], 404);
++    }
++}
++
++function monster_multiplier(int $count): float|int
++{
++    if ($count <= 1) {
++        return 1;
++    }
++    if ($count === 2) {
++        return 1.5;
++    }
++    if ($count <= 6) {
++        return 2;
++    }
++    if ($count <= 10) {
++        return 2.5;
++    }
++    if ($count <= 14) {
++        return 3;
++    }
++    return 4;
++}
++
++$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
++$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
++
++if ($method === 'GET' && $path === '/health') {
++    send_json(['ok' => true]);
++}
++
++if ($path === '/v1/dice/stats') {
++    require_post($method);
++    $data = read_json_body();
++    $expression = $data['expression'] ?? null;
++    if (!is_string($expression)) {
++        bad_request('invalid expression');
++    }
++    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
++        bad_request('invalid expression');
++    }
++
++    $count = (int)$matches[1];
++    $sides = (int)$matches[2];
++    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
++    if ($count <= 0 || $sides <= 0) {
++        bad_request('invalid expression');
++    }
++
++    send_json([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $count + $modifier,
++        'max' => ($count * $sides) + $modifier,
++        'average' => ($count * ($sides + 1) / 2) + $modifier,
++    ]);
++}
++
++if ($path === '/v1/checks/ability') {
++    require_post($method);
++    $data = read_json_body();
++    $roll = require_int($data['roll'] ?? null, 'roll');
++    $modifier = require_int($data['modifier'] ?? null, 'modifier');
++    $dc = require_int($data['dc'] ?? null, 'dc');
++    $total = $roll + $modifier;
++
++    send_json([
++        'total' => $total,
++        'success' => $total >= $dc,
++        'margin' => $total - $dc,
++    ]);
++}
++
++if ($path === '/v1/encounters/adjusted-xp') {
++    require_post($method);
++    $data = read_json_body();
++    $party = $data['party'] ?? null;
++    $monsters = $data['monsters'] ?? null;
++    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
++        bad_request('invalid encounter');
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($party as $member) {
++        if (!is_array($member)) {
++            bad_request('invalid party');
++        }
++        $level = require_int($member['level'] ?? null, 'level');
++        if (!isset($levelThresholds[$level])) {
++            bad_request('unsupported level');
++        }
++        foreach ($thresholds as $name => $_) {
++            $thresholds[$name] += $levelThresholds[$level][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($monsters as $monster) {
++        if (!is_array($monster)) {
++            bad_request('invalid monsters');
++        }
++        $cr = $monster['cr'] ?? null;
++        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
++            bad_request('unsupported cr');
++        }
++        $count = require_int($monster['count'] ?? null, 'count');
++        if ($count <= 0) {
++            bad_request('invalid count');
++        }
++        $baseXp += $xpByCr[$cr] * $count;
++        $monsterCount += $count;
++    }
++
++    $multiplier = monster_multiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    send_json([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++if ($path === '/v1/initiative/order') {
++    require_post($method);
++    $data = read_json_body();
++    $combatants = $data['combatants'] ?? null;
++    if (!is_array($combatants)) {
++        bad_request('invalid combatants');
++    }
++
++    $rows = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    send_json([
++        'order' => array_map(
++            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++            $rows
++        ),
++    ]);
++}
++
++send_json(['error' => 'not found'], 404);
+
+codex
+Implemented the PHP stdlib REST API in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php). It covers `/health`, dice stats, ability checks, adjusted encounter XP, and initiative ordering with JSON responses and 400 handling for invalid inputs.
+
+`run.sh` was already correct and remains ready to start the built-in PHP server in the foreground on `127.0.0.1:$PORT`.
+
+Verified:
+- `php -l index.php`
+- CLI smoke check for `GET /health`
+
+I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+new file mode 100644
+index 0000000000000000000000000000000000000000..03f2d7abac9a87822d2fa1489cdb43108ae91139
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -0,0 +1,223 @@
++<?php
++declare(strict_types=1);
++
++function send_json(mixed $body, int $status = 200): never
++{
++    http_response_code($status);
++    header('Content-Type: application/json');
++    echo json_encode($body, JSON_UNESCAPED_SLASHES);
++    exit;
++}
++
++function bad_request(string $message = 'bad request'): never
++{
++    send_json(['error' => $message], 400);
++}
++
++function read_json_body(): array
++{
++    $raw = file_get_contents('php://input');
++    $data = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
++        bad_request('invalid json');
++    }
++    return $data;
++}
++
++function require_int(mixed $value, string $field): int
++{
++    if (!is_int($value)) {
++        bad_request("invalid $field");
++    }
++    return $value;
++}
++
++function require_post(string $method): void
++{
++    if ($method !== 'POST') {
++        send_json(['error' => 'not found'], 404);
++    }
++}
++
++function monster_multiplier(int $count): float|int
++{
++    if ($count <= 1) {
++        return 1;
++    }
++    if ($count === 2) {
++        return 1.5;
++    }
++    if ($count <= 6) {
++        return 2;
++    }
++    if ($count <= 10) {
++        return 2.5;
++    }
++    if ($count <= 14) {
++        return 3;
++    }
++    return 4;
++}
++
++$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
++$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
++
++if ($method === 'GET' && $path === '/health') {
++    send_json(['ok' => true]);
++}
++
++if ($path === '/v1/dice/stats') {
++    require_post($method);
++    $data = read_json_body();
++    $expression = $data['expression'] ?? null;
++    if (!is_string($expression)) {
++        bad_request('invalid expression');
++    }
++    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
++        bad_request('invalid expression');
++    }
++
++    $count = (int)$matches[1];
++    $sides = (int)$matches[2];
++    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
++    if ($count <= 0 || $sides <= 0) {
++        bad_request('invalid expression');
++    }
++
++    send_json([
++        'dice_count' => $count,
++        'sides' => $sides,
++        'modifier' => $modifier,
++        'min' => $count + $modifier,
++        'max' => ($count * $sides) + $modifier,
++        'average' => ($count * ($sides + 1) / 2) + $modifier,
++    ]);
++}
++
++if ($path === '/v1/checks/ability') {
++    require_post($method);
++    $data = read_json_body();
++    $roll = require_int($data['roll'] ?? null, 'roll');
++    $modifier = require_int($data['modifier'] ?? null, 'modifier');
++    $dc = require_int($data['dc'] ?? null, 'dc');
++    $total = $roll + $modifier;
++
++    send_json([
++        'total' => $total,
++        'success' => $total >= $dc,
++        'margin' => $total - $dc,
++    ]);
++}
++
++if ($path === '/v1/encounters/adjusted-xp') {
++    require_post($method);
++    $data = read_json_body();
++    $party = $data['party'] ?? null;
++    $monsters = $data['monsters'] ?? null;
++    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
++        bad_request('invalid encounter');
++    }
++
++    $xpByCr = [
++        '0' => 10,
++        '1/8' => 25,
++        '1/4' => 50,
++        '1/2' => 100,
++        '1' => 200,
++        '2' => 450,
++        '3' => 700,
++        '4' => 1100,
++        '5' => 1800,
++    ];
++    $levelThresholds = [
++        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
++    ];
++
++    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
++    foreach ($party as $member) {
++        if (!is_array($member)) {
++            bad_request('invalid party');
++        }
++        $level = require_int($member['level'] ?? null, 'level');
++        if (!isset($levelThresholds[$level])) {
++            bad_request('unsupported level');
++        }
++        foreach ($thresholds as $name => $_) {
++            $thresholds[$name] += $levelThresholds[$level][$name];
++        }
++    }
++
++    $baseXp = 0;
++    $monsterCount = 0;
++    foreach ($monsters as $monster) {
++        if (!is_array($monster)) {
++            bad_request('invalid monsters');
++        }
++        $cr = $monster['cr'] ?? null;
++        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
++            bad_request('unsupported cr');
++        }
++        $count = require_int($monster['count'] ?? null, 'count');
++        if ($count <= 0) {
++            bad_request('invalid count');
++        }
++        $baseXp += $xpByCr[$cr] * $count;
++        $monsterCount += $count;
++    }
++
++    $multiplier = monster_multiplier($monsterCount);
++    $adjustedXp = $baseXp * $multiplier;
++    $difficulty = 'trivial';
++    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
++        if ($adjustedXp >= $thresholds[$name]) {
++            $difficulty = $name;
++        }
++    }
++
++    send_json([
++        'base_xp' => $baseXp,
++        'monster_count' => $monsterCount,
++        'multiplier' => $multiplier,
++        'adjusted_xp' => $adjustedXp,
++        'difficulty' => $difficulty,
++        'thresholds' => $thresholds,
++    ]);
++}
++
++if ($path === '/v1/initiative/order') {
++    require_post($method);
++    $data = read_json_body();
++    $combatants = $data['combatants'] ?? null;
++    if (!is_array($combatants)) {
++        bad_request('invalid combatants');
++    }
++
++    $rows = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    send_json([
++        'order' => array_map(
++            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++            $rows
++        ),
++    ]);
++}
++
++send_json(['error' => 'not found'], 404);
+
+tokens used
+27,740

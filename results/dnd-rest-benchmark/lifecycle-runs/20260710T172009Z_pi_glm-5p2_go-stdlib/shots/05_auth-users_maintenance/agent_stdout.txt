@@ -1,0 +1,19 @@
+The implementation is complete, Chef 🎲✨
+
+## Summary
+
+Added the **auth-users** stage to `main.go` while preserving all prior endpoints (core, character-rules, combat-state):
+
+**New endpoints:**
+- `POST /v1/auth/register` — validates username (`^[a-z0-9_-]{2,32}$`), password (≥8 chars), role (`dm`|`player`); returns `{"username","role"}`; duplicate → **409**; bad input → **400**.
+- `POST /v1/auth/login` — verifies credentials; success → `{"username","token":"session-<username>"}`; bad creds → **401**; malformed JSON → **400**.
+
+**Security:** Go's stdlib has no bcrypt, so password handling is isolated behind a small helper (`hashPassword`/`deriveHash`/`checkPassword`) using a random 16-byte salt + iterated SHA-512 (10k rounds). Only the salt+hash are stored — the plain password is never persisted or echoed in responses. The helper is cleanly swappable for `golang.org/x/crypto/bcrypt` later without touching handlers.
+
+**Verified:**
+- `go vet` + `go build` clean ✅
+- All auth cases (register ok, duplicate 409, bad username/short pw/bad role 400, login ok with `session-dm` token, wrong pw 401, no user 401, bad json 400) ✅
+- Prior stages still green (health, dice, proficiency, combat session create/advance) ✅
+- `run.sh` unchanged — `go run .`, foreground, listens on `127.0.0.1:$PORT` ✅
+
+No third-party packages added; only stdlib (`bytes`, `crypto/rand`, `crypto/sha512`, `regexp`).

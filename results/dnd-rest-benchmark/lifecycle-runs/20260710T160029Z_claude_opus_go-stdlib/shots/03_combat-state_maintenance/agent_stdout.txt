@@ -1,0 +1,18 @@
+All endpoints work exactly per spec, Chef! 🎲
+
+- **Create** → correct initiative sort (rogue 17, mage 16, fighter 14), `round:1`, `turn_index:0`, active = rogue ✅
+- **Add condition** → attaches `blessed` (2 rounds) to fighter ✅
+- **Advance** → moves to mage, increments correctly, fighter's condition untouched (only active combatant's conditions decrement) ✅
+- **Unknown session** → `404` ✅
+- **Prior stage** (`/health` + all core/character endpoints) → preserved ✅
+
+## Summary
+
+Added stateful combat to `main.go` (Go 1.26.5, `net/http` + `encoding/json` only — no third-party deps):
+
+- **In-memory session store** guarded by a `sync.Mutex` for concurrent safety.
+- `POST /v1/combat/sessions` — client-supplied `id` (rejects duplicates/empty), initiative = `roll + dex`, sorted by score↓ then dex↓ then name↑.
+- `POST /v1/combat/sessions/{id}/conditions` — validates target membership and positive `duration_rounds`; `404` for unknown session.
+- `POST /v1/combat/sessions/{id}/advance` — wraps `turn_index`, bumps `round` on wrap, and decrements/expires conditions **only** on the newly-active combatant.
+
+`run.sh` is unchanged (`go run .`, foreground, honors `PORT` on `127.0.0.1`). Build is clean and the server is stopped. Ready to evaluate! 🚀

@@ -1,0 +1,2532 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f508f-0642-73a2-b299-8029ee89d105
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-rails
+        Language: ruby
+        Framework/runtime: rails
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 and Rails 8.1.3. A minimal Rails API app is acceptable; implement the REST endpoints in Rails routes/controllers.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Rails app shape first, including current routes/controllers and `run.sh`, then add the combat state endpoints without disturbing existing behavior.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ../20260711T080759Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260711T083219Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260711T085934Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260711T092405Z_claude_opus_ruby-rails/
+?? ../20260711T093710Z_claude_sonnet_ruby-rails/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 101ms:
+codex
+The repo is a compact Rack/Rails-style app with a single `app.rb`. I see unrelated dirty files outside this workspace, so I’ll ignore those and keep changes scoped here.
+exec
+/bin/zsh -lc "sed -n '1,260p' app.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+exec
+/bin/zsh -lc "sed -n '1,200p' config.ru" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+require_relative './app'
+run Rails.application
+
+ succeeded in 0ms:
+require 'bundler/setup'
+require 'logger'
+require 'rails'
+require 'action_controller/railtie'
+
+class DndRestApp < Rails::Application
+  config.root = __dir__
+  config.load_defaults 8.1
+  config.api_only = true
+  config.eager_load = false
+  config.logger = Logger.new($stdout)
+  config.hosts.clear
+  config.secret_key_base = 'benchmark-secret-key-base'
+end
+
+class ApplicationController < ActionController::API
+  private
+
+  def json_body
+    request.request_parameters
+  rescue ActionDispatch::Http::Parameters::ParseError
+    {}
+  end
+
+  def bad_request
+    render json: { error: 'bad_request' }, status: :bad_request
+  end
+end
+
+class HealthController < ApplicationController
+  def show
+    render json: { ok: true }
+  end
+end
+
+class DiceController < ApplicationController
+  DICE_PATTERN = /\A([1-9][0-9]*)d([1-9][0-9]*)(?:([+-])([0-9]+))?\z/
+
+  def stats
+    expression = json_body['expression']
+    match = expression.is_a?(String) ? DICE_PATTERN.match(expression) : nil
+    return bad_request unless match
+
+    dice_count = match[1].to_i
+    sides = match[2].to_i
+    modifier = match[4] ? match[4].to_i : 0
+    modifier = -modifier if match[3] == '-'
+
+    render json: {
+      dice_count: dice_count,
+      sides: sides,
+      modifier: modifier,
+      min: dice_count + modifier,
+      max: (dice_count * sides) + modifier,
+      average: dice_count * (sides + 1) / 2.0 + modifier
+    }
+  end
+end
+
+class ChecksController < ApplicationController
+  def ability
+    roll = json_body['roll'].to_i
+    modifier = json_body['modifier'].to_i
+    dc = json_body['dc'].to_i
+    total = roll + modifier
+
+    render json: {
+      total: total,
+      success: total >= dc,
+      margin: total - dc
+    }
+  end
+end
+
+class EncountersController < ApplicationController
+  MONSTER_XP = {
+    '0' => 10,
+    '1/8' => 25,
+    '1/4' => 50,
+    '1/2' => 100,
+    '1' => 200,
+    '2' => 450,
+    '3' => 700,
+    '4' => 1100,
+    '5' => 1800
+  }.freeze
+
+  LEVEL_THRESHOLDS = {
+    3 => { easy: 75, medium: 150, hard: 225, deadly: 400 }
+  }.freeze
+
+  def adjusted_xp
+    party = Array(json_body['party'])
+    monsters = Array(json_body['monsters'])
+
+    base_xp = monsters.sum do |monster|
+      MONSTER_XP.fetch(monster['cr'].to_s) * monster['count'].to_i
+    end
+    monster_count = monsters.sum { |monster| monster['count'].to_i }
+    multiplier = encounter_multiplier(monster_count)
+    adjusted_xp = base_xp * multiplier
+    thresholds = party_thresholds(party)
+
+    render json: {
+      base_xp: base_xp,
+      monster_count: monster_count,
+      multiplier: multiplier,
+      adjusted_xp: adjusted_xp,
+      difficulty: difficulty(adjusted_xp, thresholds),
+      thresholds: thresholds
+    }
+  rescue KeyError
+    bad_request
+  end
+
+  private
+
+  def encounter_multiplier(monster_count)
+    case monster_count
+    when 0 then 0
+    when 1 then 1
+    when 2 then 1.5
+    when 3..6 then 2
+    when 7..10 then 2.5
+    when 11..14 then 3
+    else 4
+    end
+  end
+
+  def party_thresholds(party)
+    party.each_with_object({ easy: 0, medium: 0, hard: 0, deadly: 0 }) do |member, totals|
+      thresholds = LEVEL_THRESHOLDS.fetch(member['level'].to_i)
+      totals.each_key { |key| totals[key] += thresholds[key] }
+    end
+  end
+
+  def difficulty(adjusted_xp, thresholds)
+    return 'deadly' if adjusted_xp >= thresholds[:deadly]
+    return 'hard' if adjusted_xp >= thresholds[:hard]
+    return 'medium' if adjusted_xp >= thresholds[:medium]
+    return 'easy' if adjusted_xp >= thresholds[:easy]
+
+    'trivial'
+  end
+end
+
+class InitiativeController < ApplicationController
+  def order
+    combatants = Array(json_body['combatants'])
+    order = combatants
+            .map { |combatant| initiative_entry(combatant) }
+            .sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
+            .map { |entry| { name: entry[:name], score: entry[:score] } }
+
+    render json: { order: order }
+  end
+
+  private
+
+  def initiative_entry(combatant)
+    dex = combatant['dex'].to_i
+    roll = combatant['roll'].to_i
+    {
+      name: combatant['name'].to_s,
+      dex: dex,
+      score: roll + dex
+    }
+  end
+end
+
+class CharactersController < ApplicationController
+  ABILITY_KEYS = %w[str dex con int wis cha].freeze
+
+  def ability_modifier
+    score = json_body['score']
+    return bad_request unless valid_integer?(score, 1..30)
+
+    render json: { score: score, modifier: ability_modifier_for(score) }
+  end
+
+  def proficiency
+    level = json_body['level']
+    return bad_request unless valid_integer?(level, 1..20)
+
+    render json: { level: level, proficiency_bonus: proficiency_for(level) }
+  end
+
+  def derived_stats
+    body = json_body
+    level = body['level']
+    abilities = body['abilities']
+    armor = body['armor']
+    return bad_request unless valid_integer?(level, 1..20)
+    return bad_request unless abilities.is_a?(Hash) && armor.is_a?(Hash)
+    return bad_request unless valid_abilities?(abilities) && valid_armor?(armor)
+
+    modifiers = ABILITY_KEYS.to_h { |key| [key, ability_modifier_for(abilities[key])] }
+    shield_bonus = armor['shield'] ? 2 : 0
+
+    render json: {
+      level: level,
+      proficiency_bonus: proficiency_for(level),
+      hp_max: level * (6 + modifiers['con']),
+      armor_class: armor['base'] + [modifiers['dex'], armor['dex_cap']].min + shield_bonus,
+      modifiers: modifiers
+    }
+  end
+
+  private
+
+  def valid_integer?(value, range)
+    value.is_a?(Integer) && range.cover?(value)
+  end
+
+  def ability_modifier_for(score)
+    ((score - 10) / 2.0).floor
+  end
+
+  def proficiency_for(level)
+    2 + ((level - 1) / 4)
+  end
+
+  def valid_abilities?(abilities)
+    ABILITY_KEYS.all? { |key| valid_integer?(abilities[key], 1..30) }
+  end
+
+  def valid_armor?(armor)
+    valid_integer?(armor['base'], 0..30) &&
+      valid_integer?(armor['dex_cap'], -10..10) &&
+      [true, false].include?(armor['shield'])
+  end
+end
+
+Rails.application.initialize!
+
+Rails.application.routes.draw do
+  get '/health', to: 'health#show'
+  post '/v1/dice/stats', to: 'dice#stats'
+  post '/v1/checks/ability', to: 'checks#ability'
+  post '/v1/encounters/adjusted-xp', to: 'encounters#adjusted_xp'
+  post '/v1/initiative/order', to: 'initiative#order'
+  post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+  post '/v1/characters/proficiency', to: 'characters#proficiency'
+  post '/v1/characters/derived-stats', to: 'characters#derived_stats'
+end
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+bundle exec rackup -o 127.0.0.1 -p "$PORT"
+
+exec
+/bin/zsh -lc "sed -n '1,120p' Gemfile && sed -n '1,120p' Gemfile.lock" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+source 'https://rubygems.org'
+
+gem 'rails', '8.1.3'
+gem 'rack', '3.2.6'
+gem 'rackup', '2.3.1'
+gem 'puma', '8.0.2'
+GEM
+  remote: https://rubygems.org/
+  specs:
+    action_text-trix (2.1.19)
+      railties
+    actioncable (8.1.3)
+      actionpack (= 8.1.3)
+      activesupport (= 8.1.3)
+      nio4r (~> 2.0)
+      websocket-driver (>= 0.6.1)
+      zeitwerk (~> 2.6)
+    actionmailbox (8.1.3)
+      actionpack (= 8.1.3)
+      activejob (= 8.1.3)
+      activerecord (= 8.1.3)
+      activestorage (= 8.1.3)
+      activesupport (= 8.1.3)
+      mail (>= 2.8.0)
+    actionmailer (8.1.3)
+      actionpack (= 8.1.3)
+      actionview (= 8.1.3)
+      activejob (= 8.1.3)
+      activesupport (= 8.1.3)
+      mail (>= 2.8.0)
+      rails-dom-testing (~> 2.2)
+    actionpack (8.1.3)
+      actionview (= 8.1.3)
+      activesupport (= 8.1.3)
+      nokogiri (>= 1.8.5)
+      rack (>= 2.2.4)
+      rack-session (>= 1.0.1)
+      rack-test (>= 0.6.3)
+      rails-dom-testing (~> 2.2)
+      rails-html-sanitizer (~> 1.6)
+      useragent (~> 0.16)
+    actiontext (8.1.3)
+      action_text-trix (~> 2.1.15)
+      actionpack (= 8.1.3)
+      activerecord (= 8.1.3)
+      activestorage (= 8.1.3)
+      activesupport (= 8.1.3)
+      globalid (>= 0.6.0)
+      nokogiri (>= 1.8.5)
+    actionview (8.1.3)
+      activesupport (= 8.1.3)
+      builder (~> 3.1)
+      erubi (~> 1.11)
+      rails-dom-testing (~> 2.2)
+      rails-html-sanitizer (~> 1.6)
+    activejob (8.1.3)
+      activesupport (= 8.1.3)
+      globalid (>= 0.3.6)
+    activemodel (8.1.3)
+      activesupport (= 8.1.3)
+    activerecord (8.1.3)
+      activemodel (= 8.1.3)
+      activesupport (= 8.1.3)
+      timeout (>= 0.4.0)
+    activestorage (8.1.3)
+      actionpack (= 8.1.3)
+      activejob (= 8.1.3)
+      activerecord (= 8.1.3)
+      activesupport (= 8.1.3)
+      marcel (~> 1.0)
+    activesupport (8.1.3)
+      base64
+      bigdecimal
+      concurrent-ruby (~> 1.0, >= 1.3.1)
+      connection_pool (>= 2.2.5)
+      drb
+      i18n (>= 1.6, < 2)
+      json
+      logger (>= 1.4.2)
+      minitest (>= 5.1)
+      securerandom (>= 0.3)
+      tzinfo (~> 2.0, >= 2.0.5)
+      uri (>= 0.13.1)
+    base64 (0.3.0)
+    bigdecimal (4.1.2)
+    builder (3.3.0)
+    concurrent-ruby (1.3.7)
+    connection_pool (3.0.2)
+    crass (1.0.7)
+    date (3.5.1)
+    drb (2.2.3)
+    erb (6.0.4)
+    erubi (1.13.1)
+    globalid (1.4.0)
+      activesupport (>= 6.1)
+    i18n (1.15.2)
+      concurrent-ruby (~> 1.0)
+    io-console (0.8.2)
+    irb (1.18.0)
+      pp (>= 0.6.0)
+      prism (>= 1.3.0)
+      rdoc (>= 4.0.0)
+      reline (>= 0.4.2)
+    json (2.20.0)
+    logger (1.7.0)
+    loofah (2.25.1)
+      crass (~> 1.0.2)
+      nokogiri (>= 1.12.0)
+    mail (2.9.1)
+      logger
+      mini_mime (>= 0.1.1)
+      net-imap
+      net-pop
+      net-smtp
+    marcel (1.2.1)
+    mini_mime (1.1.5)
+    minitest (6.0.6)
+      drb (~> 2.0)
+      prism (~> 1.5)
+    net-imap (0.6.4.1)
+      date
+      net-protocol
+    net-pop (0.1.2)
+      net-protocol
+    net-protocol (0.2.2)
+      timeout
+
+codex
+I’m going to add a dedicated `CombatSessionsController` plus routes. The state will live in process memory, keyed by the client-supplied session id, with validation returning `400` or `404` as the stage asks.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..6f07bc978ca636e6baac1bae3cc727f84c59ade2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,133 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = session_response(session).merge(conditions: conditions_response(session))
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +373,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..6f07bc978ca636e6baac1bae3cc727f84c59ade2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,133 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = session_response(session).merge(conditions: conditions_response(session))
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +373,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+codex
+The core implementation is in place. I’ll verify it without starting a server by loading the Rack app directly and issuing in-process mock requests, then I’ll check `run.sh` still satisfies the foreground/PORT contract.
+exec
+/bin/zsh -lc 'ruby -c app.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+exec
+/bin/zsh -lc "test -x run.sh && sed -n '1,40p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+Syntax OK
+
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+bundle exec rackup -o 127.0.0.1 -p "$PORT"
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..6f07bc978ca636e6baac1bae3cc727f84c59ade2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,133 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = session_response(session).merge(conditions: conditions_response(session))
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +373,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+exec
+/bin/zsh -lc "bundle exec ruby -rjson -r./app -e '
+app = Rails.application
+req = Rack::MockRequest.new(app)
+headers = {\"CONTENT_TYPE\" => \"application/json\"}
+create = req.post(\"/v1/combat/sessions\", headers.merge(input: {
+  id: \"enc-1\",
+  combatants: [
+    {name: \"fighter\", dex: 1, roll: 13},
+    {name: \"rogue\", dex: 3, roll: 14},
+    {name: \"mage\", dex: 2, roll: 14}
+  ]
+}.to_json))
+puts [create.status, create.body].join(\" \")
+condition = req.post(\"/v1/combat/sessions/enc-1/conditions\", headers.merge(input: {target: \"fighter\", condition: \"blessed\", duration_rounds: 2}.to_json))
+puts [condition.status, condition.body].join(\" \")
+advance1 = req.post(\"/v1/combat/sessions/enc-1/advance\", headers)
+puts [advance1.status, advance1.body].join(\" \")
+advance2 = req.post(\"/v1/combat/sessions/enc-1/advance\", headers)
+puts [advance2.status, advance2.body].join(\" \")
+advance3 = req.post(\"/v1/combat/sessions/enc-1/advance\", headers)
+puts [advance3.status, advance3.body].join(\" \")
+'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..6f07bc978ca636e6baac1bae3cc727f84c59ade2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,133 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = session_response(session).merge(conditions: conditions_response(session))
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +373,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+ succeeded in 447ms:
+I, [2026-07-11T02:44:03.961646 #76192]  INFO -- : Started POST "/v1/combat/sessions" for  at 2026-07-11 02:44:03 -0700
+I, [2026-07-11T02:44:03.963078 #76192]  INFO -- : Processing by CombatSessionsController#create as HTML
+I, [2026-07-11T02:44:03.963150 #76192]  INFO -- :   Parameters: {"id" => "enc-1", "combatants" => [{"name" => "fighter", "dex" => 1, "roll" => 13}, {"name" => "rogue", "dex" => 3, "roll" => 14}, {"name" => "mage", "dex" => 2, "roll" => 14}], "api" => {"id" => "enc-1", "combatants" => [{"name" => "fighter", "dex" => 1, "roll" => 13}, {"name" => "rogue", "dex" => 3, "roll" => 14}, {"name" => "mage", "dex" => 2, "roll" => 14}]}}
+I, [2026-07-11T02:44:03.966947 #76192]  INFO -- : Completed 200 OK in 4ms (Views: 0.0ms | GC: 0.0ms)
+
+
+200 {"id":"enc-1","round":1,"turn_index":0,"active":{"name":"rogue","score":17},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}]}
+I, [2026-07-11T02:44:03.967733 #76192]  INFO -- : Started POST "/v1/combat/sessions/enc-1/conditions" for  at 2026-07-11 02:44:03 -0700
+I, [2026-07-11T02:44:03.967949 #76192]  INFO -- : Processing by CombatSessionsController#add_condition as HTML
+I, [2026-07-11T02:44:03.968013 #76192]  INFO -- :   Parameters: {"target" => "fighter", "condition" => "blessed", "duration_rounds" => 2, "id" => "enc-1", "api" => {"target" => "fighter", "condition" => "blessed", "duration_rounds" => 2}}
+I, [2026-07-11T02:44:03.968128 #76192]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+200 {"target":"fighter","conditions":[{"condition":"blessed","remaining_rounds":2}]}
+I, [2026-07-11T02:44:03.968316 #76192]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:03 -0700
+I, [2026-07-11T02:44:03.968504 #76192]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:03.968564 #76192]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:03.968660 #76192]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+200 {"id":"enc-1","round":1,"turn_index":1,"active":{"name":"mage","score":16},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}],"conditions":{"fighter":[{"condition":"blessed","remaining_rounds":2}]}}
+I, [2026-07-11T02:44:03.968843 #76192]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:03 -0700
+I, [2026-07-11T02:44:03.969003 #76192]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:03.969063 #76192]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:03.969155 #76192]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+200 {"id":"enc-1","round":1,"turn_index":2,"active":{"name":"fighter","score":14},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}],"conditions":{"fighter":[{"condition":"blessed","remaining_rounds":1}]}}
+I, [2026-07-11T02:44:03.969334 #76192]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:03 -0700
+I, [2026-07-11T02:44:03.969494 #76192]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:03.969552 #76192]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:03.969642 #76192]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+200 {"id":"enc-1","round":2,"turn_index":0,"active":{"name":"rogue","score":17},"order":[{"name":"rogue","score":17},{"name":"mage","score":16},{"name":"fighter","score":14}],"conditions":{"fighter":[{"condition":"blessed","remaining_rounds":1}]}}
+
+codex
+The in-process check shows ordering and condition decrement behavior are correct. One detail I’m tightening now: the advance response should match the specified shape, so I’ll omit `order` there while keeping it for session creation.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..9ad9aa9cf7d2b3adb82c08c709af2188eda0ad33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,139 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = {
++        id: session[:id],
++        round: session[:round],
++        turn_index: session[:turn_index],
++        active: session[:order][session[:turn_index]],
++        conditions: conditions_response(session)
++      }
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +379,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..9ad9aa9cf7d2b3adb82c08c709af2188eda0ad33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,139 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = {
++        id: session[:id],
++        round: session[:round],
++        turn_index: session[:turn_index],
++        active: session[:order][session[:turn_index]],
++        conditions: conditions_response(session)
++      }
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +379,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+exec
+/bin/zsh -lc "bundle exec ruby -rjson -r./app -e '
+app = Rails.application
+req = Rack::MockRequest.new(app)
+headers = {\"CONTENT_TYPE\" => \"application/json\"}
+post_json = ->(path, body = nil) { req.post(path, headers.merge(body ? {input: body.to_json} : {})) }
+assert = ->(condition, message) { raise message unless condition }
+
+create = post_json.call(\"/v1/combat/sessions\", {
+  id: \"enc-1\",
+  combatants: [
+    {name: \"fighter\", dex: 1, roll: 13},
+    {name: \"rogue\", dex: 3, roll: 14},
+    {name: \"mage\", dex: 2, roll: 14}
+  ]
+})
+assert.call(create.status == 200, \"create status\")
+created = JSON.parse(create.body)
+assert.call(created == {
+  \"id\" => \"enc-1\",
+  \"round\" => 1,
+  \"turn_index\" => 0,
+  \"active\" => {\"name\" => \"rogue\", \"score\" => 17},
+  \"order\" => [
+    {\"name\" => \"rogue\", \"score\" => 17},
+    {\"name\" => \"mage\", \"score\" => 16},
+    {\"name\" => \"fighter\", \"score\" => 14}
+  ]
+}, \"create body\")
+
+condition = post_json.call(\"/v1/combat/sessions/enc-1/conditions\", {target: \"fighter\", condition: \"blessed\", duration_rounds: 2})
+assert.call(condition.status == 200, \"condition status\")
+assert.call(JSON.parse(condition.body) == {\"target\" => \"fighter\", \"conditions\" => [{\"condition\" => \"blessed\", \"remaining_rounds\" => 2}]}, \"condition body\")
+
+advance1 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+assert.call(advance1.status == 200, \"advance1 status\")
+assert.call(JSON.parse(advance1.body) == {
+  \"id\" => \"enc-1\",
+  \"round\" => 1,
+  \"turn_index\" => 1,
+  \"active\" => {\"name\" => \"mage\", \"score\" => 16},
+  \"conditions\" => {\"fighter\" => [{\"condition\" => \"blessed\", \"remaining_rounds\" => 2}]}
+}, \"advance1 body\")
+
+advance2 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+assert.call(JSON.parse(advance2.body)[\"conditions\"][\"fighter\"][0][\"remaining_rounds\"] == 1, \"fighter condition decremented\")
+advance4 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+advance5 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+assert.call(JSON.parse(advance5.body)[\"conditions\"] == {}, \"expired condition removed\")
+missing = post_json.call(\"/v1/combat/sessions/nope/advance\")
+assert.call(missing.status == 404, \"missing session status\")
+invalid = post_json.call(\"/v1/combat/sessions/enc-1/conditions\", {target: \"fighter\", condition: \"x\", duration_rounds: 0})
+assert.call(invalid.status == 400, \"invalid condition status\")
+puts \"combat checks passed\"
+'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..9ad9aa9cf7d2b3adb82c08c709af2188eda0ad33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,139 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = {
++        id: session[:id],
++        round: session[:round],
++        turn_index: session[:turn_index],
++        active: session[:order][session[:turn_index]],
++        conditions: conditions_response(session)
++      }
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +379,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+ exited 1 in 456ms:
+-e:6:in 'block in <main>': expired condition removed (RuntimeError)
+	from -e:48:in '<main>'
+I, [2026-07-11T02:44:29.978459 #76387]  INFO -- : Started POST "/v1/combat/sessions" for  at 2026-07-11 02:44:29 -0700
+I, [2026-07-11T02:44:29.979881 #76387]  INFO -- : Processing by CombatSessionsController#create as HTML
+I, [2026-07-11T02:44:29.979954 #76387]  INFO -- :   Parameters: {"id" => "enc-1", "combatants" => [{"name" => "fighter", "dex" => 1, "roll" => 13}, {"name" => "rogue", "dex" => 3, "roll" => 14}, {"name" => "mage", "dex" => 2, "roll" => 14}], "api" => {"id" => "enc-1", "combatants" => [{"name" => "fighter", "dex" => 1, "roll" => 13}, {"name" => "rogue", "dex" => 3, "roll" => 14}, {"name" => "mage", "dex" => 2, "roll" => 14}]}}
+I, [2026-07-11T02:44:29.983796 #76387]  INFO -- : Completed 200 OK in 4ms (Views: 0.0ms | GC: 0.0ms)
+
+
+I, [2026-07-11T02:44:29.984562 #76387]  INFO -- : Started POST "/v1/combat/sessions/enc-1/conditions" for  at 2026-07-11 02:44:29 -0700
+I, [2026-07-11T02:44:29.984765 #76387]  INFO -- : Processing by CombatSessionsController#add_condition as HTML
+I, [2026-07-11T02:44:29.984833 #76387]  INFO -- :   Parameters: {"target" => "fighter", "condition" => "blessed", "duration_rounds" => 2, "id" => "enc-1", "api" => {"target" => "fighter", "condition" => "blessed", "duration_rounds" => 2}}
+I, [2026-07-11T02:44:29.984943 #76387]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+I, [2026-07-11T02:44:29.985132 #76387]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:29 -0700
+I, [2026-07-11T02:44:29.985316 #76387]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:29.985376 #76387]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:29.985475 #76387]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+I, [2026-07-11T02:44:29.985661 #76387]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:29 -0700
+I, [2026-07-11T02:44:29.985816 #76387]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:29.985875 #76387]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:29.985966 #76387]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+I, [2026-07-11T02:44:29.986131 #76387]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:29 -0700
+I, [2026-07-11T02:44:29.986286 #76387]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:29.986346 #76387]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:29.986445 #76387]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+I, [2026-07-11T02:44:29.986626 #76387]  INFO -- : Started POST "/v1/combat/sessions/enc-1/advance" for  at 2026-07-11 02:44:29 -0700
+I, [2026-07-11T02:44:29.986783 #76387]  INFO -- : Processing by CombatSessionsController#advance as HTML
+I, [2026-07-11T02:44:29.986843 #76387]  INFO -- :   Parameters: {"id" => "enc-1", "api" => {}}
+I, [2026-07-11T02:44:29.986933 #76387]  INFO -- : Completed 200 OK in 0ms (Views: 0.0ms | GC: 0.0ms)
+
+
+
+codex
+The failed verification was my assertion timing, not the implementation: fighter’s condition only decrements when fighter becomes active, so it needs another full pass to expire. I’m rerunning with the correct turn count and a couple of existing endpoint checks.
+exec
+/bin/zsh -lc "bundle exec ruby -rjson -r./app -e '
+Rails.logger.level = Logger::FATAL
+app = Rails.application
+req = Rack::MockRequest.new(app)
+headers = {\"CONTENT_TYPE\" => \"application/json\"}
+post_json = ->(path, body = nil) { req.post(path, headers.merge(body ? {input: body.to_json} : {})) }
+assert = ->(condition, message) { raise message unless condition }
+
+health = req.get(\"/health\")
+assert.call(health.status == 200 && JSON.parse(health.body) == {\"ok\" => true}, \"health\")
+dice = post_json.call(\"/v1/dice/stats\", {expression: \"2d6+3\"})
+assert.call(dice.status == 200 && JSON.parse(dice.body)[\"average\"] == 10.0, \"dice\")
+
+create = post_json.call(\"/v1/combat/sessions\", {
+  id: \"enc-1\",
+  combatants: [
+    {name: \"fighter\", dex: 1, roll: 13},
+    {name: \"rogue\", dex: 3, roll: 14},
+    {name: \"mage\", dex: 2, roll: 14}
+  ]
+})
+assert.call(create.status == 200, \"create status\")
+assert.call(JSON.parse(create.body) == {
+  \"id\" => \"enc-1\",
+  \"round\" => 1,
+  \"turn_index\" => 0,
+  \"active\" => {\"name\" => \"rogue\", \"score\" => 17},
+  \"order\" => [
+    {\"name\" => \"rogue\", \"score\" => 17},
+    {\"name\" => \"mage\", \"score\" => 16},
+    {\"name\" => \"fighter\", \"score\" => 14}
+  ]
+}, \"create body\")
+
+condition = post_json.call(\"/v1/combat/sessions/enc-1/conditions\", {target: \"fighter\", condition: \"blessed\", duration_rounds: 2})
+assert.call(condition.status == 200, \"condition status\")
+assert.call(JSON.parse(condition.body) == {\"target\" => \"fighter\", \"conditions\" => [{\"condition\" => \"blessed\", \"remaining_rounds\" => 2}]}, \"condition body\")
+
+advance1 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+assert.call(JSON.parse(advance1.body) == {
+  \"id\" => \"enc-1\",
+  \"round\" => 1,
+  \"turn_index\" => 1,
+  \"active\" => {\"name\" => \"mage\", \"score\" => 16},
+  \"conditions\" => {\"fighter\" => [{\"condition\" => \"blessed\", \"remaining_rounds\" => 2}]}
+}, \"advance1 body\")
+
+advance2 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+assert.call(JSON.parse(advance2.body)[\"conditions\"][\"fighter\"][0][\"remaining_rounds\"] == 1, \"fighter condition decremented\")
+post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+advance5 = post_json.call(\"/v1/combat/sessions/enc-1/advance\")
+assert.call(JSON.parse(advance5.body)[\"conditions\"] == {}, \"expired condition removed\")
+missing = post_json.call(\"/v1/combat/sessions/nope/advance\")
+assert.call(missing.status == 404, \"missing session status\")
+invalid = post_json.call(\"/v1/combat/sessions/enc-1/conditions\", {target: \"fighter\", condition: \"x\", duration_rounds: 0})
+assert.call(invalid.status == 400, \"invalid condition status\")
+puts \"checks passed\"
+'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..9ad9aa9cf7d2b3adb82c08c709af2188eda0ad33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,139 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = {
++        id: session[:id],
++        round: session[:round],
++        turn_index: session[:turn_index],
++        active: session[:order][session[:turn_index]],
++        conditions: conditions_response(session)
++      }
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +379,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+ succeeded in 485ms:
+checks passed
+
+codex
+The corrected in-process checks passed, including a smoke check for prior health/dice behavior. I’m doing one final diff review now to make sure the patch is scoped and `run.sh` is unchanged.
+exec
+/bin/zsh -lc 'git diff -- app.rb run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short -- app.rb run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails
+ succeeded in 0ms:
+?? app.rb
+?? run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..9ad9aa9cf7d2b3adb82c08c709af2188eda0ad33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,139 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = {
++        id: session[:id],
++        round: session[:round],
++        turn_index: session[:turn_index],
++        active: session[:order][session[:turn_index]],
++        conditions: conditions_response(session)
++      }
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +379,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+codex
+Implemented the stateful combat stage in [app.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb).
+
+Added:
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/:id/conditions`
+- `POST /v1/combat/sessions/:id/advance`
+
+State is in memory for the server process, initiative sorting follows the required score/dex/name rules, conditions decrement only when their target becomes active, and missing sessions return `404`.
+
+Verified without starting the server:
+- `ruby -c app.rb`
+- In-process Rack checks for combat create/add/advance/expiry/404/400
+- Smoke checks for existing `/health` and `/v1/dice/stats`
+
+[run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/run.sh) was already correct and still starts Rack in the foreground on `127.0.0.1` using `$PORT`.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+index 02fd7599189db68c051ba089a6870106a1f9f5c6..9ad9aa9cf7d2b3adb82c08c709af2188eda0ad33
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T093731Z_codex_gpt-5.5_ruby-rails/app.rb
+@@ -25,6 +25,10 @@
+   def bad_request
+     render json: { error: 'bad_request' }, status: :bad_request
+   end
++
++  def not_found
++    render json: { error: 'not_found' }, status: :not_found
++  end
+ end
+ 
+ class HealthController < ApplicationController
+@@ -231,6 +235,139 @@
+   end
+ end
+ 
++class CombatSessionsController < ApplicationController
++  SESSIONS = {}
++  SESSION_LOCK = Mutex.new
++
++  def create
++    body = json_body
++    id = body['id']
++    combatants = body['combatants']
++    return bad_request unless id.is_a?(String) && !id.empty?
++    return bad_request unless combatants.is_a?(Array) && !combatants.empty?
++
++    order = combatants.map { |combatant| initiative_entry(combatant) }
++    return bad_request unless order.all?
++    return bad_request unless order.map { |entry| entry[:name] }.uniq.length == order.length
++
++    order = order.sort_by { |entry| [-entry[:score], -entry[:dex], entry[:name]] }
++                 .map { |entry| { name: entry[:name], score: entry[:score] } }
++
++    session = {
++      id: id,
++      round: 1,
++      turn_index: 0,
++      order: order,
++      conditions: Hash.new { |hash, key| hash[key] = [] }
++    }
++
++    inserted = false
++    SESSION_LOCK.synchronize do
++      unless SESSIONS.key?(id)
++        SESSIONS[id] = session
++        inserted = true
++      end
++    end
++    return bad_request unless inserted
++
++    render json: session_response(session)
++  end
++
++  def add_condition
++    session = find_session
++    return not_found unless session
++
++    body = json_body
++    target = body['target']
++    condition = body['condition']
++    duration_rounds = body['duration_rounds']
++    return bad_request unless combatant_names(session).include?(target)
++    return bad_request unless condition.is_a?(String)
++    return bad_request unless duration_rounds.is_a?(Integer) && duration_rounds.positive?
++
++    target_conditions = nil
++    SESSION_LOCK.synchronize do
++      session[:conditions][target] << {
++        condition: condition,
++        remaining_rounds: duration_rounds
++      }
++      target_conditions = session[:conditions][target].map(&:dup)
++    end
++
++    render json: { target: target, conditions: target_conditions }
++  end
++
++  def advance
++    session = find_session
++    return not_found unless session
++
++    updated = nil
++    SESSION_LOCK.synchronize do
++      session[:turn_index] += 1
++      if session[:turn_index] >= session[:order].length
++        session[:turn_index] = 0
++        session[:round] += 1
++      end
++
++      active_name = session[:order][session[:turn_index]][:name]
++      session[:conditions][active_name].each do |condition|
++        condition[:remaining_rounds] -= 1
++      end
++      session[:conditions][active_name].reject! do |condition|
++        condition[:remaining_rounds] <= 0
++      end
++
++      updated = {
++        id: session[:id],
++        round: session[:round],
++        turn_index: session[:turn_index],
++        active: session[:order][session[:turn_index]],
++        conditions: conditions_response(session)
++      }
++    end
++
++    render json: updated
++  end
++
++  private
++
++  def find_session
++    SESSION_LOCK.synchronize { SESSIONS[params[:id]] }
++  end
++
++  def initiative_entry(combatant)
++    return nil unless combatant.is_a?(Hash)
++
++    name = combatant['name']
++    dex = combatant['dex']
++    roll = combatant['roll']
++    return nil unless name.is_a?(String) && !name.empty?
++    return nil unless dex.is_a?(Integer) && roll.is_a?(Integer)
++
++    { name: name, dex: dex, score: roll + dex }
++  end
++
++  def combatant_names(session)
++    session[:order].map { |combatant| combatant[:name] }
++  end
++
++  def session_response(session)
++    {
++      id: session[:id],
++      round: session[:round],
++      turn_index: session[:turn_index],
++      active: session[:order][session[:turn_index]],
++      order: session[:order]
++    }
++  end
++
++  def conditions_response(session)
++    session[:conditions].each_with_object({}) do |(target, conditions), response|
++      response[target] = conditions.map(&:dup) unless conditions.empty?
++    end
++  end
++end
++
+ Rails.application.initialize!
+ 
+ Rails.application.routes.draw do
+@@ -242,4 +379,7 @@
+   post '/v1/characters/ability-modifier', to: 'characters#ability_modifier'
+   post '/v1/characters/proficiency', to: 'characters#proficiency'
+   post '/v1/characters/derived-stats', to: 'characters#derived_stats'
++  post '/v1/combat/sessions', to: 'combat_sessions#create'
++  post '/v1/combat/sessions/:id/conditions', to: 'combat_sessions#add_condition'
++  post '/v1/combat/sessions/:id/advance', to: 'combat_sessions#advance'
+ end
+
+tokens used
+40,198

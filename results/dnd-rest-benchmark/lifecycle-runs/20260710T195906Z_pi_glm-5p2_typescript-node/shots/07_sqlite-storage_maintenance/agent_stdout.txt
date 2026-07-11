@@ -1,0 +1,26 @@
+All wired up correctly and verified. Here's the summary, Chef 🍳
+
+## What I did
+
+**Stage 4 (SQLite Game Storage)** — moved durable game-world/state data behind SQLite using Node 26's built-in `node:sqlite` (no external deps, no frameworks added).
+
+### New file: `src/storage.ts`
+- Opens **`game.db`** in the project directory (resolved from cwd, which `run.sh` sets to the project dir).
+- **`initStorage()`** runs on startup → creates schema (`users`, `combat_sessions`, `combatants`, `condition_targets`, `conditions`, `schema_meta`) via `CREATE TABLE IF NOT EXISTS` and pins `schema_version = 1`.
+- **`resetStorage()`** drops all benchmark data tables (children before parents, FK-safe) and recreates the schema.
+- Backed `users` + `combat_sessions`/`combatants`/`conditions` with load/persist helpers.
+- Preserved the subtle prior semantics: a combatant that *ever* had a condition stays in the snapshot with an empty array once expired (tracked via `condition_targets`, ordered by insertion `rowid`).
+
+### Refactored: `src/server.ts`
+- Removed the in-memory `SESSIONS`/`USERS` `Map`s; all handlers now go through the SQLite layer (load → operate → persist), keeping **byte-identical response shapes**.
+- Added `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}` and `POST /v1/storage/reset` → `{"ok":true,"schema_version":1}`.
+- `initStorage()` is called before `server.listen`.
+
+### Verification
+- `tsc` (TypeScript 7.0.2) compiles **clean**, exit 0.
+- **Real evaluator binary**, `sqlite-storage` suite: **26/26 PASS**, exit 0, no stderr.
+- Confirmed **durability**: registered user + combat session survive a full server-process restart.
+- Confirmed **reset**: clears durable data (login → 401, session recreatable → 200), schema recreated, process stays healthy.
+- `game.db` is created on startup; test DB cleaned up so the evaluator starts from a clean slate.
+
+`./run.sh` is unchanged and executable — it compiles with the pinned `tsc` and runs `node dist/server.js` in the foreground on `127.0.0.1:$PORT`. 🎲✨

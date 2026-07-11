@@ -1,0 +1,24 @@
+Done, Chef! 🎲✨
+
+## Maintenance Stage 6: Campaign State APIs — complete
+
+I inherited the existing Django D&D API and added SQLite-backed campaign state, preserving every prior endpoint.
+
+**What I added:**
+
+📦 `dndsite/storage.py` — three new tables (`campaigns`, `characters`, `events`) with `CREATE TABLE IF NOT EXISTS` (so existing DBs upgrade cleanly), plus `create_campaign`, `create_character`, `create_event`, `get_campaign`, `get_campaign_state`. Character/event inserts check the campaign exists first and use a `seq` column for stable insertion ordering. `reset_storage` now drops the new tables too.
+
+🛣️ `dndsite/urls.py` + `views.py` — four routes:
+- `POST /v1/campaigns` → `{id, name, dm}`
+- `POST /v1/campaigns/<id>/characters` → `{id, name, level, class}`
+- `POST /v1/campaigns/<id>/events` → `{id, kind}`
+- `GET /v1/campaigns/<id>/state` → campaign + `characters[]` + `log_count`
+
+**Status-code discipline** (matches the earlier stages' conventions):
+- `400` malformed input (bad/empty ids, level out of 1–20, etc.)
+- `404` unknown campaign
+- `409` duplicate campaign/character/event id
+
+**Verified end-to-end** 🧪 — every new endpoint returns the exact spec shapes, prior endpoints (`/health`, `/v1/dice/stats`, …) still work, and I removed the `game.db` I dirtied during testing so it regenerates fresh on startup.
+
+`./run.sh` is unchanged and ready — it starts Django in the foreground on `127.0.0.1:$PORT`. I did **not** start the server as part of finishing. 🐉

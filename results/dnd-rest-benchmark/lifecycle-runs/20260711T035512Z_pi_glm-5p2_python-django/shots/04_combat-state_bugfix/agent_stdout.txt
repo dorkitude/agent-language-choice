@@ -1,0 +1,23 @@
+All done, Chef! 🍳✨
+
+## Root cause
+
+The `combat-advance-expired-removed` test expects the expired condition's combatant key to **remain present with an empty array**:
+
+```go
+"conditions": map[string]any{
+    "fighter": []any{},
+},
+```
+
+The evaluator's `jsonContains` matcher only requires keys present in `want` to exist in `got` (subset match for objects), but it **does** require them to exist. My code did two things that dropped the key:
+
+1. `combat_session_advance` called `session["conditions"].pop(active_name, None)` when all conditions expired → wiped the `fighter` key entirely.
+2. `_session_advance_response` had an `if conds:` guard that filtered out empty lists even if the key existed.
+
+## Fix (`dndsite/views.py`)
+
+- **Advance logic**: only touch a combatant's conditions if they already have an entry; on expiry, keep the key mapped to an empty list instead of popping it. This also avoids spuriously creating empty entries for combatants who never had conditions.
+- **Response builder**: removed the `if conds:` filter so empty condition lists are serialized as `[]` rather than dropped.
+
+Verified end-to-end with the real `dndeval` binary: **`passed=true tests=20/20`** for the combat-state suite, with core/characters behavior untouched and 404s still returned for unknown session IDs. `./run.sh` is unchanged and ready. 🐉

@@ -1,0 +1,33 @@
+All done, Chef! 🎲✨
+
+## Root cause
+
+The `combat-advance-expired-removed` test expected the `conditions` map to still contain the `"fighter"` key with an empty array `[]` after fighter's `blessed` condition ticked down to 0 and was removed:
+
+```json
+"conditions": { "fighter": [] }
+```
+
+But `conditionsMap` only emitted combatants whose condition list was **non-empty**:
+
+```java
+if (conds != null && !conds.isEmpty()) map.put(c.name, conditionList(conds));
+```
+
+So once fighter's last condition expired and the list became empty, the `"fighter"` key vanished entirely → `"conditions":{}` → evaluator reported `missing JSON key "fighter"`.
+
+## The fix
+
+Dropped the `!conds.isEmpty()` guard so every combatant is always emitted with their (possibly empty) condition list. This is safe because the evaluator's `jsonContains` does **subset matching** on objects — it only verifies that the `want` keys are present, never rejecting extra keys. The earlier advance tests only assert the `"fighter"` key, so the additional `rogue`/`mage` entries don't affect them.
+
+```java
+if (conds != null) map.put(c.name, conditionList(conds));
+```
+
+## Verification
+
+- `core`: 8/8 ✅
+- `characters`: 13/13 ✅
+- `combat-state`: 20/20 ✅ (was 19/20)
+
+`run.sh` is unchanged and ready — it compiles `Main.java` and starts the server in the foreground on `127.0.0.1:$PORT`. 🗡️

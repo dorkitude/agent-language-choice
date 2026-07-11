@@ -1,0 +1,22 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+**Root cause:** Integer division in the dice-stats average calculation.
+
+In `app.rb`, the `/v1/dice/stats` endpoint computed:
+```ruby
+average = (min_v + max_v) / 2
+```
+
+In Ruby, `/` on two integers is integer division. For `1d20-1` (min=0, max=19), `19 / 2 = 9`, truncating the correct `9.5`. The `2d6+3` test passed only by luck — `(5+15)/2 = 10` is a whole number.
+
+**Fix:** Switch to float division and route through the existing `normalize_num` helper:
+```ruby
+average = normalize_num((min_v + max_v) / 2.0)
+```
+
+- `9.5` → stays `9.5` (genuine fraction, serialized as `9.5`) ✓
+- `10.0` → collapses to integer `10` (whole number, serialized as `10`) ✓
+
+**Verification:** All 8 core tests pass via live curl smoke test, including the previously-failing `dice-stats-1d20-minus-1`. No prior-stage behavior was changed — only the average computation. `run.sh` is unchanged and starts Sinatra/Puma in the foreground on `127.0.0.1:$PORT`.

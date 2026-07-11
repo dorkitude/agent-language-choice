@@ -1,0 +1,24 @@
+All done, Chef! 🎲🐉 Here's the summary of what I did:
+
+## What changed
+
+I edited **`src/dndPlugin.ts`** (the existing Vite dev-server middleware plugin) to add three new character-rule endpoints, leaving all prior core endpoints untouched:
+
+### New endpoints
+1. **`POST /v1/characters/ability-modifier`** — validates `score` is an integer 1–30, returns `{score, modifier}` where `modifier = Math.floor((score - 10) / 2)`. `Math.floor` correctly floors negative halves (score 9 → -1). ✅
+2. **`POST /v1/characters/proficiency`** — validates `level` is an integer 1–20, returns `{level, proficiency_bonus}` computed as `Math.floor((level - 1) / 4) + 2` (yields 2/3/4/5/6 across the four-level tiers). ✅
+3. **`POST /v1/characters/derived-stats`** — validates `level`, all six abilities (1–30), and `armor` (`base` int, `shield` optional bool, `dex_cap` int); computes `hp_max = level * (6 + con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + (shield ? 2 : 0)`, and all six modifiers. ✅
+
+Invalid inputs return `400` with a JSON error body.
+
+## Verification
+- `tsc --noEmit` passes clean ✅
+- Spec example for derived-stats returns **exactly** the expected JSON (proficiency 3, hp_max 35, armor_class 16, modifiers matching) ✅
+- All tier/proficiency boundaries and ability-modifier edge cases (1, 9, 10, 30) correct ✅
+- Invalid cases (score 0/31/9.5, level 0/21, missing ability, missing armor, bad score) all return 400 ✅
+- Full regression on the 5 core endpoints (health, dice, ability-check, adjusted-xp, initiative) still green ✅
+
+## `run.sh`
+Already present and correct — `exec vite --host 127.0.0.1 --port "$PORT"` runs the Vite dev server (with the REST plugin middleware) in the foreground, listening on `127.0.0.1` via `PORT`. No packages downgraded; still on Vite 8.1.3 / TS 7.0.2.
+
+The server is **not** running — ready for the evaluator to start it. 🛡️

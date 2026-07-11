@@ -1,0 +1,39 @@
+All done, Chef! 🎲✨ Here's the summary.
+
+## What I built
+
+A minimal Django 6.0.7 REST engine implementing the **core** stage endpoints, wired into the seeded `dndsite` project:
+
+**`dndsite/views.py`** (new) — five view functions:
+- `GET /health` → `{"ok": true}`
+- `POST /v1/dice/stats` — regex-parsed `<count>d<sides>[±<mod>]`, positive count/sides enforced, 400 on invalid. `average = (min+max)/2` (int when whole, e.g. `10`; float when not, e.g. `9.5`).
+- `POST /v1/checks/ability` — `total = roll+modifier`, `success = total >= dc`, `margin = total-dc`.
+- `POST /v1/encounters/adjusted-xp` — CR→XP table, monster-count multipliers (1 / 1.5 / 2 / 2.5 / 3 / 4), summed party thresholds (level 3), highest-reached difficulty (`trivial`→`deadly`).
+- `POST /v1/initiative/order` — `score = roll+dex`, sorted by score desc → dex desc → name asc.
+
+**`dndsite/urls.py`** — routes wired to the views (no trailing slashes, matching the spec).
+
+**`run.sh`** — kept the `PYTHONPATH=.deps` + `runserver --noreload` pattern, added `PORT="${PORT:-8000}"` fallback so `set -u` never trips; listens on `127.0.0.1:$PORT` in the foreground.
+
+## Verification
+
+I installed Django 6.0.7 into `.deps` (the dir the evaluator normally provisions) and ran the **live server** against every spec example + edge cases — all passed:
+
+| Check | Result |
+|---|---|
+| health | `{"ok": true}` 200 ✓ |
+| `2d6+3` | avg `10` ✓ |
+| `1d20-1` | min 0, max 19, avg `9.5` ✓ |
+| invalid dice (`0d6`, `2d0`, garbage, `{}`) | 400 ✓ |
+| ability fail (9/5/15) | total 14, success false, margin -1 ✓ |
+| ability success (10/5/15) | total 15, success true, margin 0 ✓ |
+| encounter sample | base 850, mult 2, adj 1700, **deadly**, thresholds 300/600/900/1600 ✓ |
+| initiative sample | rogue(17), ogre(15) ✓ |
+| tie-break (same score) | dex desc then name asc ✓ |
+| multiplier tiers 1/2/3/7/11/15 | 1 / 1.5 / 2 / 2.5 / 3 / 4 ✓ |
+| fractional adjusted_xp | `112.5` (float) / `75` (int when whole) ✓ |
+| validation (bad CR, count 0, bad level, missing fields) | 400 ✓ |
+
+## Cleanup
+
+After testing I removed the temporary `.deps`, `__pycache__`, and logs so the workspace is back to a pristine seeded state — the evaluator's setup step will recreate `.deps` from `requirements.txt`. `py_compile` passes on all files. `./run.sh` is ready and the server is **not** running. 🛡️

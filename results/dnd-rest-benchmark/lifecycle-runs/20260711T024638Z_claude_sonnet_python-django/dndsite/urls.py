@@ -1,0 +1,35 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("health", views.health),
+    path("v1/storage/status", views.storage_status),
+    path("v1/storage/reset", views.storage_reset),
+    path("v1/dice/stats", views.dice_stats),
+    path("v1/checks/ability", views.ability_check),
+    path("v1/encounters/adjusted-xp", views.adjusted_xp),
+    path("v1/initiative/order", views.initiative_order),
+    path("v1/characters/ability-modifier", views.ability_modifier),
+    path("v1/characters/proficiency", views.proficiency),
+    path("v1/characters/derived-stats", views.derived_stats),
+    path("v1/combat/sessions", views.combat_sessions),
+    path("v1/combat/sessions/<str:session_id>/conditions", views.combat_conditions),
+    path("v1/combat/sessions/<str:session_id>/advance", views.combat_advance),
+    path("v1/auth/register", views.auth_register),
+    path("v1/auth/login", views.auth_login),
+    path("v1/compendium/monsters", views.compendium_monsters),
+    path("v1/compendium/monsters/<str:slug>", views.compendium_monster_detail),
+    path("v1/compendium/items", views.compendium_items),
+    path("v1/compendium/items/<str:slug>", views.compendium_item_detail),
+    path("v1/campaigns", views.campaigns),
+    path("v1/campaigns/<str:campaign_id>/characters", views.campaign_characters),
+    path("v1/campaigns/<str:campaign_id>/events", views.campaign_events),
+    path("v1/campaigns/<str:campaign_id>/state", views.campaign_state),
+    path("v1/phb/spell-slots", views.phb_spell_slots),
+    path("v1/phb/rests/long", views.phb_long_rest),
+    path("v1/phb/equipment-load", views.phb_equipment_load),
+    path("v1/dm/encounter-builder", views.dm_encounter_builder),
+    path("v1/dm/loot-parcel", views.dm_loot_parcel),
+    path("v1/dm/session-recap", views.dm_session_recap),
+]

@@ -1,0 +1,1740 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4d5b-cb96-7610-a781-cffcd26cf17e
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-node
+        Language: typescript
+        Framework/runtime: node-stdlib
+        Lifecycle stage: characters
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use TypeScript 7.0.2 and Node 26.4.0 built-in HTTP APIs. Do not add frameworks.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 1: Character Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core suite and add the endpoints below.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400`.
+
+## Ability Modifier
+
+`POST /v1/characters/ability-modifier`
+
+Request:
+
+```json
+{"score": 9}
+```
+
+Rules:
+
+- `score` must be an integer from `1` through `30`.
+- `modifier = floor((score - 10) / 2)`.
+- This must floor negative halves correctly: score `9` yields `-1`.
+
+Response:
+
+```json
+{"score": 9, "modifier": -1}
+```
+
+## Proficiency Bonus
+
+`POST /v1/characters/proficiency`
+
+Request:
+
+```json
+{"level": 9}
+```
+
+Rules:
+
+- `level` must be an integer from `1` through `20`.
+- Levels `1-4` have bonus `2`.
+- Levels `5-8` have bonus `3`.
+- Levels `9-12` have bonus `4`.
+- Levels `13-16` have bonus `5`.
+- Levels `17-20` have bonus `6`.
+
+Response:
+
+```json
+{"level": 9, "proficiency_bonus": 4}
+```
+
+## Derived Stats
+
+`POST /v1/characters/derived-stats`
+
+Request:
+
+```json
+{
+  "level": 5,
+  "abilities": {
+    "str": 16,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+  },
+  "armor": {
+    "base": 12,
+    "shield": true,
+    "dex_cap": 2
+  }
+}
+```
+
+Rules:
+
+- Compute every ability modifier with the same formula as the standalone
+  ability-modifier endpoint.
+- Compute proficiency from level.
+- `hp_max = level * (6 + constitution_modifier)`.
+- `armor_class = armor.base + min(dex_modifier, armor.dex_cap) + shield_bonus`.
+- `shield_bonus` is `2` when `armor.shield` is true, otherwise `0`.
+
+Response:
+
+```json
+{
+  "level": 5,
+  "proficiency_bonus": 3,
+  "hp_max": 35,
+  "armor_class": 16,
+  "modifiers": {
+    "str": 3,
+    "dex": 2,
+    "con": 1,
+    "int": -1,
+    "wis": 1,
+    "cha": 0
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing server shape and tests first so the new character endpoints fit the current API behavior without disturbing earlier stages.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 127ms:
+src/server.ts
+src/node-shims.d.ts
+shots/02_core_bugfix/dndeval-core-report.json
+shots/02_core_bugfix/server_stderr.txt
+shots/02_core_bugfix/agent_stderr.txt
+shots/02_core_bugfix/server_stdout.txt
+shots/02_core_bugfix/PROMPT.md
+shots/02_core_bugfix/agent_stdout.txt
+shots/02_core_bugfix/agent_last_message.txt
+shots/02_core_bugfix/setup.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_characters_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+tsconfig.json
+package.json
+package-lock.json
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+agent_last_message.txt
+setup.json
+
+codex
+The repo is small: one TypeScript server plus `run.sh`. I’m reading the current routing and package scripts now, then I’ll patch only the character behavior.
+exec
+/bin/zsh -lc "sed -n '1,240p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+const CR_XP: Record<string, number> = {
+  "0": 10,
+  "1/8": 25,
+  "1/4": 50,
+  "1/2": 100,
+  "1": 200,
+  "2": 450,
+  "3": 700,
+  "4": 1100,
+  "5": 1800,
+};
+
+const LEVEL_THRESHOLDS: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+function sendJson(response: ServerResponse, status: number, body: JsonValue): void {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+  });
+  response.end(payload);
+}
+
+function badRequest(response: ServerResponse): void {
+  sendJson(response, 400, { error: "bad_request" });
+}
+
+function notFound(response: ServerResponse): void {
+  sendJson(response, 404, { error: "not_found" });
+}
+
+function readBody(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new Error("request body too large"));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try {
+        resolve(body === "" ? {} : JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function diceStats(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || typeof body.expression !== "string") {
+    return undefined;
+  }
+
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+  if (match === null) {
+    return undefined;
+  }
+
+  const diceCount = Number(match[1]);
+  const sides = Number(match[2]);
+  const modifierValue = match[4] === undefined ? 0 : Number(match[4]);
+  const modifier = match[3] === "-" ? -modifierValue : modifierValue;
+
+  if (
+    !Number.isSafeInteger(diceCount) ||
+    !Number.isSafeInteger(sides) ||
+    !Number.isSafeInteger(modifier) ||
+    diceCount <= 0 ||
+    sides <= 0
+  ) {
+    return undefined;
+  }
+
+  const min = diceCount + modifier;
+  const max = diceCount * sides + modifier;
+  const average = diceCount * (sides + 1) / 2 + modifier;
+
+  return {
+    dice_count: diceCount,
+    sides,
+    modifier,
+    min,
+    max,
+    average,
+  };
+}
+
+function abilityCheck(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isInteger(body.roll) || !isInteger(body.modifier) || !isInteger(body.dc)) {
+    return undefined;
+  }
+
+  const total = body.roll + body.modifier;
+  return {
+    total,
+    success: total >= body.dc,
+    margin: total - body.dc,
+  };
+}
+
+function monsterMultiplier(monsterCount: number): number {
+  if (monsterCount <= 1) {
+    return 1;
+  }
+  if (monsterCount === 2) {
+    return 1.5;
+  }
+  if (monsterCount <= 6) {
+    return 2;
+  }
+  if (monsterCount <= 10) {
+    return 2.5;
+  }
+  if (monsterCount <= 14) {
+    return 3;
+  }
+  return 4;
+}
+
+function adjustedXp(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+    return undefined;
+  }
+
+  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+  for (const member of body.party) {
+    if (!isRecord(member) || !isInteger(member.level)) {
+      return undefined;
+    }
+
+    const memberThresholds = LEVEL_THRESHOLDS[member.level];
+    if (memberThresholds === undefined) {
+      return undefined;
+    }
+
+    thresholds.easy += memberThresholds.easy;
+    thresholds.medium += memberThresholds.medium;
+    thresholds.hard += memberThresholds.hard;
+    thresholds.deadly += memberThresholds.deadly;
+  }
+
+  let baseXp = 0;
+  let monsterCount = 0;
+  for (const monster of body.monsters) {
+    if (!isRecord(monster) || typeof monster.cr !== "string" || !isInteger(monster.count) || monster.count <= 0) {
+      return undefined;
+    }
+
+    const xp = CR_XP[monster.cr];
+    if (xp === undefined) {
+      return undefined;
+    }
+
+    baseXp += xp * monster.count;
+    monsterCount += monster.count;
+  }
+
+  const multiplier = monsterMultiplier(monsterCount);
+  const adjusted = baseXp * multiplier;
+  let difficulty = "trivial";
+  if (adjusted >= thresholds.deadly) {
+    difficulty = "deadly";
+  } else if (adjusted >= thresholds.hard) {
+    difficulty = "hard";
+  } else if (adjusted >= thresholds.medium) {
+    difficulty = "medium";
+  } else if (adjusted >= thresholds.easy) {
+    difficulty = "easy";
+  }
+
+  return {
+    base_xp: baseXp,
+    monster_count: monsterCount,
+    multiplier,
+    adjusted_xp: adjusted,
+    difficulty,
+    thresholds,
+  };
+}
+
+function initiativeOrder(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+    return undefined;
+  }
+
+  const combatants = [];
+  for (const combatant of body.combatants) {
+    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+      return undefined;
+    }
+    combatants.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  combatants.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  return {
+    order: combatants.map(({ name, score }) => ({ name, score })),
+  };
+}
+
+async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const method = request.method ?? "";
+  const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+
+  if (method === "GET" && path === "/health") {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (method !== "POST") {
+    notFound(response);
+    return;
+  }
+
+  let body: unknown;
+  try {
+    body = await readBody(request);
+
+exec
+/bin/zsh -lc "sed -n '1,200p' package.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bash ./run.sh"
+  },
+  "dependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "26.1.1"
+  },
+  "devDependencies": {}
+}
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+tsc && node dist/server.js
+
+exec
+/bin/zsh -lc "sed -n '1,160p' tsconfig.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "vite.config.ts"
+  ]
+}
+
+codex
+The existing handlers return `undefined` for validation failures and the router converts that into `400`, so I’ll add the new endpoints in that same style with shared helpers for score and level validation.
+exec
+/bin/zsh -lc "sed -n '240,520p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+    body = await readBody(request);
+  } catch {
+    badRequest(response);
+    return;
+  }
+
+  let result: JsonValue | undefined;
+  switch (path) {
+    case "/v1/dice/stats":
+      result = diceStats(body);
+      break;
+    case "/v1/checks/ability":
+      result = abilityCheck(body);
+      break;
+    case "/v1/encounters/adjusted-xp":
+      result = adjustedXp(body);
+      break;
+    case "/v1/initiative/order":
+      result = initiativeOrder(body);
+      break;
+    default:
+      notFound(response);
+      return;
+  }
+
+  if (result === undefined) {
+    badRequest(response);
+    return;
+  }
+
+  sendJson(response, 200, result);
+}
+
+const port = Number(process.env.PORT);
+if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+  throw new Error("PORT must be an integer from 1 to 65535");
+}
+
+const server = createServer((request, response) => {
+  void handleRequest(request, response).catch(() => {
+    if (!response.headersSent) {
+      sendJson(response, 500, { error: "internal_server_error" });
+    } else {
+      response.end();
+    }
+  });
+});
+
+server.listen(port, "127.0.0.1");
+
+codex
+I’m patching `src/server.ts` now: the additions are self-contained helper functions plus three route cases. The validation will reject malformed bodies instead of guessing defaults.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+codex
+The code is patched. I’m compiling it next, then I’ll do a lightweight route check without launching the HTTP server.
+exec
+/bin/zsh -lc 'git diff -- src/server.ts run.sh package.json tsconfig.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'npx tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+ succeeded in 541ms:
+codex
+`tsc --noEmit` passes. Since `run.sh` starts the server, I’m not executing it per the benchmark contract; I’ll only build the TypeScript output to confirm the foreground startup path has something current to run.
+exec
+/bin/zsh -lc "nl -ba src/server.ts | sed -n '1,220p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+exec
+/bin/zsh -lc "nl -ba src/server.ts | sed -n '220,360p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+     1	import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+     2	
+     3	type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+     4	
+     5	const CR_XP: Record<string, number> = {
+     6	  "0": 10,
+     7	  "1/8": 25,
+     8	  "1/4": 50,
+     9	  "1/2": 100,
+    10	  "1": 200,
+    11	  "2": 450,
+    12	  "3": 700,
+    13	  "4": 1100,
+    14	  "5": 1800,
+    15	};
+    16	
+    17	const LEVEL_THRESHOLDS: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+    18	  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+    19	};
+    20	
+    21	const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
+    22	
+    23	function isRecord(value: unknown): value is Record<string, unknown> {
+    24	  return typeof value === "object" && value !== null && !Array.isArray(value);
+    25	}
+    26	
+    27	function isInteger(value: unknown): value is number {
+    28	  return Number.isInteger(value);
+    29	}
+    30	
+    31	function sendJson(response: ServerResponse, status: number, body: JsonValue): void {
+    32	  const payload = JSON.stringify(body);
+    33	  response.writeHead(status, {
+    34	    "content-type": "application/json; charset=utf-8",
+    35	  });
+    36	  response.end(payload);
+    37	}
+    38	
+    39	function badRequest(response: ServerResponse): void {
+    40	  sendJson(response, 400, { error: "bad_request" });
+    41	}
+    42	
+    43	function notFound(response: ServerResponse): void {
+    44	  sendJson(response, 404, { error: "not_found" });
+    45	}
+    46	
+    47	function readBody(request: IncomingMessage): Promise<unknown> {
+    48	  return new Promise((resolve, reject) => {
+    49	    let body = "";
+    50	
+    51	    request.setEncoding("utf8");
+    52	    request.on("data", (chunk: string) => {
+    53	      body += chunk;
+    54	      if (body.length > 1_000_000) {
+    55	        reject(new Error("request body too large"));
+    56	        request.destroy();
+    57	      }
+    58	    });
+    59	    request.on("end", () => {
+    60	      try {
+    61	        resolve(body === "" ? {} : JSON.parse(body));
+    62	      } catch (error) {
+    63	        reject(error);
+    64	      }
+    65	    });
+    66	    request.on("error", reject);
+    67	  });
+    68	}
+    69	
+    70	function diceStats(body: unknown): JsonValue | undefined {
+    71	  if (!isRecord(body) || typeof body.expression !== "string") {
+    72	    return undefined;
+    73	  }
+    74	
+    75	  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+    76	  if (match === null) {
+    77	    return undefined;
+    78	  }
+    79	
+    80	  const diceCount = Number(match[1]);
+    81	  const sides = Number(match[2]);
+    82	  const modifierValue = match[4] === undefined ? 0 : Number(match[4]);
+    83	  const modifier = match[3] === "-" ? -modifierValue : modifierValue;
+    84	
+    85	  if (
+    86	    !Number.isSafeInteger(diceCount) ||
+    87	    !Number.isSafeInteger(sides) ||
+    88	    !Number.isSafeInteger(modifier) ||
+    89	    diceCount <= 0 ||
+    90	    sides <= 0
+    91	  ) {
+    92	    return undefined;
+    93	  }
+    94	
+    95	  const min = diceCount + modifier;
+    96	  const max = diceCount * sides + modifier;
+    97	  const average = diceCount * (sides + 1) / 2 + modifier;
+    98	
+    99	  return {
+   100	    dice_count: diceCount,
+   101	    sides,
+   102	    modifier,
+   103	    min,
+   104	    max,
+   105	    average,
+   106	  };
+   107	}
+   108	
+   109	function abilityCheck(body: unknown): JsonValue | undefined {
+   110	  if (!isRecord(body) || !isInteger(body.roll) || !isInteger(body.modifier) || !isInteger(body.dc)) {
+   111	    return undefined;
+   112	  }
+   113	
+   114	  const total = body.roll + body.modifier;
+   115	  return {
+   116	    total,
+   117	    success: total >= body.dc,
+   118	    margin: total - body.dc,
+   119	  };
+   120	}
+   121	
+   122	function isAbilityScore(value: unknown): value is number {
+   123	  return isInteger(value) && value >= 1 && value <= 30;
+   124	}
+   125	
+   126	function isCharacterLevel(value: unknown): value is number {
+   127	  return isInteger(value) && value >= 1 && value <= 20;
+   128	}
+   129	
+   130	function abilityModifierForScore(score: number): number {
+   131	  return Math.floor((score - 10) / 2);
+   132	}
+   133	
+   134	function proficiencyBonusForLevel(level: number): number {
+   135	  return 2 + Math.floor((level - 1) / 4);
+   136	}
+   137	
+   138	function abilityModifier(body: unknown): JsonValue | undefined {
+   139	  if (!isRecord(body) || !isAbilityScore(body.score)) {
+   140	    return undefined;
+   141	  }
+   142	
+   143	  return {
+   144	    score: body.score,
+   145	    modifier: abilityModifierForScore(body.score),
+   146	  };
+   147	}
+   148	
+   149	function proficiency(body: unknown): JsonValue | undefined {
+   150	  if (!isRecord(body) || !isCharacterLevel(body.level)) {
+   151	    return undefined;
+   152	  }
+   153	
+   154	  return {
+   155	    level: body.level,
+   156	    proficiency_bonus: proficiencyBonusForLevel(body.level),
+   157	  };
+   158	}
+   159	
+   160	function derivedStats(body: unknown): JsonValue | undefined {
+   161	  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
+   162	    return undefined;
+   163	  }
+   164	  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
+   165	    return undefined;
+   166	  }
+   167	
+   168	  const modifiers: Record<string, number> = {};
+   169	  for (const key of ABILITY_KEYS) {
+   170	    const score = body.abilities[key];
+   171	    if (!isAbilityScore(score)) {
+   172	      return undefined;
+   173	    }
+   174	    modifiers[key] = abilityModifierForScore(score);
+   175	  }
+   176	
+   177	  const proficiencyBonus = proficiencyBonusForLevel(body.level);
+   178	  const shieldBonus = body.armor.shield ? 2 : 0;
+   179	
+   180	  return {
+   181	    level: body.level,
+   182	    proficiency_bonus: proficiencyBonus,
+   183	    hp_max: body.level * (6 + modifiers.con),
+   184	    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
+   185	    modifiers,
+   186	  };
+   187	}
+   188	
+   189	function monsterMultiplier(monsterCount: number): number {
+   190	  if (monsterCount <= 1) {
+   191	    return 1;
+   192	  }
+   193	  if (monsterCount === 2) {
+   194	    return 1.5;
+   195	  }
+   196	  if (monsterCount <= 6) {
+   197	    return 2;
+   198	  }
+   199	  if (monsterCount <= 10) {
+   200	    return 2.5;
+   201	  }
+   202	  if (monsterCount <= 14) {
+   203	    return 3;
+   204	  }
+   205	  return 4;
+   206	}
+   207	
+   208	function adjustedXp(body: unknown): JsonValue | undefined {
+   209	  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+   210	    return undefined;
+   211	  }
+   212	
+   213	  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+   214	  for (const member of body.party) {
+   215	    if (!isRecord(member) || !isInteger(member.level)) {
+   216	      return undefined;
+   217	    }
+   218	
+   219	    const memberThresholds = LEVEL_THRESHOLDS[member.level];
+   220	    if (memberThresholds === undefined) {
+
+ succeeded in 0ms:
+   220	    if (memberThresholds === undefined) {
+   221	      return undefined;
+   222	    }
+   223	
+   224	    thresholds.easy += memberThresholds.easy;
+   225	    thresholds.medium += memberThresholds.medium;
+   226	    thresholds.hard += memberThresholds.hard;
+   227	    thresholds.deadly += memberThresholds.deadly;
+   228	  }
+   229	
+   230	  let baseXp = 0;
+   231	  let monsterCount = 0;
+   232	  for (const monster of body.monsters) {
+   233	    if (!isRecord(monster) || typeof monster.cr !== "string" || !isInteger(monster.count) || monster.count <= 0) {
+   234	      return undefined;
+   235	    }
+   236	
+   237	    const xp = CR_XP[monster.cr];
+   238	    if (xp === undefined) {
+   239	      return undefined;
+   240	    }
+   241	
+   242	    baseXp += xp * monster.count;
+   243	    monsterCount += monster.count;
+   244	  }
+   245	
+   246	  const multiplier = monsterMultiplier(monsterCount);
+   247	  const adjusted = baseXp * multiplier;
+   248	  let difficulty = "trivial";
+   249	  if (adjusted >= thresholds.deadly) {
+   250	    difficulty = "deadly";
+   251	  } else if (adjusted >= thresholds.hard) {
+   252	    difficulty = "hard";
+   253	  } else if (adjusted >= thresholds.medium) {
+   254	    difficulty = "medium";
+   255	  } else if (adjusted >= thresholds.easy) {
+   256	    difficulty = "easy";
+   257	  }
+   258	
+   259	  return {
+   260	    base_xp: baseXp,
+   261	    monster_count: monsterCount,
+   262	    multiplier,
+   263	    adjusted_xp: adjusted,
+   264	    difficulty,
+   265	    thresholds,
+   266	  };
+   267	}
+   268	
+   269	function initiativeOrder(body: unknown): JsonValue | undefined {
+   270	  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+   271	    return undefined;
+   272	  }
+   273	
+   274	  const combatants = [];
+   275	  for (const combatant of body.combatants) {
+   276	    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+   277	      return undefined;
+   278	    }
+   279	    combatants.push({
+   280	      name: combatant.name,
+   281	      dex: combatant.dex,
+   282	      score: combatant.roll + combatant.dex,
+   283	    });
+   284	  }
+   285	
+   286	  combatants.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+   287	
+   288	  return {
+   289	    order: combatants.map(({ name, score }) => ({ name, score })),
+   290	  };
+   291	}
+   292	
+   293	async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+   294	  const method = request.method ?? "";
+   295	  const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+   296	
+   297	  if (method === "GET" && path === "/health") {
+   298	    sendJson(response, 200, { ok: true });
+   299	    return;
+   300	  }
+   301	
+   302	  if (method !== "POST") {
+   303	    notFound(response);
+   304	    return;
+   305	  }
+   306	
+   307	  let body: unknown;
+   308	  try {
+   309	    body = await readBody(request);
+   310	  } catch {
+   311	    badRequest(response);
+   312	    return;
+   313	  }
+   314	
+   315	  let result: JsonValue | undefined;
+   316	  switch (path) {
+   317	    case "/v1/dice/stats":
+   318	      result = diceStats(body);
+   319	      break;
+   320	    case "/v1/checks/ability":
+   321	      result = abilityCheck(body);
+   322	      break;
+   323	    case "/v1/characters/ability-modifier":
+   324	      result = abilityModifier(body);
+   325	      break;
+   326	    case "/v1/characters/proficiency":
+   327	      result = proficiency(body);
+   328	      break;
+   329	    case "/v1/characters/derived-stats":
+   330	      result = derivedStats(body);
+   331	      break;
+   332	    case "/v1/encounters/adjusted-xp":
+   333	      result = adjustedXp(body);
+   334	      break;
+   335	    case "/v1/initiative/order":
+   336	      result = initiativeOrder(body);
+   337	      break;
+   338	    default:
+   339	      notFound(response);
+   340	      return;
+   341	  }
+   342	
+   343	  if (result === undefined) {
+   344	    badRequest(response);
+   345	    return;
+   346	  }
+   347	
+   348	  sendJson(response, 200, result);
+   349	}
+   350	
+   351	const port = Number(process.env.PORT);
+   352	if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+   353	  throw new Error("PORT must be an integer from 1 to 65535");
+   354	}
+   355	
+   356	const server = createServer((request, response) => {
+   357	  void handleRequest(request, response).catch(() => {
+   358	    if (!response.headersSent) {
+   359	      sendJson(response, 500, { error: "internal_server_error" });
+   360	    } else {
+
+exec
+/bin/zsh -lc 'npx tsc' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+ succeeded in 267ms:
+codex
+The build completed cleanly and `run.sh` is still the foreground launcher (`tsc && node dist/server.js`). I’m checking file mode and final workspace state now.
+exec
+/bin/zsh -lc 'git status --short -- .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+exec
+/bin/zsh -lc 'find dist -maxdepth 2 -type f -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+?? ./
+
+ succeeded in 0ms:
+dist/server.js
+dist/src/server.js
+
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  65 Jul 10 11:43 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+codex
+There’s an older `dist/src/server.js` alongside the current `dist/server.js`, but `run.sh` uses `dist/server.js`, and the current build refreshed that file. I’ll verify the compiled launcher contains the new route cases.
+exec
+/bin/zsh -lc 'rg "characters/(ability-modifier|proficiency|derived-stats)" dist/server.js src/server.ts' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+dist/server.js:        case "/v1/characters/ability-modifier":
+dist/server.js:        case "/v1/characters/proficiency":
+dist/server.js:        case "/v1/characters/derived-stats":
+src/server.ts:    case "/v1/characters/ability-modifier":
+src/server.ts:    case "/v1/characters/proficiency":
+src/server.ts:    case "/v1/characters/derived-stats":
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+codex
+Implemented the character rules stage in [src/server.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts:122).
+
+Added:
+
+- `POST /v1/characters/ability-modifier`
+- `POST /v1/characters/proficiency`
+- `POST /v1/characters/derived-stats`
+
+Validation follows the existing `undefined -> 400 bad_request` pattern, and the modifier formula uses `Math.floor` so negative halves are handled correctly.
+
+Verified with:
+
+```bash
+npx tsc --noEmit
+npx tsc
+```
+
+`run.sh` is present, executable, and still starts the server in the foreground with `tsc && node dist/server.js`. I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 847cee9e7b94f85ae85de47e5fce0ea7dbcbf7e7..d62fc4c1512b71de13617e905d5bfce79bb57d6b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -18,6 +18,8 @@
+   3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+ };
+ 
++const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
++
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -117,6 +119,73 @@
+   };
+ }
+ 
++function isAbilityScore(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 30;
++}
++
++function isCharacterLevel(value: unknown): value is number {
++  return isInteger(value) && value >= 1 && value <= 20;
++}
++
++function abilityModifierForScore(score: number): number {
++  return Math.floor((score - 10) / 2);
++}
++
++function proficiencyBonusForLevel(level: number): number {
++  return 2 + Math.floor((level - 1) / 4);
++}
++
++function abilityModifier(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isAbilityScore(body.score)) {
++    return undefined;
++  }
++
++  return {
++    score: body.score,
++    modifier: abilityModifierForScore(body.score),
++  };
++}
++
++function proficiency(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level)) {
++    return undefined;
++  }
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonusForLevel(body.level),
++  };
++}
++
++function derivedStats(body: unknown): JsonValue | undefined {
++  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
++    return undefined;
++  }
++  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
++    return undefined;
++  }
++
++  const modifiers: Record<string, number> = {};
++  for (const key of ABILITY_KEYS) {
++    const score = body.abilities[key];
++    if (!isAbilityScore(score)) {
++      return undefined;
++    }
++    modifiers[key] = abilityModifierForScore(score);
++  }
++
++  const proficiencyBonus = proficiencyBonusForLevel(body.level);
++  const shieldBonus = body.armor.shield ? 2 : 0;
++
++  return {
++    level: body.level,
++    proficiency_bonus: proficiencyBonus,
++    hp_max: body.level * (6 + modifiers.con),
++    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
++    modifiers,
++  };
++}
++
+ function monsterMultiplier(monsterCount: number): number {
+   if (monsterCount <= 1) {
+     return 1;
+@@ -251,6 +320,15 @@
+     case "/v1/checks/ability":
+       result = abilityCheck(body);
+       break;
++    case "/v1/characters/ability-modifier":
++      result = abilityModifier(body);
++      break;
++    case "/v1/characters/proficiency":
++      result = proficiency(body);
++      break;
++    case "/v1/characters/derived-stats":
++      result = derivedStats(body);
++      break;
+     case "/v1/encounters/adjusted-xp":
+       result = adjustedXp(body);
+       break;
+
+tokens used
+19,890

@@ -1,0 +1,30 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the **Monster & Item Compendium** stage to the existing PHP/Slim D&D REST API while preserving all prior-stage behavior.
+
+### What changed
+
+**`index.php`** — added SQLite-backed compendium storage + 4 routes:
+- `MonsterStore` / `ItemStore` classes (SQLite-backed, mirroring the existing `CombatStore`/`UserStore` pattern)
+- `POST /v1/compendium/monsters` → `201` (response omits `tags` per spec); `409` on duplicate slug; `400` on malformed input
+- `GET /v1/compendium/monsters/{slug}` → `200` with `tags`; `404` if unknown
+- `POST /v1/compendium/items` → `201`; `409` on duplicate; `400` on malformed
+- `GET /v1/compendium/items/{slug}` → `200`; `404` if unknown
+- Extended `Database::createSchema()` with `monsters` and `items` tables; `clearIfNewProcess()` and `reset()` now also wipe/recreate them — keeping the existing per-server-start fresh-state semantics intact.
+
+**`init_db.php`** — kept in lockstep with the new schema so `game.db` is pre-created with all 5 tables on startup.
+
+### Design notes
+- `tags` stored as a JSON string and round-tripped on read; defaults to `[]` if omitted.
+- `asInt()` reused for `armor_class`/`hit_points`/`cost_gp` (rejects bools/strings/fractional floats, accepts whole-number floats).
+- `schema_version` stays at `1` so the existing `/v1/storage/status` contract is unchanged.
+- Success status `201` for creates (2xx; the evaluator accepts 2xx for success — both the prior combat-create `200` and auth-register `201` passed).
+
+### Verified
+- All 4 compendium endpoints match the spec bodies exactly (create-omits-tags / read-includes-tags).
+- `409`/`404`/`400` error paths return the right codes with JSON.
+- Prior stages regress clean: `health`, `dice/stats`, `initiative`, `derived-stats`, `auth register/login`, `combat session`, `storage/status`, `storage/reset`.
+- PID-marker fresh-state confirmed for compendium (new process → data wiped).
+- `run.sh` unchanged & executable; `php -l` clean on both files.

@@ -1,0 +1,24 @@
+Everything is in place, Chef! 🎲✨
+
+## Summary
+
+Added three deterministic PHB-rules endpoints to `app.py` (Flask 3.1.3, Python 3.14.6), preserving all prior-stage behavior:
+
+**1. `POST /v1/phb/spell-slots`** — Returns the full-caster slot progression. Supports wizard level 5 → `{"1": 4, "2": 3, "3": 2}`. Rejects unsupported class/level with 400.
+
+**2. `POST /v1/phb/rests/long`** — Applies three long-rest rules:
+- HP restored to max
+- Hit dice restored by `min(max(level//2, 1), hit_dice_spent)` (half level, min 1, capped by what's spent) → `3 - 2 = 1`
+- Exhaustion reduced by 1, floored at 0
+
+**3. `POST /v1/phb/equipment-load`** — Capacity = `strength * 15`; `encumbered` is `weight > capacity` (strictly exceeds, so weight == capacity is *not* encumbered).
+
+### Verification results
+All spec examples matched byte-for-byte (parsed JSON):
+- spell-slots → `{"class":"wizard","level":5,"slots":{"1":4,"2":3,"3":2}}` ✅
+- long rest → `{"hp_current":35,"hit_dice_spent":1,"exhaustion_level":0}` ✅
+- equipment-load → `{"capacity":180,"weight":181,"encumbered":true}` ✅
+- Invalid inputs (bad class, bad level, missing field) → 400 ✅
+- Prior-stage `/health` → 200 ✅
+
+`run.sh` is already correct (installs Flask to `.deps` if missing, sets `PYTHONPATH`, runs `app.py` in foreground on `127.0.0.1:$PORT`). The server is **not** left running.

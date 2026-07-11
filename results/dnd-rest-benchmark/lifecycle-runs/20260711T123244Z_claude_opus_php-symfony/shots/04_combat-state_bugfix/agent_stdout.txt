@@ -1,0 +1,15 @@
+All five advances now match the expected evaluator output — including `adv5` producing `"conditions":{"fighter":[]}` (the previously failing `combat-advance-expired-removed` case). The `run.sh` is already present and correct. 🎉
+
+## Summary
+
+The bug was in how expired conditions were reported. When a combatant's last condition decremented to `0`:
+
+- **Advance handler** (`index.php:599`) did `unset($session['conditions'][$activeName])`, dropping the combatant entirely.
+- **Map builder** (`combat_conditions_map`) also skipped any combatant whose condition list was empty.
+
+The evaluator expects the combatant's key to *persist* with an empty array — `{"fighter":[]}` — once a condition has ever been attached. Fixes:
+
+1. 🗺️ `combat_conditions_map` now includes any combatant present in `$session['conditions']` (via `array_key_exists`), even with an empty list — but still omits combatants that never had a condition (so `rogue`/`mage` stay absent, preserving the earlier passing tests).
+2. ⚔️ The advance handler now always writes back the `$remaining` list instead of unsetting, keeping the key alive as `[]`.
+
+Prior behavior is fully preserved (adv1–adv4 unchanged), and no packages or framework were touched. `./run.sh` is ready, Chef. 🎲

@@ -1,0 +1,2706 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4f2c-9e55-7031-8512-40f30c278768
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-django
+        Language: python
+        Framework/runtime: django
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Django 6.0.7. Implement the REST API as Django URL routes/views inside the seeded minimal project.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Django project and existing API surface first, then add the combat state endpoints in the same style so prior behavior stays intact.
+exec
+/bin/zsh -lc 'find . -maxdepth 3 -type f | sort' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+./.deps/asgiref-3.11.1.dist-info/INSTALLER
+./.deps/asgiref-3.11.1.dist-info/METADATA
+./.deps/asgiref-3.11.1.dist-info/RECORD
+./.deps/asgiref-3.11.1.dist-info/WHEEL
+./.deps/asgiref-3.11.1.dist-info/top_level.txt
+./.deps/asgiref/__init__.py
+./.deps/asgiref/compatibility.py
+./.deps/asgiref/current_thread_executor.py
+./.deps/asgiref/local.py
+./.deps/asgiref/py.typed
+./.deps/asgiref/server.py
+./.deps/asgiref/sync.py
+./.deps/asgiref/testing.py
+./.deps/asgiref/timeout.py
+./.deps/asgiref/typing.py
+./.deps/asgiref/wsgi.py
+./.deps/bin/django-admin
+./.deps/bin/sqlformat
+./.deps/django-6.0.7.dist-info/INSTALLER
+./.deps/django-6.0.7.dist-info/METADATA
+./.deps/django-6.0.7.dist-info/RECORD
+./.deps/django-6.0.7.dist-info/REQUESTED
+./.deps/django-6.0.7.dist-info/WHEEL
+./.deps/django-6.0.7.dist-info/entry_points.txt
+./.deps/django-6.0.7.dist-info/top_level.txt
+./.deps/django/__init__.py
+./.deps/django/__main__.py
+./.deps/django/shortcuts.py
+./.deps/sqlparse-0.5.5.dist-info/INSTALLER
+./.deps/sqlparse-0.5.5.dist-info/METADATA
+./.deps/sqlparse-0.5.5.dist-info/RECORD
+./.deps/sqlparse-0.5.5.dist-info/WHEEL
+./.deps/sqlparse-0.5.5.dist-info/entry_points.txt
+./.deps/sqlparse/__init__.py
+./.deps/sqlparse/__main__.py
+./.deps/sqlparse/cli.py
+./.deps/sqlparse/exceptions.py
+./.deps/sqlparse/formatter.py
+./.deps/sqlparse/keywords.py
+./.deps/sqlparse/lexer.py
+./.deps/sqlparse/py.typed
+./.deps/sqlparse/sql.py
+./.deps/sqlparse/tokens.py
+./.deps/sqlparse/utils.py
+./PROMPT.md
+./VERSION-PINS.json
+./__pycache__/manage.cpython-314.pyc
+./agent_last_message.txt
+./agent_stderr.txt
+./agent_stdout.txt
+./dndeval-characters-report.json
+./dndeval-core-report.json
+./dndsite/__init__.py
+./dndsite/__pycache__/__init__.cpython-314.pyc
+./dndsite/__pycache__/settings.cpython-314.pyc
+./dndsite/__pycache__/urls.cpython-314.pyc
+./dndsite/settings.py
+./dndsite/urls.py
+./lifecycle-result.json
+./manage.py
+./requirements.txt
+./run.sh
+./server_stderr.txt
+./server_stdout.txt
+./setup.json
+./shots/01_core_creative/PROMPT.md
+./shots/01_core_creative/agent_last_message.txt
+./shots/01_core_creative/agent_stderr.txt
+./shots/01_core_creative/agent_stdout.txt
+./shots/01_core_creative/dndeval-core-report.json
+./shots/01_core_creative/server_stderr.txt
+./shots/01_core_creative/server_stdout.txt
+./shots/01_core_creative/setup.json
+./shots/02_characters_maintenance/PROMPT.md
+./shots/02_characters_maintenance/agent_last_message.txt
+./shots/02_characters_maintenance/agent_stderr.txt
+./shots/02_characters_maintenance/agent_stdout.txt
+./shots/02_characters_maintenance/dndeval-characters-report.json
+./shots/02_characters_maintenance/server_stderr.txt
+./shots/02_characters_maintenance/server_stdout.txt
+./shots/02_characters_maintenance/setup.json
+./shots/03_combat-state_maintenance/PROMPT.md
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+requirements.txt
+setup.json
+run.sh
+server_stdout.txt
+PROMPT.md
+manage.py
+lifecycle-result.json
+dndsite/settings.py
+dndsite/__init__.py
+dndsite/urls.py
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ./
+
+codex
+The worktree has unrelated changes outside this run directory, so I’ll ignore them and keep edits scoped here. Next I’m reading the current URL/view implementation and the previous reports to understand what behavior must remain stable.
+exec
+/bin/zsh -lc "sed -n '1,240p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+import json
+import re
+
+from django.http import JsonResponse
+from django.urls import path
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+
+def bad_request():
+    return JsonResponse({"error": "bad request"}, status=400)
+
+
+def json_body(request):
+    if request.method != "POST":
+        return None
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def clean_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def require_int(value):
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError
+    return value
+
+
+def ability_modifier_for_score(score):
+    score = require_int(score)
+    if score < 1 or score > 30:
+        raise ValueError
+    return (score - 10) // 2
+
+
+def proficiency_for_level(level):
+    level = require_int(level)
+    if level < 1 or level > 20:
+        raise ValueError
+    return 2 + (level - 1) // 4
+
+
+def health(request):
+    return JsonResponse({"ok": True})
+
+
+def dice_stats(request):
+    data = json_body(request)
+    if data is None or not isinstance(data.get("expression"), str):
+        return bad_request()
+
+    match = DICE_RE.fullmatch(data["expression"])
+    if not match:
+        return bad_request()
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        return bad_request()
+
+    modifier = int(match.group(4) or 0)
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    minimum = count + modifier
+    maximum = count * sides + modifier
+    average = count * (sides + 1) / 2 + modifier
+    return JsonResponse(
+        {
+            "dice_count": count,
+            "sides": sides,
+            "modifier": modifier,
+            "min": minimum,
+            "max": maximum,
+            "average": clean_number(average),
+        }
+    )
+
+
+def ability_check(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        roll = require_int(data["roll"])
+        modifier = require_int(data["modifier"])
+        dc = require_int(data["dc"])
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    total = roll + modifier
+    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
+
+
+def encounter_multiplier(monster_count):
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def adjusted_xp(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+
+    party = data.get("party")
+    monsters = data.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        return bad_request()
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    try:
+        for member in party:
+            levels = LEVEL_THRESHOLDS[require_int(member["level"])]
+            for name in thresholds:
+                thresholds[name] += levels[name]
+
+        base_xp = 0
+        monster_count = 0
+        for monster in monsters:
+            count = require_int(monster["count"])
+            if count <= 0:
+                return bad_request()
+            base_xp += CR_XP[str(monster["cr"])] * count
+            monster_count += count
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    multiplier = encounter_multiplier(monster_count) if monster_count else 1
+    adjusted = base_xp * multiplier
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted >= thresholds[name]:
+            difficulty = name
+
+    return JsonResponse(
+        {
+            "base_xp": base_xp,
+            "monster_count": monster_count,
+            "multiplier": clean_number(multiplier),
+            "adjusted_xp": clean_number(adjusted),
+            "difficulty": difficulty,
+            "thresholds": thresholds,
+        }
+    )
+
+
+def initiative_order(request):
+    data = json_body(request)
+    if data is None or not isinstance(data.get("combatants"), list):
+        return bad_request()
+
+    order = []
+    try:
+        for combatant in data["combatants"]:
+            name = combatant["name"]
+            if not isinstance(name, str):
+                return bad_request()
+            dex = require_int(combatant["dex"])
+            roll = require_int(combatant["roll"])
+            order.append({"name": name, "dex": dex, "score": roll + dex})
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return JsonResponse(
+        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+    )
+
+
+def ability_modifier(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        score = require_int(data["score"])
+        modifier = ability_modifier_for_score(score)
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    return JsonResponse({"score": score, "modifier": modifier})
+
+
+def proficiency(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+    try:
+        level = require_int(data["level"])
+        bonus = proficiency_for_level(level)
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    return JsonResponse({"level": level, "proficiency_bonus": bonus})
+
+
+def derived_stats(request):
+    data = json_body(request)
+    if data is None:
+        return bad_request()
+
+    abilities = data.get("abilities")
+    armor = data.get("armor")
+    if not isinstance(abilities, dict) or not isinstance(armor, dict):
+        return bad_request()
+
+    try:
+        level = require_int(data["level"])
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-characters-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:55411",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndsite/settings.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+SECRET_KEY = "benchmark"
+DEBUG = True
+ROOT_URLCONF = "dndsite.urls"
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+INSTALLED_APPS = []
+MIDDLEWARE = []
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 manage.py runserver 127.0.0.1:"$PORT" --noreload
+
+codex
+The existing app is intentionally minimal: all views live in `dndsite/urls.py`, with helper validation already in place. I’m going to add the in-memory session store and three views there, reusing the same JSON/error conventions.
+exec
+/bin/zsh -lc "sed -n '240,520p' dndsite/urls.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+        level = require_int(data["level"])
+        proficiency_bonus = proficiency_for_level(level)
+        modifiers = {
+            ability: ability_modifier_for_score(abilities[ability])
+            for ability in ("str", "dex", "con", "int", "wis", "cha")
+        }
+        armor_base = require_int(armor["base"])
+        dex_cap = require_int(armor["dex_cap"])
+        shield = armor["shield"]
+        if not isinstance(shield, bool):
+            return bad_request()
+    except (KeyError, TypeError, ValueError):
+        return bad_request()
+
+    hp_max = level * (6 + modifiers["con"])
+    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+    return JsonResponse(
+        {
+            "level": level,
+            "proficiency_bonus": proficiency_bonus,
+            "hp_max": hp_max,
+            "armor_class": armor_class,
+            "modifiers": modifiers,
+        }
+    )
+
+
+urlpatterns = [
+    path("health", health),
+    path("v1/dice/stats", dice_stats),
+    path("v1/checks/ability", ability_check),
+    path("v1/encounters/adjusted-xp", adjusted_xp),
+    path("v1/initiative/order", initiative_order),
+    path("v1/characters/ability-modifier", ability_modifier),
+    path("v1/characters/proficiency", proficiency),
+    path("v1/characters/derived-stats", derived_stats),
+]
+
+codex
+I’m editing `dndsite/urls.py` now. The combat state will live in a module-level dictionary, which matches the benchmark requirement that state only survives for the server process lifetime.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+codex
+The routes and state helpers are in place. I’m running lightweight validation with Django’s test client rather than starting the server, since the contract says not to launch it before the final answer.
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 manage.py check' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+import json
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dndsite.settings')
+import django
+django.setup()
+from django.test import Client
+
+c = Client()
+resp = c.post('/v1/combat/sessions', data=json.dumps({
+    'id': 'enc-1',
+    'combatants': [
+        {'name': 'fighter', 'dex': 1, 'roll': 13},
+        {'name': 'rogue', 'dex': 3, 'roll': 14},
+        {'name': 'mage', 'dex': 2, 'roll': 14},
+    ],
+}), content_type='application/json')
+print(resp.status_code, resp.json())
+resp = c.post('/v1/combat/sessions/enc-1/conditions', data=json.dumps({
+    'target': 'fighter', 'condition': 'blessed', 'duration_rounds': 2,
+}), content_type='application/json')
+print(resp.status_code, resp.json())
+resp = c.post('/v1/combat/sessions/enc-1/advance')
+print(resp.status_code, resp.json())
+resp = c.post('/v1/combat/sessions/enc-1/advance')
+print(resp.status_code, resp.json())
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+ succeeded in 117ms:
+ succeeded in 106ms:
+codex
+Validation passed for Django configuration and the main combat flow. I’m checking the final diff now for scope and any accidental churn.
+exec
+/bin/zsh -lc 'git status --short -- dndsite/urls.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+exec
+/bin/zsh -lc 'git diff -- dndsite/urls.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+ succeeded in 0ms:
+?? dndsite/urls.py
+?? run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+codex
+This run directory is untracked from the parent repo’s perspective, so `git diff` does not show a tracked patch. The actual scoped changes are in `dndsite/urls.py`; `run.sh` was already present and still satisfies the foreground server contract.
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  142 Jul 10 20:11 run.sh
+
+exec
+/bin/zsh -lc "nl -ba dndsite/urls.py | sed -n '1,360p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+     1	import json
+     2	import re
+     3	
+     4	from django.http import JsonResponse
+     5	from django.urls import path
+     6	
+     7	
+     8	DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+     9	
+    10	CR_XP = {
+    11	    "0": 10,
+    12	    "1/8": 25,
+    13	    "1/4": 50,
+    14	    "1/2": 100,
+    15	    "1": 200,
+    16	    "2": 450,
+    17	    "3": 700,
+    18	    "4": 1100,
+    19	    "5": 1800,
+    20	}
+    21	
+    22	LEVEL_THRESHOLDS = {
+    23	    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+    24	}
+    25	
+    26	COMBAT_SESSIONS = {}
+    27	
+    28	
+    29	def bad_request():
+    30	    return JsonResponse({"error": "bad request"}, status=400)
+    31	
+    32	
+    33	def not_found():
+    34	    return JsonResponse({"error": "not found"}, status=404)
+    35	
+    36	
+    37	def json_body(request):
+    38	    if request.method != "POST":
+    39	        return None
+    40	    try:
+    41	        data = json.loads(request.body.decode("utf-8") or "{}")
+    42	    except (UnicodeDecodeError, json.JSONDecodeError):
+    43	        return None
+    44	    return data if isinstance(data, dict) else None
+    45	
+    46	
+    47	def clean_number(value):
+    48	    if isinstance(value, float) and value.is_integer():
+    49	        return int(value)
+    50	    return value
+    51	
+    52	
+    53	def require_int(value):
+    54	    if isinstance(value, bool) or not isinstance(value, int):
+    55	        raise ValueError
+    56	    return value
+    57	
+    58	
+    59	def ability_modifier_for_score(score):
+    60	    score = require_int(score)
+    61	    if score < 1 or score > 30:
+    62	        raise ValueError
+    63	    return (score - 10) // 2
+    64	
+    65	
+    66	def proficiency_for_level(level):
+    67	    level = require_int(level)
+    68	    if level < 1 or level > 20:
+    69	        raise ValueError
+    70	    return 2 + (level - 1) // 4
+    71	
+    72	
+    73	def health(request):
+    74	    return JsonResponse({"ok": True})
+    75	
+    76	
+    77	def dice_stats(request):
+    78	    data = json_body(request)
+    79	    if data is None or not isinstance(data.get("expression"), str):
+    80	        return bad_request()
+    81	
+    82	    match = DICE_RE.fullmatch(data["expression"])
+    83	    if not match:
+    84	        return bad_request()
+    85	
+    86	    count = int(match.group(1))
+    87	    sides = int(match.group(2))
+    88	    if count <= 0 or sides <= 0:
+    89	        return bad_request()
+    90	
+    91	    modifier = int(match.group(4) or 0)
+    92	    if match.group(3) == "-":
+    93	        modifier = -modifier
+    94	
+    95	    minimum = count + modifier
+    96	    maximum = count * sides + modifier
+    97	    average = count * (sides + 1) / 2 + modifier
+    98	    return JsonResponse(
+    99	        {
+   100	            "dice_count": count,
+   101	            "sides": sides,
+   102	            "modifier": modifier,
+   103	            "min": minimum,
+   104	            "max": maximum,
+   105	            "average": clean_number(average),
+   106	        }
+   107	    )
+   108	
+   109	
+   110	def ability_check(request):
+   111	    data = json_body(request)
+   112	    if data is None:
+   113	        return bad_request()
+   114	    try:
+   115	        roll = require_int(data["roll"])
+   116	        modifier = require_int(data["modifier"])
+   117	        dc = require_int(data["dc"])
+   118	    except (KeyError, TypeError, ValueError):
+   119	        return bad_request()
+   120	
+   121	    total = roll + modifier
+   122	    return JsonResponse({"total": total, "success": total >= dc, "margin": total - dc})
+   123	
+   124	
+   125	def encounter_multiplier(monster_count):
+   126	    if monster_count == 1:
+   127	        return 1
+   128	    if monster_count == 2:
+   129	        return 1.5
+   130	    if monster_count <= 6:
+   131	        return 2
+   132	    if monster_count <= 10:
+   133	        return 2.5
+   134	    if monster_count <= 14:
+   135	        return 3
+   136	    return 4
+   137	
+   138	
+   139	def adjusted_xp(request):
+   140	    data = json_body(request)
+   141	    if data is None:
+   142	        return bad_request()
+   143	
+   144	    party = data.get("party")
+   145	    monsters = data.get("monsters")
+   146	    if not isinstance(party, list) or not isinstance(monsters, list):
+   147	        return bad_request()
+   148	
+   149	    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+   150	    try:
+   151	        for member in party:
+   152	            levels = LEVEL_THRESHOLDS[require_int(member["level"])]
+   153	            for name in thresholds:
+   154	                thresholds[name] += levels[name]
+   155	
+   156	        base_xp = 0
+   157	        monster_count = 0
+   158	        for monster in monsters:
+   159	            count = require_int(monster["count"])
+   160	            if count <= 0:
+   161	                return bad_request()
+   162	            base_xp += CR_XP[str(monster["cr"])] * count
+   163	            monster_count += count
+   164	    except (KeyError, TypeError, ValueError):
+   165	        return bad_request()
+   166	
+   167	    multiplier = encounter_multiplier(monster_count) if monster_count else 1
+   168	    adjusted = base_xp * multiplier
+   169	    difficulty = "trivial"
+   170	    for name in ("easy", "medium", "hard", "deadly"):
+   171	        if adjusted >= thresholds[name]:
+   172	            difficulty = name
+   173	
+   174	    return JsonResponse(
+   175	        {
+   176	            "base_xp": base_xp,
+   177	            "monster_count": monster_count,
+   178	            "multiplier": clean_number(multiplier),
+   179	            "adjusted_xp": clean_number(adjusted),
+   180	            "difficulty": difficulty,
+   181	            "thresholds": thresholds,
+   182	        }
+   183	    )
+   184	
+   185	
+   186	def initiative_order(request):
+   187	    data = json_body(request)
+   188	    if data is None or not isinstance(data.get("combatants"), list):
+   189	        return bad_request()
+   190	
+   191	    order = []
+   192	    try:
+   193	        for combatant in data["combatants"]:
+   194	            name = combatant["name"]
+   195	            if not isinstance(name, str):
+   196	                return bad_request()
+   197	            dex = require_int(combatant["dex"])
+   198	            roll = require_int(combatant["roll"])
+   199	            order.append({"name": name, "dex": dex, "score": roll + dex})
+   200	    except (KeyError, TypeError, ValueError):
+   201	        return bad_request()
+   202	
+   203	    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+   204	    return JsonResponse(
+   205	        {"order": [{"name": item["name"], "score": item["score"]} for item in order]}
+   206	    )
+   207	
+   208	
+   209	def build_initiative_order(combatants):
+   210	    order = []
+   211	    for combatant in combatants:
+   212	        name = combatant["name"]
+   213	        if not isinstance(name, str):
+   214	            raise ValueError
+   215	        dex = require_int(combatant["dex"])
+   216	        roll = require_int(combatant["roll"])
+   217	        order.append({"name": name, "dex": dex, "score": roll + dex})
+   218	    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+   219	    return [{"name": item["name"], "score": item["score"]} for item in order]
+   220	
+   221	
+   222	def public_conditions(session):
+   223	    return {
+   224	        name: [
+   225	            {
+   226	                "condition": condition["condition"],
+   227	                "remaining_rounds": condition["remaining_rounds"],
+   228	            }
+   229	            for condition in conditions
+   230	        ]
+   231	        for name, conditions in session["conditions"].items()
+   232	        if conditions
+   233	    }
+   234	
+   235	
+   236	def session_response(session, include_conditions=False):
+   237	    response = {
+   238	        "id": session["id"],
+   239	        "round": session["round"],
+   240	        "turn_index": session["turn_index"],
+   241	        "active": session["order"][session["turn_index"]],
+   242	    }
+   243	    if include_conditions:
+   244	        response["conditions"] = public_conditions(session)
+   245	    else:
+   246	        response["order"] = session["order"]
+   247	    return response
+   248	
+   249	
+   250	def create_combat_session(request):
+   251	    data = json_body(request)
+   252	    if data is None:
+   253	        return bad_request()
+   254	
+   255	    session_id = data.get("id")
+   256	    combatants = data.get("combatants")
+   257	    if (
+   258	        not isinstance(session_id, str)
+   259	        or session_id in COMBAT_SESSIONS
+   260	        or not isinstance(combatants, list)
+   261	        or not combatants
+   262	    ):
+   263	        return bad_request()
+   264	
+   265	    try:
+   266	        order = build_initiative_order(combatants)
+   267	    except (KeyError, TypeError, ValueError):
+   268	        return bad_request()
+   269	
+   270	    session = {
+   271	        "id": session_id,
+   272	        "round": 1,
+   273	        "turn_index": 0,
+   274	        "order": order,
+   275	        "conditions": {},
+   276	    }
+   277	    COMBAT_SESSIONS[session_id] = session
+   278	    return JsonResponse(session_response(session))
+   279	
+   280	
+   281	def add_condition(request, session_id):
+   282	    data = json_body(request)
+   283	    session = COMBAT_SESSIONS.get(session_id)
+   284	    if session is None:
+   285	        return not_found()
+   286	    if data is None:
+   287	        return bad_request()
+   288	
+   289	    target = data.get("target")
+   290	    condition = data.get("condition")
+   291	    try:
+   292	        duration = require_int(data["duration_rounds"])
+   293	    except (KeyError, TypeError, ValueError):
+   294	        return bad_request()
+   295	
+   296	    combatant_names = {combatant["name"] for combatant in session["order"]}
+   297	    if (
+   298	        target not in combatant_names
+   299	        or not isinstance(condition, str)
+   300	        or duration <= 0
+   301	    ):
+   302	        return bad_request()
+   303	
+   304	    conditions = session["conditions"].setdefault(target, [])
+   305	    conditions.append({"condition": condition, "remaining_rounds": duration})
+   306	    return JsonResponse(
+   307	        {
+   308	            "target": target,
+   309	            "conditions": [
+   310	                {
+   311	                    "condition": item["condition"],
+   312	                    "remaining_rounds": item["remaining_rounds"],
+   313	                }
+   314	                for item in conditions
+   315	            ],
+   316	        }
+   317	    )
+   318	
+   319	
+   320	def advance_combat_session(request, session_id):
+   321	    if request.method != "POST":
+   322	        return bad_request()
+   323	
+   324	    session = COMBAT_SESSIONS.get(session_id)
+   325	    if session is None:
+   326	        return not_found()
+   327	
+   328	    session["turn_index"] += 1
+   329	    if session["turn_index"] >= len(session["order"]):
+   330	        session["turn_index"] = 0
+   331	        session["round"] += 1
+   332	
+   333	    active_name = session["order"][session["turn_index"]]["name"]
+   334	    active_conditions = session["conditions"].get(active_name, [])
+   335	    if active_conditions:
+   336	        remaining = []
+   337	        for condition in active_conditions:
+   338	            condition["remaining_rounds"] -= 1
+   339	            if condition["remaining_rounds"] > 0:
+   340	                remaining.append(condition)
+   341	        session["conditions"][active_name] = remaining
+   342	
+   343	    return JsonResponse(session_response(session, include_conditions=True))
+   344	
+   345	
+   346	def ability_modifier(request):
+   347	    data = json_body(request)
+   348	    if data is None:
+   349	        return bad_request()
+   350	    try:
+   351	        score = require_int(data["score"])
+   352	        modifier = ability_modifier_for_score(score)
+   353	    except (KeyError, TypeError, ValueError):
+   354	        return bad_request()
+   355	
+   356	    return JsonResponse({"score": score, "modifier": modifier})
+   357	
+   358	
+   359	def proficiency(request):
+   360	    data = json_body(request)
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+exec
+/bin/zsh -lc "nl -ba dndsite/urls.py | sed -n '360,460p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+ succeeded in 0ms:
+   360	    data = json_body(request)
+   361	    if data is None:
+   362	        return bad_request()
+   363	    try:
+   364	        level = require_int(data["level"])
+   365	        bonus = proficiency_for_level(level)
+   366	    except (KeyError, TypeError, ValueError):
+   367	        return bad_request()
+   368	
+   369	    return JsonResponse({"level": level, "proficiency_bonus": bonus})
+   370	
+   371	
+   372	def derived_stats(request):
+   373	    data = json_body(request)
+   374	    if data is None:
+   375	        return bad_request()
+   376	
+   377	    abilities = data.get("abilities")
+   378	    armor = data.get("armor")
+   379	    if not isinstance(abilities, dict) or not isinstance(armor, dict):
+   380	        return bad_request()
+   381	
+   382	    try:
+   383	        level = require_int(data["level"])
+   384	        proficiency_bonus = proficiency_for_level(level)
+   385	        modifiers = {
+   386	            ability: ability_modifier_for_score(abilities[ability])
+   387	            for ability in ("str", "dex", "con", "int", "wis", "cha")
+   388	        }
+   389	        armor_base = require_int(armor["base"])
+   390	        dex_cap = require_int(armor["dex_cap"])
+   391	        shield = armor["shield"]
+   392	        if not isinstance(shield, bool):
+   393	            return bad_request()
+   394	    except (KeyError, TypeError, ValueError):
+   395	        return bad_request()
+   396	
+   397	    hp_max = level * (6 + modifiers["con"])
+   398	    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+   399	    return JsonResponse(
+   400	        {
+   401	            "level": level,
+   402	            "proficiency_bonus": proficiency_bonus,
+   403	            "hp_max": hp_max,
+   404	            "armor_class": armor_class,
+   405	            "modifiers": modifiers,
+   406	        }
+   407	    )
+   408	
+   409	
+   410	urlpatterns = [
+   411	    path("health", health),
+   412	    path("v1/dice/stats", dice_stats),
+   413	    path("v1/checks/ability", ability_check),
+   414	    path("v1/encounters/adjusted-xp", adjusted_xp),
+   415	    path("v1/initiative/order", initiative_order),
+   416	    path("v1/characters/ability-modifier", ability_modifier),
+   417	    path("v1/characters/proficiency", proficiency),
+   418	    path("v1/characters/derived-stats", derived_stats),
+   419	    path("v1/combat/sessions", create_combat_session),
+   420	    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
+   421	    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+   422	]
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+codex
+The implementation is scoped and `run.sh` is executable. I’m doing a couple of edge checks now: duplicate session IDs, unknown sessions, and duration expiry on the active combatant’s next turn.
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+import json
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dndsite.settings')
+import django
+django.setup()
+from django.test import Client
+
+c = Client()
+def post(path, payload=None):
+    if payload is None:
+        return c.post(path)
+    return c.post(path, data=json.dumps(payload), content_type='application/json')
+
+payload = {'id': 'edge', 'combatants': [{'name': 'a', 'dex': 0, 'roll': 10}, {'name': 'b', 'dex': 1, 'roll': 9}]}
+print('create', post('/v1/combat/sessions', payload).status_code)
+print('duplicate', post('/v1/combat/sessions', payload).status_code)
+print('unknown condition', post('/v1/combat/sessions/missing/conditions', {'target': 'a', 'condition': 'x', 'duration_rounds': 1}).status_code)
+print('bad duration', post('/v1/combat/sessions/edge/conditions', {'target': 'a', 'condition': 'x', 'duration_rounds': 0}).status_code)
+print('add active duration', post('/v1/combat/sessions/edge/conditions', {'target': 'a', 'condition': 'x', 'duration_rounds': 1}).json())
+print('advance to b', post('/v1/combat/sessions/edge/advance').json())
+print('advance to a expires', post('/v1/combat/sessions/edge/advance').json())
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+ succeeded in 124ms:
+Bad Request: /v1/combat/sessions
+Not Found: /v1/combat/sessions/missing/conditions
+Bad Request: /v1/combat/sessions/edge/conditions
+create 200
+duplicate 400
+unknown condition 404
+bad duration 400
+add active duration {'target': 'a', 'conditions': [{'condition': 'x', 'remaining_rounds': 1}]}
+advance to b {'id': 'edge', 'round': 1, 'turn_index': 1, 'active': {'name': 'a', 'score': 10}, 'conditions': {}}
+advance to a expires {'id': 'edge', 'round': 2, 'turn_index': 0, 'active': {'name': 'b', 'score': 10}, 'conditions': {}}
+
+codex
+Implemented stateful combat in [dndsite/urls.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py:26):
+
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+
+State is in memory, initiative ordering follows the specified tie-breakers, conditions decrement only when their combatant becomes active, and unknown session IDs return JSON `404`.
+
+`run.sh` is present, executable, and still starts Django in the foreground on `127.0.0.1:$PORT`.
+
+Verified with:
+- `python3 manage.py check`
+- Django test-client checks for create, duplicate IDs, unknown sessions, add condition, advance, round wrap, and condition expiry.
+
+I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+index cb55070422190dbac4abd1a28a4b10057c8fcb0e..96572eea3b8d439ef507e5789e0025250455c667
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T031134Z_codex_gpt-5.5_python-django/dndsite/urls.py
+@@ -23,11 +23,17 @@
+     3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+ }
+ 
++COMBAT_SESSIONS = {}
++
+ 
+ def bad_request():
+     return JsonResponse({"error": "bad request"}, status=400)
+ 
+ 
++def not_found():
++    return JsonResponse({"error": "not found"}, status=404)
++
++
+ def json_body(request):
+     if request.method != "POST":
+         return None
+@@ -200,6 +206,143 @@
+     )
+ 
+ 
++def build_initiative_order(combatants):
++    order = []
++    for combatant in combatants:
++        name = combatant["name"]
++        if not isinstance(name, str):
++            raise ValueError
++        dex = require_int(combatant["dex"])
++        roll = require_int(combatant["roll"])
++        order.append({"name": name, "dex": dex, "score": roll + dex})
++    order.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
++    return [{"name": item["name"], "score": item["score"]} for item in order]
++
++
++def public_conditions(session):
++    return {
++        name: [
++            {
++                "condition": condition["condition"],
++                "remaining_rounds": condition["remaining_rounds"],
++            }
++            for condition in conditions
++        ]
++        for name, conditions in session["conditions"].items()
++        if conditions
++    }
++
++
++def session_response(session, include_conditions=False):
++    response = {
++        "id": session["id"],
++        "round": session["round"],
++        "turn_index": session["turn_index"],
++        "active": session["order"][session["turn_index"]],
++    }
++    if include_conditions:
++        response["conditions"] = public_conditions(session)
++    else:
++        response["order"] = session["order"]
++    return response
++
++
++def create_combat_session(request):
++    data = json_body(request)
++    if data is None:
++        return bad_request()
++
++    session_id = data.get("id")
++    combatants = data.get("combatants")
++    if (
++        not isinstance(session_id, str)
++        or session_id in COMBAT_SESSIONS
++        or not isinstance(combatants, list)
++        or not combatants
++    ):
++        return bad_request()
++
++    try:
++        order = build_initiative_order(combatants)
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    session = {
++        "id": session_id,
++        "round": 1,
++        "turn_index": 0,
++        "order": order,
++        "conditions": {},
++    }
++    COMBAT_SESSIONS[session_id] = session
++    return JsonResponse(session_response(session))
++
++
++def add_condition(request, session_id):
++    data = json_body(request)
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++    if data is None:
++        return bad_request()
++
++    target = data.get("target")
++    condition = data.get("condition")
++    try:
++        duration = require_int(data["duration_rounds"])
++    except (KeyError, TypeError, ValueError):
++        return bad_request()
++
++    combatant_names = {combatant["name"] for combatant in session["order"]}
++    if (
++        target not in combatant_names
++        or not isinstance(condition, str)
++        or duration <= 0
++    ):
++        return bad_request()
++
++    conditions = session["conditions"].setdefault(target, [])
++    conditions.append({"condition": condition, "remaining_rounds": duration})
++    return JsonResponse(
++        {
++            "target": target,
++            "conditions": [
++                {
++                    "condition": item["condition"],
++                    "remaining_rounds": item["remaining_rounds"],
++                }
++                for item in conditions
++            ],
++        }
++    )
++
++
++def advance_combat_session(request, session_id):
++    if request.method != "POST":
++        return bad_request()
++
++    session = COMBAT_SESSIONS.get(session_id)
++    if session is None:
++        return not_found()
++
++    session["turn_index"] += 1
++    if session["turn_index"] >= len(session["order"]):
++        session["turn_index"] = 0
++        session["round"] += 1
++
++    active_name = session["order"][session["turn_index"]]["name"]
++    active_conditions = session["conditions"].get(active_name, [])
++    if active_conditions:
++        remaining = []
++        for condition in active_conditions:
++            condition["remaining_rounds"] -= 1
++            if condition["remaining_rounds"] > 0:
++                remaining.append(condition)
++        session["conditions"][active_name] = remaining
++
++    return JsonResponse(session_response(session, include_conditions=True))
++
++
+ def ability_modifier(request):
+     data = json_body(request)
+     if data is None:
+@@ -273,4 +416,7 @@
+     path("v1/characters/ability-modifier", ability_modifier),
+     path("v1/characters/proficiency", proficiency),
+     path("v1/characters/derived-stats", derived_stats),
++    path("v1/combat/sessions", create_combat_session),
++    path("v1/combat/sessions/<str:session_id>/conditions", add_condition),
++    path("v1/combat/sessions/<str:session_id>/advance", advance_combat_session),
+ ]
+
+tokens used
+38,224

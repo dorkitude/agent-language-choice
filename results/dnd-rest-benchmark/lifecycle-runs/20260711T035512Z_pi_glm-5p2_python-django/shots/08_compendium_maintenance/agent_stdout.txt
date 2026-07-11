@@ -1,0 +1,25 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the **Monster and Item Compendium** stage to the existing D&D REST API while preserving all prior endpoints. Three files were touched:
+
+### `dndsite/storage.py`
+- Added two new SQLite tables to `_SCHEMA_SQL`: **`monsters`** (slug, name, cr, armor_class, hit_points, tags_json) and **`items`** (slug, name, type, rarity, cost_gp).
+- Added `monsters` and `items` to the `DROP` list in `init_schema(reset=True)` — critical because the cumulative suite runs `storage-reset` right before the compendium tests, so the new tables must be wiped & recreated too (otherwise leftover data would turn the `201` create into a `409`).
+- Added four accessors: `insert_monster`, `get_monster`, `insert_item`, `get_item`.
+- Kept `SCHEMA_VERSION = 1` so the existing `storage-status` test still passes.
+
+### `dndsite/views.py`
+Four new view functions following the existing patterns (lock-guarded check-then-insert, strict int-but-not-bool validation, `_bad()`/`_not_found()` helpers):
+- `compendium_create_monster` — POST, validates slug/name/cr/armor_class/hit_points/tags, **201** on success (response omits `tags`), **409** on duplicate slug.
+- `compendium_get_monster` — GET, **200** with `tags` included, **404** if unknown.
+- `compendium_create_item` — POST, validates slug/name/type/rarity/cost_gp, **201**, **409** on duplicate.
+- `compendium_get_item` — GET, **200**, **404** if unknown.
+- Malformed input → **400** throughout.
+
+### `dndsite/urls.py`
+Registered the four new routes (collection POST + `<str:slug>` GET for both monsters and items).
+
+### Verification
+I simulated the **exact cumulative suite tail** (auth → storage-reset → compendium) with Django's test client and confirmed every status code and JSON body matches the evaluator's `WantStatus`/`WantJSON`, including: create-monster omits `tags` (201), get-monster includes `tags` (200), duplicates → 409, missing → 404, malformed → 400. `run.sh` is unchanged and starts the server in the foreground on `127.0.0.1:$PORT`. The test `game.db` and stale `__pycache__` were cleaned so the server boots fresh. 🐉

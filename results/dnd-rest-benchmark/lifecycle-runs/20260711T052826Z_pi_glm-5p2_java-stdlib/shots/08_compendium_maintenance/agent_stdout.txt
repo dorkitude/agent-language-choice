@@ -1,0 +1,33 @@
+Done, Chef! 🐉📜 Here's the summary of the compendium stage:
+
+## Monster & Item Compendium — Stage 5 Complete
+
+**Approach:** Followed the existing codebase's proven pattern — in-memory `ConcurrentHashMap`s as the authoritative runtime store, with a write-through durable mirror to a real SQLite `game.db` via the system `sqlite3` CLI (Java stdlib ships no JDBC driver). This preserves all prior-stage behavior exactly while adding genuine SQLite-backed compendium storage.
+
+### Changes to `Main.java`
+
+1. **Two new route patterns** (`COMPENDIUM_MONSTER`, `COMPENDIUM_ITEM`) for slug-parameterized GETs, plus two exact-path POST cases in the router switch.
+
+2. **Four new endpoints:**
+   - `POST /v1/compendium/monsters` → `201`, body = `{slug,name,cr,armor_class,hit_points}` (no `tags`, per spec)
+   - `GET /v1/compendium/monsters/{slug}` → `200`, includes `tags` array
+   - `POST /v1/compendium/items` → `201`, body = `{slug,name,type,rarity,cost_gp}`
+   - `GET /v1/compendium/items/{slug}` → `200`
+
+3. **Error handling per spec:** `400` for malformed input (missing/empty/non-string fields, non-integer numerics, non-array tags), `404` for unknown slugs, `409` for duplicate slugs.
+
+4. **`Monster` / `Item` model classes** + `asNonEmptyString` helper (strict string validation, matching the codebase's `asInt` philosophy).
+
+5. **SQLite schema extended** (`SCHEMA_VERSION` stays `1` — required by the storage-status test) with `monsters`, `monster_tags` (ordered), and `items` tables — dropped + recreated on init/reset.
+
+6. **`Store.saveMonster` / `Store.saveItem`** write-through mirroring (transactional for monsters with tags).
+
+7. **`storageReset` now clears** the in-memory `MONSTERS`/`ITEMS` maps so the cumulative suite's reset-then-create flow stays clean.
+
+### Verification (clean single-process run)
+- ✅ Compendium: create-monster `201`, get-monster `200` (with tags), create-item `201`, get-item `200` — bodies byte-match the contract
+- ✅ Error cases: duplicate slug `409`, missing slug `404`, malformed `400`
+- ✅ SQLite tables populated correctly (`monsters`, `monster_tags`, `items`)
+- ✅ No regression: health, dice, ability-modifier, derived-stats, combat create, auth register/login, storage status/reset all intact
+- ✅ `storage-reset` clears compendium data (create-after-reset → `201`)
+- ✅ Stderr clean (only the listening line); `run.sh` compiles + runs in foreground on `127.0.0.1:$PORT` 🗡️✨

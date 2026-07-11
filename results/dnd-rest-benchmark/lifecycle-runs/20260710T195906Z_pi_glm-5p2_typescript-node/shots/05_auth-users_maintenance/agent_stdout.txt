@@ -1,0 +1,31 @@
+Everything is in place, Chef 🎲✨
+
+## Summary
+
+I inherited the existing D&D REST API (core + characters + combat-state suites, all passing) and added the **auth-users** stage on top, preserving all prior behavior.
+
+### What I added to `src/server.ts`
+
+**1. Real password hashing (Node built-in `crypto`)** — not a toy hash:
+- `hashPassword()` uses `crypto.scryptSync` with a random 16-byte salt, stored as `scrypt$<saltHex>$<hashHex>`.
+- `verifyPassword()` recomputes the hash and compares with `crypto.timingSafeEqual` (constant-time, no string comparison).
+- The plain password is never persisted or echoed — register returns only `{username, role}`, login returns only `{username, token}`.
+
+**2. `POST /v1/auth/register`** — validation:
+- `username`: 2–32 chars, `^[a-z0-9_-]{2,32}$` → else `400`
+- `password`: string ≥ 8 chars → else `400`
+- `role`: `dm` or `player` → else `400`
+- duplicate username → `409`
+- non-object body → `400`
+
+**3. `POST /v1/auth/login`**:
+- non-string `username`/`password` → `400` (malformed)
+- unknown user or wrong password → `401` (bad credentials)
+- success → `{ "username": "dm", "token": "session-dm" }` (deterministic per spec)
+
+### Verification
+- `tsc` compiles cleanly with `strict` mode.
+- All 14 prior-stage endpoints (health, dice, checks, encounters, initiative, character rules, combat sessions/conditions/advance) still return correct status codes — **0 regressions**.
+- All new auth cases verified: valid register (dm + player with `-` in name), duplicate→409, short username→400, uppercase→400, short password→400, bad role→400, non-object→400, correct login→200 with `session-<username>`, wrong password→401, unknown user→401, malformed login→400.
+
+`./run.sh` is unchanged and still compiles via the pinned TypeScript 7.0.2 then runs `node dist/server.js` in the foreground, listening on `127.0.0.1:$PORT`. Ready to go 🚀

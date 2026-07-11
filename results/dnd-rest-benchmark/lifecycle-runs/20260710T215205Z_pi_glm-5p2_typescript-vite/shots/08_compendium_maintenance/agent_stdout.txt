@@ -1,0 +1,33 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+Added the **Monster & Item Compendium** stage to the existing D&D REST API, preserving all prior endpoints.
+
+### Changes
+
+**`src/storage.ts`** — added two SQLite-backed tables and CRUD:
+- `monsters` (slug, name, cr, armor_class, hit_points, tags_json) + `getMonster`/`putMonster`
+- `items` (slug, name, type, rarity, cost_gp) + `getItem`/`putItem`
+- Both tables added to `resetStorage()`'s DROP list so `/v1/storage/reset` clears them too
+
+**`src/dndPlugin.ts`** — added 4 routes + handlers:
+- `POST /v1/compendium/monsters` → `201`, response **omits** `tags` (per spec); `409` on duplicate slug; `400` on malformed input
+- `GET /v1/compendium/monsters/:slug` → `200` with `tags` included; `404` if unknown
+- `POST /v1/compendium/items` → `201`; `409` on duplicate; `400` on malformed
+- `GET /v1/compendium/items/:slug` → `200`; `404` if unknown
+
+### Key spec details handled
+- **Asymmetric monster shape**: create response drops `tags`, read response includes `tags` ✅
+- `tags` optional on create (defaults to `[]`), but validated as string-array when present ✅
+- Status codes: `400` malformed, `404` unknown, `409` duplicate ✅
+- Duplicate detection via existence check before insert (slug is PK) ✅
+- Schema stays at version 1 (additive tables) so prior `storage-status` test still passes ✅
+
+### Verification
+- `tsc --noEmit` clean ✅
+- Live-tested all 4 compendium endpoints + edge cases (dup→409, missing→404, malformed→400, float cost→400, invalid JSON→400, reset wipes compendium) ✅
+- Regression-swept prior stages (health, dice, ability-mod, auth register/login, combat sessions, storage status/reset) — all green ✅
+- `game.db` removed so the evaluator starts from a fresh DB (schema recreated on startup) ✅
+
+`./run.sh` is ready and unchanged — starts Vite in the foreground on `127.0.0.1:$PORT`. 🗡️🧪

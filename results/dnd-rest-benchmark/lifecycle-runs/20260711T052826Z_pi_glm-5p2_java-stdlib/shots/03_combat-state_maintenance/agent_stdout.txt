@@ -1,0 +1,25 @@
+Everything works end-to-end via `run.sh`. 🎲⚔️
+
+## Summary
+
+I inherited the existing D&D REST API (Java stdlib `com.sun.net.httpserver`) and added the **Stateful Combat** stage while preserving all 13 prior core + character endpoints.
+
+### What was added to `Main.java`
+
+**Three new endpoints:**
+
+1. **`POST /v1/combat/sessions`** — Creates an in-memory combat session. Computes initiative scores (`roll + dex`), sorts by score desc → dex desc → name asc, starts at `round=1`, `turn_index=0`. Returns `{id, round, turn_index, active, order}`.
+
+2. **`POST /v1/combat/sessions/{id}/conditions`** — Attaches a condition (arbitrary string + positive integer duration) to a named combatant. Returns `{target, conditions}`.
+
+3. **`POST /v1/combat/sessions/{id}/advance`** — Advances `turn_index`; wraps to `0` and increments `round` at the end; decrements only the *new active* combatant's conditions and removes any that hit `0`. Returns `{id, round, turn_index, active, conditions}`.
+
+### Key implementation details
+
+- **Path-parameter routing** added via two regex patterns (`/sessions/{id}/conditions`, `/sessions/{id}/advance`) checked before the exact-match `switch`, leaving all existing routes untouched.
+- **In-memory state** in a `ConcurrentHashMap<String, CombatSession>`; per-session mutation guarded by `synchronized(session)` for thread safety under the 16-thread pool.
+- **Strict validation**: 400 for malformed input (missing/empty id, empty combatants, missing dex/roll, non-integer/non-positive `duration_rounds`, unknown target, duplicate id), 404 for unknown session ids.
+- **Exact response shapes** per spec — the create response carries `order` (no `conditions`), while the advance response carries `conditions` (no `order`), matching the examples precisely.
+- The condition-duration semantics were verified end-to-end: a `duration_rounds: 2` condition decrements only on its owner's turns and expires after exactly 2 of that combatant's turns.
+
+`./run.sh` is unchanged (compiles + runs `java Main` in the foreground, listens on `127.0.0.1:$PORT`). All prior-stage endpoints pass regression. ✨

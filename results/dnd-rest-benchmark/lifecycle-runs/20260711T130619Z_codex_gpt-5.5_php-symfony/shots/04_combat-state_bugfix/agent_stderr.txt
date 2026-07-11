@@ -1,0 +1,1257 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f514f-5798-74f1-bb4f-1a1aa8efae75
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-symfony
+        Language: php
+        Framework/runtime: symfony-components
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8, Composer 2.10.2, Symfony HttpFoundation 8.1.1, and Symfony Routing 8.1.0. Implement routing with Symfony components.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:50202 passed=false tests=19/20
+PASS	health	0ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+PASS	combat-add-condition	0ms	HTTP 200
+PASS	combat-advance-to-mage	0ms	HTTP 200
+PASS	combat-advance-to-fighter-decrements	0ms	HTTP 200
+PASS	combat-advance-wrap-round	0ms	HTTP 200
+PASS	combat-advance-condition-expires	0ms	HTTP 200
+FAIL	combat-advance-expired-removed	0ms	HTTP 200	conditions: missing JSON key "fighter"
+  response: {"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{}}
+
+
+Error: suite failed: 19/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing PHP/Symfony component implementation and the combat state handling first, then make the smallest change that preserves the prior passing behavior.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ../20260711T080759Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260711T083219Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260711T085934Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260711T092405Z_claude_opus_ruby-rails/
+?? ../20260711T093710Z_claude_sonnet_ruby-rails/
+?? ../20260711T093731Z_codex_gpt-5.5_ruby-rails/
+?? ../20260711T100327Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260711T102312Z_pi_glm-5p2_ruby-rails/
+?? ../20260711T103327Z_claude_opus_php-stdlib/
+?? ../20260711T103332Z_claude_sonnet_php-stdlib/
+?? ../20260711T103336Z_codex_gpt-5.5_php-stdlib/
+?? ../20260711T103925Z_pi_kimi-k2p7-code_php-stdlib/
+?? ../20260711T105237Z_pi_glm-5p2_php-stdlib/
+?? ../20260711T112326Z_claude_opus_php-slim/
+?? ../20260711T112334Z_claude_sonnet_php-slim/
+?? ../20260711T112342Z_codex_gpt-5.5_php-slim/
+?? ../20260711T113032Z_pi_kimi-k2p7-code_php-slim/
+?? ../20260711T115134Z_pi_glm-5p2_php-slim/
+?? ../20260711T123244Z_claude_opus_php-symfony/
+?? ../20260711T125335Z_claude_sonnet_php-symfony/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/PROMPT.md
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+dndeval-core-report.json
+composer.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+index.php
+setup.json
+composer.lock
+dndeval-combat-state-report.json
+
+codex
+The repo is small. I see unrelated dirty state outside this workspace, so I’ll ignore that and focus only on the current run directory.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc "sed -n '1,260p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+rm -f .combat-state.json
+php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 0ms:
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Exception\MethodNotAllowedException;
+use Symfony\Component\Routing\Exception\ResourceNotFoundException;
+use Symfony\Component\Routing\Matcher\UrlMatcher;
+use Symfony\Component\Routing\RequestContext;
+use Symfony\Component\Routing\Route;
+use Symfony\Component\Routing\RouteCollection;
+
+$routes = new RouteCollection();
+$routes->add('health', new Route('/health', ['handler' => 'health'], [], [], '', [], ['GET']));
+$routes->add('dice_stats', new Route('/v1/dice/stats', ['handler' => 'diceStats'], [], [], '', [], ['POST']));
+$routes->add('ability_check', new Route('/v1/checks/ability', ['handler' => 'abilityCheck'], [], [], '', [], ['POST']));
+$routes->add('adjusted_xp', new Route('/v1/encounters/adjusted-xp', ['handler' => 'adjustedXp'], [], [], '', [], ['POST']));
+$routes->add('initiative_order', new Route('/v1/initiative/order', ['handler' => 'initiativeOrder'], [], [], '', [], ['POST']));
+$routes->add('character_ability_modifier', new Route('/v1/characters/ability-modifier', ['handler' => 'characterAbilityModifier'], [], [], '', [], ['POST']));
+$routes->add('character_proficiency', new Route('/v1/characters/proficiency', ['handler' => 'characterProficiency'], [], [], '', [], ['POST']));
+$routes->add('character_derived_stats', new Route('/v1/characters/derived-stats', ['handler' => 'characterDerivedStats'], [], [], '', [], ['POST']));
+$routes->add('combat_create_session', new Route('/v1/combat/sessions', ['handler' => 'combatCreateSession'], [], [], '', [], ['POST']));
+$routes->add('combat_add_condition', new Route('/v1/combat/sessions/{id}/conditions', ['handler' => 'combatAddCondition'], [], [], '', [], ['POST']));
+$routes->add('combat_advance', new Route('/v1/combat/sessions/{id}/advance', ['handler' => 'combatAdvance'], [], [], '', [], ['POST']));
+
+function handleRequest(Request $request, RouteCollection $routes): JsonResponse
+{
+    $context = new RequestContext();
+    $context->fromRequest($request);
+    $matcher = new UrlMatcher($routes, $context);
+
+    try {
+        $parameters = $matcher->match($request->getPathInfo());
+        $handler = $parameters['handler'];
+        $request->attributes->add($parameters);
+
+        return $handler($request);
+    } catch (ResourceNotFoundException) {
+        return new JsonResponse(['error' => 'not found'], 404);
+    } catch (MethodNotAllowedException) {
+        return new JsonResponse(['error' => 'method not allowed'], 405);
+    }
+}
+
+function jsonPayload(Request $request): ?array
+{
+    $decoded = json_decode($request->getContent(), true);
+
+    return is_array($decoded) ? $decoded : null;
+}
+
+function badRequest(string $message = 'bad request'): JsonResponse
+{
+    return new JsonResponse(['error' => $message], 400);
+}
+
+function notFound(string $message = 'not found'): JsonResponse
+{
+    return new JsonResponse(['error' => $message], 404);
+}
+
+function requireInt(array $payload, string $key): ?int
+{
+    return array_key_exists($key, $payload) && is_int($payload[$key]) ? $payload[$key] : null;
+}
+
+function requireIntRange(array $payload, string $key, int $min, int $max): ?int
+{
+    $value = requireInt($payload, $key);
+
+    return $value !== null && $value >= $min && $value <= $max ? $value : null;
+}
+
+function abilityModifierFromScore(int $score): int
+{
+    return (int) floor(($score - 10) / 2);
+}
+
+function proficiencyBonusForLevel(int $level): int
+{
+    return 2 + intdiv($level - 1, 4);
+}
+
+function combatStatePath(): string
+{
+    return getenv('COMBAT_STATE_FILE') ?: __DIR__ . '/.combat-state.json';
+}
+
+function loadCombatSessions(): array
+{
+    $path = combatStatePath();
+    if (!is_file($path)) {
+        return [];
+    }
+
+    $decoded = json_decode((string) file_get_contents($path), true);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
+function saveCombatSessions(array $sessions): void
+{
+    file_put_contents(combatStatePath(), json_encode($sessions, JSON_PRETTY_PRINT));
+}
+
+function publicCombatant(array $combatant): array
+{
+    return ['name' => $combatant['name'], 'score' => $combatant['score']];
+}
+
+function publicConditions(array $session): array|stdClass
+{
+    $conditions = [];
+    foreach ($session['conditions'] as $name => $entries) {
+        if ($entries !== []) {
+            $conditions[$name] = $entries;
+        }
+    }
+
+    return $conditions === [] ? new stdClass() : $conditions;
+}
+
+function combatSessionResponse(array $session): array
+{
+    return [
+        'id' => $session['id'],
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => publicCombatant($session['order'][$session['turn_index']]),
+        'order' => array_map('publicCombatant', $session['order']),
+    ];
+}
+
+function health(): JsonResponse
+{
+    return new JsonResponse(['ok' => true]);
+}
+
+function diceStats(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if ($payload === null || !isset($payload['expression']) || !is_string($payload['expression'])) {
+        return badRequest('invalid expression');
+    }
+
+    if (!preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $payload['expression'], $matches)) {
+        return badRequest('invalid expression');
+    }
+
+    $count = (int) $matches[1];
+    $sides = (int) $matches[2];
+    if ($count <= 0 || $sides <= 0) {
+        return badRequest('invalid expression');
+    }
+
+    $modifier = 0;
+    if (isset($matches[3], $matches[4]) && $matches[3] !== '') {
+        $modifier = (int) $matches[4];
+        if ($matches[3] === '-') {
+            $modifier *= -1;
+        }
+    }
+
+    $min = $count + $modifier;
+    $max = ($count * $sides) + $modifier;
+    $average = ($count * ($sides + 1) / 2) + $modifier;
+
+    return new JsonResponse([
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $min,
+        'max' => $max,
+        'average' => $average,
+    ]);
+}
+
+function abilityCheck(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if ($payload === null) {
+        return badRequest();
+    }
+
+    $roll = requireInt($payload, 'roll');
+    $modifier = requireInt($payload, 'modifier');
+    $dc = requireInt($payload, 'dc');
+    if ($roll === null || $modifier === null || $dc === null) {
+        return badRequest();
+    }
+
+    $total = $roll + $modifier;
+    $margin = $total - $dc;
+
+    return new JsonResponse([
+        'total' => $total,
+        'success' => $total >= $dc,
+        'margin' => $margin,
+    ]);
+}
+
+function adjustedXp(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if ($payload === null || !isset($payload['party'], $payload['monsters']) || !is_array($payload['party']) || !is_array($payload['monsters'])) {
+        return badRequest();
+    }
+
+    $monsterXp = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($payload['monsters'] as $monster) {
+        if (!is_array($monster) || !isset($monster['cr'], $monster['count']) || !is_string($monster['cr']) || !is_int($monster['count'])) {
+            return badRequest();
+        }
+
+        if ($monster['count'] < 0 || !array_key_exists($monster['cr'], $monsterXp)) {
+            return badRequest();
+        }
+
+        $baseXp += $monsterXp[$monster['cr']] * $monster['count'];
+        $monsterCount += $monster['count'];
+    }
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($payload['party'] as $member) {
+        if (!is_array($member) || !isset($member['level']) || !is_int($member['level']) || $member['level'] !== 3) {
+            return badRequest();
+        }
+
+        $thresholds['easy'] += 75;
+        $thresholds['medium'] += 150;
+        $thresholds['hard'] += 225;
+        $thresholds['deadly'] += 400;
+    }
+
+    $multiplier = match (true) {
+        $monsterCount <= 0 => 0,
+        $monsterCount === 1 => 1,
+        $monsterCount === 2 => 1.5,
+        $monsterCount <= 6 => 2,
+        $monsterCount <= 10 => 2.5,
+        $monsterCount <= 14 => 3,
+        default => 4,
+    };
+
+
+exec
+/bin/zsh -lc 'cat composer.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+{
+  "require": {
+    "symfony/http-foundation": "8.1.1",
+    "symfony/routing": "8.1.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
+codex
+The failure points at response shape rather than turn math: expired conditions are removed, but the evaluator still expects the combatant key with an empty list after removal. I’m checking the remaining combat code to confirm where empty keys are filtered out.
+exec
+/bin/zsh -lc "sed -n '260,620p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+
+    $adjustedXp = $baseXp * $multiplier;
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $level) {
+        if ($adjustedXp >= $thresholds[$level]) {
+            $difficulty = $level;
+        }
+    }
+
+    return new JsonResponse([
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+}
+
+function initiativeOrder(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if ($payload === null || !isset($payload['combatants']) || !is_array($payload['combatants'])) {
+        return badRequest();
+    }
+
+    $combatants = [];
+    foreach ($payload['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+            || !is_string($combatant['name'])
+            || !is_int($combatant['dex'])
+            || !is_int($combatant['roll'])
+        ) {
+            return badRequest();
+        }
+
+        $combatants[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    usort($combatants, static function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: ($a['name'] <=> $b['name']);
+    });
+
+    return new JsonResponse([
+        'order' => array_map(
+            static fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+            $combatants
+        ),
+    ]);
+}
+
+function characterAbilityModifier(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if ($payload === null) {
+        return badRequest();
+    }
+
+    $score = requireIntRange($payload, 'score', 1, 30);
+    if ($score === null) {
+        return badRequest();
+    }
+
+    return new JsonResponse([
+        'score' => $score,
+        'modifier' => abilityModifierFromScore($score),
+    ]);
+}
+
+function characterProficiency(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if ($payload === null) {
+        return badRequest();
+    }
+
+    $level = requireIntRange($payload, 'level', 1, 20);
+    if ($level === null) {
+        return badRequest();
+    }
+
+    return new JsonResponse([
+        'level' => $level,
+        'proficiency_bonus' => proficiencyBonusForLevel($level),
+    ]);
+}
+
+function characterDerivedStats(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if (
+        $payload === null
+        || !isset($payload['abilities'], $payload['armor'])
+        || !is_array($payload['abilities'])
+        || !is_array($payload['armor'])
+    ) {
+        return badRequest();
+    }
+
+    $level = requireIntRange($payload, 'level', 1, 20);
+    if ($level === null) {
+        return badRequest();
+    }
+
+    $modifiers = [];
+    foreach (['str', 'dex', 'con', 'int', 'wis', 'cha'] as $ability) {
+        $score = requireIntRange($payload['abilities'], $ability, 1, 30);
+        if ($score === null) {
+            return badRequest();
+        }
+
+        $modifiers[$ability] = abilityModifierFromScore($score);
+    }
+
+    $armorBase = requireInt($payload['armor'], 'base');
+    $dexCap = requireInt($payload['armor'], 'dex_cap');
+    if (
+        $armorBase === null
+        || $dexCap === null
+        || !array_key_exists('shield', $payload['armor'])
+        || !is_bool($payload['armor']['shield'])
+    ) {
+        return badRequest();
+    }
+
+    $shieldBonus = $payload['armor']['shield'] ? 2 : 0;
+
+    return new JsonResponse([
+        'level' => $level,
+        'proficiency_bonus' => proficiencyBonusForLevel($level),
+        'hp_max' => $level * (6 + $modifiers['con']),
+        'armor_class' => $armorBase + min($modifiers['dex'], $dexCap) + $shieldBonus,
+        'modifiers' => $modifiers,
+    ]);
+}
+
+function combatCreateSession(Request $request): JsonResponse
+{
+    $payload = jsonPayload($request);
+    if (
+        $payload === null
+        || !isset($payload['id'], $payload['combatants'])
+        || !is_string($payload['id'])
+        || $payload['id'] === ''
+        || !is_array($payload['combatants'])
+        || $payload['combatants'] === []
+    ) {
+        return badRequest();
+    }
+
+    $sessions = loadCombatSessions();
+    if (array_key_exists($payload['id'], $sessions)) {
+        return badRequest('session id already exists');
+    }
+
+    $order = [];
+    $conditions = [];
+    foreach ($payload['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+            || !is_string($combatant['name'])
+            || $combatant['name'] === ''
+            || !is_int($combatant['dex'])
+            || !is_int($combatant['roll'])
+            || array_key_exists($combatant['name'], $conditions)
+        ) {
+            return badRequest();
+        }
+
+        $order[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+        $conditions[$combatant['name']] = [];
+    }
+
+    usort($order, static function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: ($a['name'] <=> $b['name']);
+    });
+
+    $session = [
+        'id' => $payload['id'],
+        'round' => 1,
+        'turn_index' => 0,
+        'order' => $order,
+        'conditions' => $conditions,
+    ];
+
+    $sessions[$payload['id']] = $session;
+    saveCombatSessions($sessions);
+
+    return new JsonResponse(combatSessionResponse($session));
+}
+
+function combatAddCondition(Request $request): JsonResponse
+{
+    $id = (string) $request->attributes->get('id');
+    $sessions = loadCombatSessions();
+    if (!array_key_exists($id, $sessions)) {
+        return notFound('unknown session');
+    }
+
+    $payload = jsonPayload($request);
+    if (
+        $payload === null
+        || !isset($payload['target'], $payload['condition'])
+        || !is_string($payload['target'])
+        || !is_string($payload['condition'])
+    ) {
+        return badRequest();
+    }
+
+    $durationRounds = requireInt($payload, 'duration_rounds');
+    if ($durationRounds === null || $durationRounds <= 0) {
+        return badRequest();
+    }
+
+    if (!array_key_exists($payload['target'], $sessions[$id]['conditions'])) {
+        return badRequest('unknown target');
+    }
+
+    $sessions[$id]['conditions'][$payload['target']][] = [
+        'condition' => $payload['condition'],
+        'remaining_rounds' => $durationRounds,
+    ];
+    saveCombatSessions($sessions);
+
+    return new JsonResponse([
+        'target' => $payload['target'],
+        'conditions' => $sessions[$id]['conditions'][$payload['target']],
+    ]);
+}
+
+function combatAdvance(Request $request): JsonResponse
+{
+    $id = (string) $request->attributes->get('id');
+    $sessions = loadCombatSessions();
+    if (!array_key_exists($id, $sessions)) {
+        return notFound('unknown session');
+    }
+
+    $session = $sessions[$id];
+    $nextTurnIndex = $session['turn_index'] + 1;
+    if ($nextTurnIndex >= count($session['order'])) {
+        $nextTurnIndex = 0;
+        $session['round']++;
+    }
+    $session['turn_index'] = $nextTurnIndex;
+
+    $activeName = $session['order'][$session['turn_index']]['name'];
+    $remaining = [];
+    foreach ($session['conditions'][$activeName] as $condition) {
+        $condition['remaining_rounds']--;
+        if ($condition['remaining_rounds'] > 0) {
+            $remaining[] = $condition;
+        }
+    }
+    $session['conditions'][$activeName] = $remaining;
+
+    $sessions[$id] = $session;
+    saveCombatSessions($sessions);
+
+    return new JsonResponse([
+        'id' => $session['id'],
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => publicCombatant($session['order'][$session['turn_index']]),
+        'conditions' => publicConditions($session),
+    ]);
+}
+
+if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    handleRequest(Request::createFromGlobals(), $routes)->send();
+}
+
+codex
+I’m going to adjust only the condition serialization for advance responses. The state update already removes expired conditions correctly; the missing bit is preserving the affected combatant’s empty array in the response when a condition expired on that turn.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+codex
+The edit is in place. I’ll run syntax checks and a direct in-process exercise of the combat flow without starting the HTTP server.
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+exec
+/bin/zsh -lc "php -r '
+putenv(\"COMBAT_STATE_FILE=/tmp/codex-combat-state-test.json\");
+@unlink(\"/tmp/codex-combat-state-test.json\");
+require \"index.php\";
+function call_route("'$method, $path, $body = null) {
+    global $routes;
+    $request = Symfony'"\\Component\\HttpFoundation\\Request::create("'$path, $method, [], [], [], [], $body === null ? "" : json_encode($body));
+    $response = handleRequest($request, $routes);
+    return [$response->getStatusCode(), json_decode($response->getContent(), true)];
+}
+call_route("POST", "/v1/combat/sessions", ["id"=>"enc-1", "combatants"=>[["name"=>"fighter","dex"=>1,"roll"=>13],["name"=>"rogue","dex"=>3,"roll"=>14],["name"=>"mage","dex"=>2,"roll"=>14]]]);
+call_route("POST", "/v1/combat/sessions/enc-1/conditions", ["target"=>"fighter", "condition"=>"blessed", "duration_rounds"=>2]);
+for ($i = 0; $i < 5; $i++) { $last = call_route("POST", "/v1/combat/sessions/enc-1/advance"); }
+echo json_encode($last, JSON_UNESCAPED_SLASHES), "'"\\n\";
+@unlink(\"/tmp/codex-combat-state-test.json\");
+'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 300ms:
+No syntax errors detected in index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+ succeeded in 459ms:
+[200,{"id":"enc-1","round":2,"turn_index":2,"active":{"name":"fighter","score":14},"conditions":{"fighter":[]}}]
+
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  98 Jul 11 06:11 run.sh
+
+exec
+/bin/zsh -lc 'git diff -- index.php run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+exec
+/bin/zsh -lc "rg -n \"function publicConditions|hadActiveConditions|publicConditions\\(\" index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+114:function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+522:    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+540:        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+codex
+The local checks pass, and the direct combat sequence now returns `conditions: {"fighter":[]}` at the previously failing step. I’m doing one final workspace-scoped status check before wrapping up.
+exec
+/bin/zsh -lc 'git status --short . && git diff --no-index -- /dev/null index.php >/tmp/index.diff 2>/dev/null; true' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony
+ succeeded in 0ms:
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+codex
+Implemented the combat-state bugfix in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php:114).
+
+The fix preserves an empty condition list for the active combatant in an advance response when that combatant had conditions at turn start and they expired during decrement, producing:
+
+```json
+"conditions": {"fighter":[]}
+```
+
+`run.sh` is present, executable, and still starts the PHP server in the foreground on `127.0.0.1:$PORT`.
+
+Verification run:
+- `php -l index.php` passed.
+- Direct in-process combat flow reproduced the failing step and returned `conditions.fighter` as an empty array.
+- I did not start the HTTP server, per the contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+index 00134e6c81eea5f93bc575919ed07bd24549a846..abbaa6942216ce30f808aba5cdaad0dc9ed98b0f
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T130619Z_codex_gpt-5.5_php-symfony/index.php
+@@ -111,11 +111,11 @@
+     return ['name' => $combatant['name'], 'score' => $combatant['score']];
+ }
+ 
+-function publicConditions(array $session): array|stdClass
++function publicConditions(array $session, array $includeEmptyNames = []): array|stdClass
+ {
+     $conditions = [];
+     foreach ($session['conditions'] as $name => $entries) {
+-        if ($entries !== []) {
++        if ($entries !== [] || in_array($name, $includeEmptyNames, true)) {
+             $conditions[$name] = $entries;
+         }
+     }
+@@ -519,6 +519,7 @@
+     $session['turn_index'] = $nextTurnIndex;
+ 
+     $activeName = $session['order'][$session['turn_index']]['name'];
++    $hadActiveConditions = $session['conditions'][$activeName] !== [];
+     $remaining = [];
+     foreach ($session['conditions'][$activeName] as $condition) {
+         $condition['remaining_rounds']--;
+@@ -536,7 +537,7 @@
+         'round' => $session['round'],
+         'turn_index' => $session['turn_index'],
+         'active' => publicCombatant($session['order'][$session['turn_index']]),
+-        'conditions' => publicConditions($session),
++        'conditions' => publicConditions($session, $hadActiveConditions ? [$activeName] : []),
+     ]);
+ }
+ 
+
+tokens used
+27,085

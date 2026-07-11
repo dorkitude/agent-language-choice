@@ -1,0 +1,5618 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4e5a-f2fe-79c1-a9c6-ec70798034e6
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-nextjs
+        Language: typescript
+        Framework/runtime: nextjs
+        Lifecycle stage: campaign-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Next.js 16.2.10, React 19.2.7, and TypeScript 7.0.2. Implement endpoints as Next route handlers under app/.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 6: Campaign State APIs
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add SQLite-backed APIs for campaign state.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input, `404` for unknown records, and
+`409` for duplicate IDs.
+
+## Create Campaign
+
+`POST /v1/campaigns`
+
+Request:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+Response:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+## Add Character
+
+`POST /v1/campaigns/camp-1/characters`
+
+Request:
+
+```json
+{
+  "id": "char-1",
+  "name": "Nyx",
+  "level": 3,
+  "class": "rogue"
+}
+```
+
+Response:
+
+```json
+{"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+```
+
+## Add Session Log Event
+
+`POST /v1/campaigns/camp-1/events`
+
+Request:
+
+```json
+{"id": "evt-1", "kind": "note", "summary": "Nyx scouts the goblin trail."}
+```
+
+Response:
+
+```json
+{"id": "evt-1", "kind": "note"}
+```
+
+## Read Campaign State
+
+`GET /v1/campaigns/camp-1/state`
+
+Response:
+
+```json
+{
+  "id": "camp-1",
+  "name": "Lost Mine",
+  "dm": "dm",
+  "characters": [
+    {"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+  ],
+  "log_count": 1
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Next app and its API shape first, then add the campaign state routes in the same style while keeping `run.sh` intact.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 103ms:
+shots/02_core_bugfix/dndeval-core-report.json
+shots/02_core_bugfix/server_stderr.txt
+shots/02_core_bugfix/agent_stderr.txt
+shots/02_core_bugfix/server_stdout.txt
+shots/02_core_bugfix/PROMPT.md
+shots/02_core_bugfix/agent_stdout.txt
+shots/02_core_bugfix/agent_last_message.txt
+shots/02_core_bugfix/setup.json
+shots/09_compendium_maintenance/server_stderr.txt
+shots/09_compendium_maintenance/agent_stderr.txt
+shots/09_compendium_maintenance/dndeval-compendium-report.json
+shots/09_compendium_maintenance/server_stdout.txt
+shots/09_compendium_maintenance/PROMPT.md
+shots/09_compendium_maintenance/agent_stdout.txt
+shots/09_compendium_maintenance/agent_last_message.txt
+shots/09_compendium_maintenance/setup.json
+shots/06_auth-users_maintenance/server_stderr.txt
+shots/06_auth-users_maintenance/agent_stderr.txt
+shots/06_auth-users_maintenance/dndeval-auth-users-report.json
+shots/06_auth-users_maintenance/server_stdout.txt
+shots/06_auth-users_maintenance/PROMPT.md
+shots/06_auth-users_maintenance/agent_stdout.txt
+shots/06_auth-users_maintenance/agent_last_message.txt
+shots/06_auth-users_maintenance/setup.json
+shots/04_combat-state_maintenance/server_stderr.txt
+shots/04_combat-state_maintenance/agent_stderr.txt
+shots/04_combat-state_maintenance/server_stdout.txt
+shots/04_combat-state_maintenance/PROMPT.md
+shots/04_combat-state_maintenance/agent_stdout.txt
+shots/04_combat-state_maintenance/agent_last_message.txt
+shots/04_combat-state_maintenance/setup.json
+shots/04_combat-state_maintenance/dndeval-combat-state-report.json
+shots/08_sqlite-storage_maintenance/server_stderr.txt
+shots/08_sqlite-storage_maintenance/agent_stderr.txt
+shots/08_sqlite-storage_maintenance/server_stdout.txt
+shots/08_sqlite-storage_maintenance/PROMPT.md
+shots/08_sqlite-storage_maintenance/agent_stdout.txt
+shots/08_sqlite-storage_maintenance/agent_last_message.txt
+shots/08_sqlite-storage_maintenance/setup.json
+shots/08_sqlite-storage_maintenance/dndeval-sqlite-storage-report.json
+shots/10_campaign-state_maintenance/PROMPT.md
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/05_combat-state_bugfix/server_stderr.txt
+shots/05_combat-state_bugfix/agent_stderr.txt
+shots/05_combat-state_bugfix/server_stdout.txt
+shots/05_combat-state_bugfix/PROMPT.md
+shots/05_combat-state_bugfix/agent_stdout.txt
+shots/05_combat-state_bugfix/agent_last_message.txt
+shots/05_combat-state_bugfix/setup.json
+shots/05_combat-state_bugfix/dndeval-combat-state-report.json
+shots/07_auth-users_bugfix/server_stderr.txt
+shots/07_auth-users_bugfix/agent_stderr.txt
+shots/07_auth-users_bugfix/dndeval-auth-users-report.json
+shots/07_auth-users_bugfix/server_stdout.txt
+shots/07_auth-users_bugfix/PROMPT.md
+shots/07_auth-users_bugfix/agent_stdout.txt
+shots/07_auth-users_bugfix/agent_last_message.txt
+shots/07_auth-users_bugfix/setup.json
+shots/03_characters_maintenance/server_stderr.txt
+shots/03_characters_maintenance/agent_stderr.txt
+shots/03_characters_maintenance/server_stdout.txt
+shots/03_characters_maintenance/PROMPT.md
+shots/03_characters_maintenance/agent_stdout.txt
+shots/03_characters_maintenance/dndeval-characters-report.json
+shots/03_characters_maintenance/agent_last_message.txt
+shots/03_characters_maintenance/setup.json
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+game.db
+instrumentation.ts
+agent_stderr.txt
+tsconfig.json
+dndeval-auth-users-report.json
+package.json
+package-lock.json
+lifecycle-result.json
+dndeval-compendium-report.json
+run.sh
+next-env.d.ts
+server_stdout.txt
+PROMPT.md
+next.config.js
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+app/page.tsx
+app/api.ts
+app/health/route.ts
+app/v1/characters/proficiency/route.ts
+app/v1/characters/rules.ts
+app/v1/characters/derived-stats/route.ts
+app/v1/characters/ability-modifier/route.ts
+app/v1/initiative/order/route.ts
+app/v1/compendium/monsters/[slug]/route.ts
+app/v1/compendium/monsters/route.ts
+app/v1/compendium/items/[slug]/route.ts
+app/v1/compendium/items/route.ts
+app/v1/compendium/data.ts
+app/v1/encounters/adjusted-xp/route.ts
+app/v1/storage/db.ts
+app/v1/storage/status/route.ts
+app/v1/storage/reset/route.ts
+app/v1/dice/stats/route.ts
+app/v1/checks/ability/route.ts
+app/v1/auth/login/route.ts
+app/v1/auth/users.ts
+dndeval-combat-state-report.json
+setup.json
+dndeval-sqlite-storage-report.json
+app/v1/auth/register/route.ts
+app/v1/combat/sessions/[id]/conditions/route.ts
+app/v1/combat/sessions/[id]/advance/route.ts
+app/v1/combat/sessions/route.ts
+app/v1/combat/state.ts
+
+codex
+The repo already has route handlers and a SQLite storage layer, so I’m checking those before adding tables to avoid changing prior endpoint behavior.
+exec
+/bin/zsh -lc "sed -n '1,160p' app/v1/combat/sessions/route.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc "sed -n '1,220p' app/api.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { badRequest, isFiniteNumber, isRecord, json, readJson } from "../../../api.js";
+import { type CombatSession, sessions, sessionSummary } from "../state.js";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const body = await readJson(request);
+  if (!isRecord(body) || typeof body.id !== "string" || !Array.isArray(body.combatants) || body.combatants.length === 0) {
+    return badRequest();
+  }
+
+  if (sessions.has(body.id)) {
+    return badRequest();
+  }
+
+  const order = [];
+  for (const combatant of body.combatants) {
+    if (
+      !isRecord(combatant) ||
+      typeof combatant.name !== "string" ||
+      !isFiniteNumber(combatant.dex) ||
+      !isFiniteNumber(combatant.roll)
+    ) {
+      return badRequest();
+    }
+
+    order.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  order.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  const session: CombatSession = {
+    id: body.id,
+    round: 1,
+    turn_index: 0,
+    order,
+    conditions: new Map(),
+  };
+  sessions.set(session.id, session);
+
+  return json(sessionSummary(session));
+}
+
+ succeeded in 0ms:
+export function json(data: unknown, status = 200): Response {
+  return Response.json(data, { status });
+}
+
+export function badRequest(): Response {
+  return json({ error: "bad_request" }, 400);
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+export async function readJson(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return undefined;
+  }
+}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' app/v1/combat/state.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { db } from "../storage/db.js";
+
+export type InitiativeEntry = {
+  name: string;
+  dex: number;
+  score: number;
+};
+
+export type Condition = {
+  condition: string;
+  remaining_rounds: number;
+};
+
+export type CombatSession = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order: InitiativeEntry[];
+  conditions: Map<string, Condition[]>;
+};
+
+function parseSession(row: Record<string, unknown>): CombatSession | undefined {
+  if (
+    typeof row.id !== "string" ||
+    typeof row.round !== "number" ||
+    typeof row.turn_index !== "number" ||
+    typeof row.order_json !== "string" ||
+    typeof row.conditions_json !== "string"
+  ) {
+    return undefined;
+  }
+
+  const order = JSON.parse(row.order_json) as InitiativeEntry[];
+  const conditionEntries = JSON.parse(row.conditions_json) as [string, Condition[]][];
+
+  return {
+    id: row.id,
+    round: row.round,
+    turn_index: row.turn_index,
+    order,
+    conditions: new Map(conditionEntries),
+  };
+}
+
+export const sessions = {
+  get(id: string): CombatSession | undefined {
+    const row = db()
+      .prepare("SELECT id, round, turn_index, order_json, conditions_json FROM combat_sessions WHERE id = ?")
+      .get(id);
+
+    return row === undefined ? undefined : parseSession(row);
+  },
+
+  has(id: string): boolean {
+    return this.get(id) !== undefined;
+  },
+
+  set(id: string, session: CombatSession): void {
+    db()
+      .prepare(
+        `INSERT OR REPLACE INTO combat_sessions (id, round, turn_index, order_json, conditions_json)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        session.round,
+        session.turn_index,
+        JSON.stringify(session.order),
+        JSON.stringify([...session.conditions.entries()]),
+      );
+  },
+};
+
+export function publicOrder(order: InitiativeEntry[]) {
+  return order.map(({ name, score }) => ({ name, score }));
+}
+
+export function sessionSummary(session: CombatSession) {
+  const active = session.order[session.turn_index];
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: { name: active.name, score: active.score },
+    order: publicOrder(session.order),
+  };
+}
+
+export function conditionListFor(session: CombatSession, target: string): Condition[] {
+  return session.conditions.get(target) ?? [];
+}
+
+export function publicConditions(session: CombatSession): Record<string, Condition[]> {
+  const conditions: Record<string, Condition[]> = {};
+
+  for (const [target, targetConditions] of session.conditions) {
+    conditions[target] = targetConditions.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds }));
+  }
+
+  return conditions;
+}
+
+exec
+/bin/zsh -lc "sed -n '1,240p' app/v1/storage/db.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { DatabaseSync } from "node:sqlite";
+import { join } from "node:path";
+
+const SCHEMA_VERSION = 1;
+const DB_PATH = join(process.cwd(), "game.db");
+
+let database: DatabaseSync | undefined;
+
+export function db(): DatabaseSync {
+  if (database === undefined) {
+    database = new DatabaseSync(DB_PATH);
+    initializeSchema();
+  }
+
+  return database;
+}
+
+export function initializeSchema(): void {
+  const connection = database ?? new DatabaseSync(DB_PATH);
+  database = connection;
+
+  connection.exec(`
+    CREATE TABLE IF NOT EXISTS metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      username TEXT PRIMARY KEY,
+      role TEXT NOT NULL,
+      password_hash TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS combat_sessions (
+      id TEXT PRIMARY KEY,
+      round INTEGER NOT NULL,
+      turn_index INTEGER NOT NULL,
+      order_json TEXT NOT NULL,
+      conditions_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS monsters (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      cr TEXT NOT NULL,
+      armor_class INTEGER NOT NULL,
+      hit_points INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS monster_tags (
+      monster_slug TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      tag TEXT NOT NULL,
+      PRIMARY KEY (monster_slug, position),
+      FOREIGN KEY (monster_slug) REFERENCES monsters(slug) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS items (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      rarity TEXT NOT NULL,
+      cost_gp INTEGER NOT NULL
+    );
+  `);
+
+  connection
+    .prepare("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)")
+    .run(String(SCHEMA_VERSION));
+}
+
+export function resetStorage(): void {
+  const connection = db();
+  connection.exec(`
+    DROP TABLE IF EXISTS monster_tags;
+    DROP TABLE IF EXISTS monsters;
+    DROP TABLE IF EXISTS items;
+    DROP TABLE IF EXISTS combat_sessions;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS metadata;
+  `);
+  initializeSchema();
+}
+
+export function storageStatus() {
+  initializeSchema();
+  const row = db().prepare("SELECT value FROM metadata WHERE key = 'schema_version'").get();
+  const schemaVersion = row === undefined ? SCHEMA_VERSION : Number(row.value);
+
+  return {
+    driver: "sqlite",
+    schema_version: schemaVersion,
+    initialized: schemaVersion === SCHEMA_VERSION,
+  };
+}
+
+export { SCHEMA_VERSION };
+
+exec
+/bin/zsh -lc "sed -n '1,120p' app/v1/storage/reset/route.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { json } from "../../../api.js";
+import { resetStorage, SCHEMA_VERSION } from "../db.js";
+
+export const runtime = "nodejs";
+
+export function POST() {
+  resetStorage();
+  return json({ ok: true, schema_version: SCHEMA_VERSION });
+}
+
+exec
+/bin/zsh -lc "cat package.json && sed -n '1,80p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bash ./run.sh"
+  },
+  "dependencies": {
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}
+#!/usr/bin/env bash
+set -euo pipefail
+exec ./node_modules/.bin/next dev -H 127.0.0.1 -p "$PORT"
+
+codex
+The storage reset currently owns the schema lifecycle, so the campaign tables need to be included there as well as initialized on demand. I’m going to add a small campaign state module and three route handlers, then run type/lint-equivalent checks and targeted HTTP smoke tests without leaving the server running.
+exec
+/bin/zsh -lc "sed -n '1,180p' app/v1/combat/sessions/[id]/conditions/route.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc "sed -n '1,160p' app/v1/auth/register/route.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { badRequest, isRecord, json, readJson } from "../../../api.js";
+import { hashPassword, isValidPassword, isValidRole, isValidUsername, users } from "../users.js";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  const body = await readJson(request);
+  if (
+    !isRecord(body) ||
+    !isValidUsername(body.username) ||
+    !isValidPassword(body.password) ||
+    !isValidRole(body.role)
+  ) {
+    return badRequest();
+  }
+
+  if (users.has(body.username)) {
+    return json({ error: "duplicate_username" }, 409);
+  }
+
+  users.set(body.username, {
+    username: body.username,
+    role: body.role,
+    passwordHash: hashPassword(body.password),
+  });
+
+  return json({
+    username: body.username,
+    role: body.role,
+  }, 201);
+}
+
+ exited 1 in 0ms:
+zsh:1: no matches found: app/v1/combat/sessions/[id]/conditions/route.ts
+
+exec
+/bin/zsh -lc "sed -n '1,200p' tsconfig.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc "sed -n '1,180p' app/v1/combat/sessions/[id]/advance/route.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "types": [
+      "node"
+    ],
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "instrumentation.ts",
+    "vite.config.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
+
+ exited 1 in 0ms:
+zsh:1: no matches found: app/v1/combat/sessions/[id]/advance/route.ts
+
+codex
+One shell glob hit the dynamic route brackets, so I’m re-reading those files with quoted paths before patching.
+exec
+/bin/zsh -lc "sed -n '1,220p' 'app/v1/combat/sessions/[id]/conditions/route.ts'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc "sed -n '1,180p' 'app/v1/combat/sessions/[id]/advance/route.ts'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { badRequest, isRecord, json, readJson } from "../../../../../api.js";
+import { conditionListFor, sessions } from "../../../state.js";
+
+export const runtime = "nodejs";
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+export async function POST(request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const session = sessions.get(id);
+  if (session === undefined) {
+    return json({ error: "not_found" }, 404);
+  }
+
+  const body = await readJson(request);
+  if (
+    !isRecord(body) ||
+    typeof body.target !== "string" ||
+    typeof body.condition !== "string" ||
+    typeof body.duration_rounds !== "number" ||
+    !Number.isSafeInteger(body.duration_rounds) ||
+    body.duration_rounds <= 0
+  ) {
+    return badRequest();
+  }
+
+  if (!session.order.some((combatant) => combatant.name === body.target)) {
+    return badRequest();
+  }
+
+  const conditions = conditionListFor(session, body.target);
+  conditions.push({
+    condition: body.condition,
+    remaining_rounds: body.duration_rounds,
+  });
+  session.conditions.set(body.target, conditions);
+  sessions.set(session.id, session);
+
+  return json({
+    target: body.target,
+    conditions,
+  });
+}
+
+ succeeded in 0ms:
+import { json } from "../../../../../api.js";
+import { publicConditions, sessions } from "../../../state.js";
+
+export const runtime = "nodejs";
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+export async function POST(_request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const session = sessions.get(id);
+  if (session === undefined) {
+    return json({ error: "not_found" }, 404);
+  }
+
+  session.turn_index += 1;
+  if (session.turn_index >= session.order.length) {
+    session.turn_index = 0;
+    session.round += 1;
+  }
+
+  const active = session.order[session.turn_index];
+  const activeConditions = session.conditions.get(active.name);
+  if (activeConditions !== undefined) {
+    const remainingConditions = activeConditions
+      .map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds: remaining_rounds - 1 }))
+      .filter(({ remaining_rounds }) => remaining_rounds > 0);
+
+    session.conditions.set(active.name, remainingConditions);
+  }
+
+  sessions.set(session.id, session);
+
+  return json({
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: { name: active.name, score: active.score },
+    conditions: publicConditions(session),
+  });
+}
+
+exec
+/bin/zsh -lc "sed -n '1,200p' app/v1/auth/users.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { db } from "../storage/db.js";
+
+export type Role = "dm" | "player";
+
+export type User = {
+  username: string;
+  role: Role;
+  passwordHash: string;
+};
+
+const SCRYPT_KEY_LENGTH = 64;
+
+export const users = {
+  get(username: string): User | undefined {
+    const row = db()
+      .prepare("SELECT username, role, password_hash FROM users WHERE username = ?")
+      .get(username);
+
+    if (
+      row === undefined ||
+      typeof row.username !== "string" ||
+      (row.role !== "dm" && row.role !== "player") ||
+      typeof row.password_hash !== "string"
+    ) {
+      return undefined;
+    }
+
+    return {
+      username: row.username,
+      role: row.role,
+      passwordHash: row.password_hash,
+    };
+  },
+
+  has(username: string): boolean {
+    return this.get(username) !== undefined;
+  },
+
+  set(username: string, user: User): void {
+    db()
+      .prepare("INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)")
+      .run(username, user.role, user.passwordHash);
+  },
+};
+
+export function isValidUsername(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
+}
+
+export function isValidPassword(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 8;
+}
+
+export function isValidRole(value: unknown): value is Role {
+  return value === "dm" || value === "player";
+}
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, SCRYPT_KEY_LENGTH).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  const [salt, expectedHex] = storedHash.split(":");
+  if (!salt || !expectedHex) {
+    return false;
+  }
+
+  const expected = Buffer.from(expectedHex, "hex");
+  const actual = scryptSync(password, salt, expected.length);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+codex
+I’m going to extend the schema with `campaigns`, `campaign_characters`, and `campaign_events`, and use plain SQLite operations with explicit duplicate/not-found handling.
+exec
+/bin/zsh -lc "mkdir -p app/v1/campaigns/'[id]'/characters app/v1/campaigns/'[id]'/events app/v1/campaigns/'[id]'/state" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+codex
+Next I’m applying the actual route and storage changes, keeping validation narrow to the fields required by the contract.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+The feature is in place now. I’m running TypeScript checks next because the Node SQLite row typings can be particular under strict mode.
+exec
+/bin/zsh -lc './node_modules/.bin/tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+ succeeded in 366ms:
+codex
+TypeScript passes. I’m checking the final diff and `run.sh` status now, then I’ll stop without launching the HTTP server per the stage contract.
+exec
+/bin/zsh -lc "ls -l run.sh && sed -n '1,40p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  96 Jul 10 16:01 run.sh
+#!/usr/bin/env bash
+set -euo pipefail
+exec ./node_modules/.bin/next dev -H 127.0.0.1 -p "$PORT"
+
+exec
+/bin/zsh -lc 'git diff -- app/v1/storage/db.ts app/v1/campaigns run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+Because this benchmark directory is untracked inside a larger worktree, `git diff` did not show the patch. I’ve still verified the touched files directly and am running a Next production build for framework-level route validation without starting a server.
+exec
+/bin/zsh -lc './node_modules/.bin/next build' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+`next build` compiled the app, then Next attempted to auto-install TypeScript despite the pinned package already being present. I’m waiting for that command to settle and will not leave it running.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+The build is stalled in Next’s dependency auto-install step, so I’m interrupting it. The earlier compile phase completed, and `tsc --noEmit` already passed with the pinned TypeScript.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+ exited 130 in 67012ms:
+▲ Next.js 16.2.10 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 572ms
+  Running TypeScript ...
+It looks like you're trying to use TypeScript but do not have the required package(s) installed.
+Installing dependencies
+
+If you are not trying to use TypeScript, please remove the tsconfig.json file from your package root (and any TypeScript files in your app and pages directories).
+
+
+Installing devDependencies (npm):
+- typescript
+
+
+codex
+I’ve stopped the stalled build. I’m checking for any unintended package or generated-file changes from that interrupted auto-install.
+exec
+/bin/zsh -lc 'test -d .next && find .next -maxdepth 2 -type f | head -20 || true' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc 'find app/v1/campaigns -type f -maxdepth 5 -print | sort' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+app/v1/campaigns/[id]/characters/route.ts
+app/v1/campaigns/[id]/events/route.ts
+app/v1/campaigns/[id]/state/route.ts
+app/v1/campaigns/route.ts
+app/v1/campaigns/state.ts
+
+ succeeded in 0ms:
+.next/fallback-build-manifest.json
+.next/types/cache-life.d.ts
+.next/types/routes.d.ts
+.next/types/validator.ts
+.next/cache/.rscinfo
+.next/cache/.previewinfo
+.next/turbopack
+.next/build-manifest.json
+.next/server/pages-manifest.json
+.next/server/instrumentation.js.nft.json
+.next/server/next-font-manifest.js
+.next/server/interception-route-rewrite-manifest.js
+.next/server/server-reference-manifest.js
+.next/server/middleware-manifest.json
+.next/server/instrumentation.js
+.next/server/instrumentation.js.map
+.next/server/app-paths-manifest.json
+.next/server/middleware-build-manifest.js
+.next/server/server-reference-manifest.json
+.next/server/next-font-manifest.json
+
+exec
+/bin/zsh -lc 'git status --short . package.json package-lock.json .next' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+The interrupted build left `.next` artifacts, which are normal generated output. I’m doing one final `tsc --noEmit` pass now that Next generated route types exist.
+exec
+/bin/zsh -lc './node_modules/.bin/tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+ succeeded in 379ms:
+codex
+The final TypeScript pass is clean. I’m grabbing line references for the files changed so the closeout is precise.
+exec
+/bin/zsh -lc "nl -ba app/v1/storage/db.ts | sed -n '1,180p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc "nl -ba app/v1/campaigns/route.ts 'app/v1/campaigns/[id]/characters/route.ts' 'app/v1/campaigns/[id]/events/route.ts' 'app/v1/campaigns/[id]/state/route.ts'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ exited 1 in 0ms:
+usage: nl [-p] [-b type] [-d delim] [-f type] [-h type] [-i incr] [-l num]
+          [-n format] [-s sep] [-v startnum] [-w width] [file]
+
+ succeeded in 0ms:
+     1	import { DatabaseSync } from "node:sqlite";
+     2	import { join } from "node:path";
+     3	
+     4	const SCHEMA_VERSION = 1;
+     5	const DB_PATH = join(process.cwd(), "game.db");
+     6	
+     7	let database: DatabaseSync | undefined;
+     8	
+     9	export function db(): DatabaseSync {
+    10	  if (database === undefined) {
+    11	    database = new DatabaseSync(DB_PATH);
+    12	    initializeSchema();
+    13	  }
+    14	
+    15	  return database;
+    16	}
+    17	
+    18	export function initializeSchema(): void {
+    19	  const connection = database ?? new DatabaseSync(DB_PATH);
+    20	  database = connection;
+    21	
+    22	  connection.exec(`
+    23	    CREATE TABLE IF NOT EXISTS metadata (
+    24	      key TEXT PRIMARY KEY,
+    25	      value TEXT NOT NULL
+    26	    );
+    27	
+    28	    CREATE TABLE IF NOT EXISTS users (
+    29	      username TEXT PRIMARY KEY,
+    30	      role TEXT NOT NULL,
+    31	      password_hash TEXT NOT NULL
+    32	    );
+    33	
+    34	    CREATE TABLE IF NOT EXISTS combat_sessions (
+    35	      id TEXT PRIMARY KEY,
+    36	      round INTEGER NOT NULL,
+    37	      turn_index INTEGER NOT NULL,
+    38	      order_json TEXT NOT NULL,
+    39	      conditions_json TEXT NOT NULL
+    40	    );
+    41	
+    42	    CREATE TABLE IF NOT EXISTS monsters (
+    43	      slug TEXT PRIMARY KEY,
+    44	      name TEXT NOT NULL,
+    45	      cr TEXT NOT NULL,
+    46	      armor_class INTEGER NOT NULL,
+    47	      hit_points INTEGER NOT NULL
+    48	    );
+    49	
+    50	    CREATE TABLE IF NOT EXISTS monster_tags (
+    51	      monster_slug TEXT NOT NULL,
+    52	      position INTEGER NOT NULL,
+    53	      tag TEXT NOT NULL,
+    54	      PRIMARY KEY (monster_slug, position),
+    55	      FOREIGN KEY (monster_slug) REFERENCES monsters(slug) ON DELETE CASCADE
+    56	    );
+    57	
+    58	    CREATE TABLE IF NOT EXISTS items (
+    59	      slug TEXT PRIMARY KEY,
+    60	      name TEXT NOT NULL,
+    61	      type TEXT NOT NULL,
+    62	      rarity TEXT NOT NULL,
+    63	      cost_gp INTEGER NOT NULL
+    64	    );
+    65	
+    66	    CREATE TABLE IF NOT EXISTS campaigns (
+    67	      id TEXT PRIMARY KEY,
+    68	      name TEXT NOT NULL,
+    69	      dm TEXT NOT NULL
+    70	    );
+    71	
+    72	    CREATE TABLE IF NOT EXISTS campaign_characters (
+    73	      id TEXT NOT NULL,
+    74	      campaign_id TEXT NOT NULL,
+    75	      name TEXT NOT NULL,
+    76	      level INTEGER NOT NULL,
+    77	      class TEXT NOT NULL,
+    78	      PRIMARY KEY (campaign_id, id),
+    79	      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    80	    );
+    81	
+    82	    CREATE TABLE IF NOT EXISTS campaign_events (
+    83	      id TEXT NOT NULL,
+    84	      campaign_id TEXT NOT NULL,
+    85	      kind TEXT NOT NULL,
+    86	      summary TEXT NOT NULL,
+    87	      PRIMARY KEY (campaign_id, id),
+    88	      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    89	    );
+    90	  `);
+    91	
+    92	  connection
+    93	    .prepare("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)")
+    94	    .run(String(SCHEMA_VERSION));
+    95	}
+    96	
+    97	export function resetStorage(): void {
+    98	  const connection = db();
+    99	  connection.exec(`
+   100	    DROP TABLE IF EXISTS monster_tags;
+   101	    DROP TABLE IF EXISTS monsters;
+   102	    DROP TABLE IF EXISTS items;
+   103	    DROP TABLE IF EXISTS campaign_events;
+   104	    DROP TABLE IF EXISTS campaign_characters;
+   105	    DROP TABLE IF EXISTS campaigns;
+   106	    DROP TABLE IF EXISTS combat_sessions;
+   107	    DROP TABLE IF EXISTS users;
+   108	    DROP TABLE IF EXISTS metadata;
+   109	  `);
+   110	  initializeSchema();
+   111	}
+   112	
+   113	export function storageStatus() {
+   114	  initializeSchema();
+   115	  const row = db().prepare("SELECT value FROM metadata WHERE key = 'schema_version'").get();
+   116	  const schemaVersion = row === undefined ? SCHEMA_VERSION : Number(row.value);
+   117	
+   118	  return {
+   119	    driver: "sqlite",
+   120	    schema_version: schemaVersion,
+   121	    initialized: schemaVersion === SCHEMA_VERSION,
+   122	  };
+   123	}
+   124	
+   125	export { SCHEMA_VERSION };
+
+exec
+/bin/zsh -lc "nl -ba app/v1/campaigns/state.ts | sed -n '1,220p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+     1	import { db } from "../storage/db.js";
+     2	
+     3	export type Campaign = {
+     4	  id: string;
+     5	  name: string;
+     6	  dm: string;
+     7	};
+     8	
+     9	export type CampaignCharacter = {
+    10	  id: string;
+    11	  name: string;
+    12	  level: number;
+    13	  class: string;
+    14	};
+    15	
+    16	export type CampaignEvent = {
+    17	  id: string;
+    18	  kind: string;
+    19	  summary: string;
+    20	};
+    21	
+    22	function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
+    23	  if (
+    24	    row === undefined ||
+    25	    typeof row.id !== "string" ||
+    26	    typeof row.name !== "string" ||
+    27	    typeof row.dm !== "string"
+    28	  ) {
+    29	    return undefined;
+    30	  }
+    31	
+    32	  return {
+    33	    id: row.id,
+    34	    name: row.name,
+    35	    dm: row.dm,
+    36	  };
+    37	}
+    38	
+    39	function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
+    40	  if (
+    41	    typeof row.id !== "string" ||
+    42	    typeof row.name !== "string" ||
+    43	    typeof row.level !== "number" ||
+    44	    typeof row.class !== "string"
+    45	  ) {
+    46	    return undefined;
+    47	  }
+    48	
+    49	  return {
+    50	    id: row.id,
+    51	    name: row.name,
+    52	    level: row.level,
+    53	    class: row.class,
+    54	  };
+    55	}
+    56	
+    57	export const campaigns = {
+    58	  get(id: string): Campaign | undefined {
+    59	    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
+    60	    return parseCampaign(row);
+    61	  },
+    62	
+    63	  has(id: string): boolean {
+    64	    return this.get(id) !== undefined;
+    65	  },
+    66	
+    67	  create(campaign: Campaign): void {
+    68	    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
+    69	  },
+    70	};
+    71	
+    72	export const campaignCharacters = {
+    73	  has(campaignId: string, id: string): boolean {
+    74	    const row = db()
+    75	      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
+    76	      .get(campaignId, id);
+    77	
+    78	    return row !== undefined;
+    79	  },
+    80	
+    81	  create(campaignId: string, character: CampaignCharacter): void {
+    82	    db()
+    83	      .prepare(
+    84	        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
+    85	         VALUES (?, ?, ?, ?, ?)`,
+    86	      )
+    87	      .run(character.id, campaignId, character.name, character.level, character.class);
+    88	  },
+    89	
+    90	  list(campaignId: string): CampaignCharacter[] {
+    91	    const rows = db()
+    92	      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
+    93	      .all(campaignId);
+    94	
+    95	    return rows.flatMap((row) => {
+    96	      const character = parseCharacter(row);
+    97	      return character === undefined ? [] : [character];
+    98	    });
+    99	  },
+   100	};
+   101	
+   102	export const campaignEvents = {
+   103	  has(campaignId: string, id: string): boolean {
+   104	    const row = db()
+   105	      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
+   106	      .get(campaignId, id);
+   107	
+   108	    return row !== undefined;
+   109	  },
+   110	
+   111	  create(campaignId: string, event: CampaignEvent): void {
+   112	    db()
+   113	      .prepare(
+   114	        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
+   115	         VALUES (?, ?, ?, ?)`,
+   116	      )
+   117	      .run(event.id, campaignId, event.kind, event.summary);
+   118	  },
+   119	
+   120	  count(campaignId: string): number {
+   121	    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
+   122	    if (row === undefined || typeof row.log_count !== "number") {
+   123	      return 0;
+   124	    }
+   125	
+   126	    return row.log_count;
+   127	  },
+   128	};
+   129	
+   130	export function isValidId(value: unknown): value is string {
+   131	  return typeof value === "string" && value.length > 0;
+   132	}
+   133	
+   134	export function isValidText(value: unknown): value is string {
+   135	  return typeof value === "string" && value.length > 0;
+   136	}
+   137	
+   138	export function isValidLevel(value: unknown): value is number {
+   139	  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+   140	}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+The line-number command only accepted one file at a time on this system, so I’m re-running that for the route files individually.
+exec
+/bin/zsh -lc "nl -ba 'app/v1/campaigns/[id]/characters/route.ts'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+exec
+/bin/zsh -lc 'nl -ba app/v1/campaigns/route.ts' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+     1	import { badRequest, isRecord, json, readJson } from "../../api.js";
+     2	import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
+     3	
+     4	export const runtime = "nodejs";
+     5	
+     6	export async function POST(request: Request) {
+     7	  const body = await readJson(request);
+     8	  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
+     9	    return badRequest();
+    10	  }
+    11	
+    12	  if (campaigns.has(body.id)) {
+    13	    return json({ error: "duplicate_id" }, 409);
+    14	  }
+    15	
+    16	  const campaign: Campaign = {
+    17	    id: body.id,
+    18	    name: body.name,
+    19	    dm: body.dm,
+    20	  };
+    21	  campaigns.create(campaign);
+    22	
+    23	  return json(campaign);
+    24	}
+
+ succeeded in 0ms:
+     1	import { badRequest, isRecord, json, readJson } from "../../../../api.js";
+     2	import {
+     3	  campaignCharacters,
+     4	  campaigns,
+     5	  isValidId,
+     6	  isValidLevel,
+     7	  isValidText,
+     8	  type CampaignCharacter,
+     9	} from "../../state.js";
+    10	
+    11	export const runtime = "nodejs";
+    12	
+    13	type RouteContext = {
+    14	  params: Promise<{ id: string }>;
+    15	};
+    16	
+    17	export async function POST(request: Request, context: RouteContext) {
+    18	  const { id } = await context.params;
+    19	  if (campaigns.get(id) === undefined) {
+    20	    return json({ error: "not_found" }, 404);
+    21	  }
+    22	
+    23	  const body = await readJson(request);
+    24	  if (
+    25	    !isRecord(body) ||
+    26	    !isValidId(body.id) ||
+    27	    !isValidText(body.name) ||
+    28	    !isValidLevel(body.level) ||
+    29	    !isValidText(body.class)
+    30	  ) {
+    31	    return badRequest();
+    32	  }
+    33	
+    34	  if (campaignCharacters.has(id, body.id)) {
+    35	    return json({ error: "duplicate_id" }, 409);
+    36	  }
+    37	
+    38	  const character: CampaignCharacter = {
+    39	    id: body.id,
+    40	    name: body.name,
+    41	    level: body.level,
+    42	    class: body.class,
+    43	  };
+    44	  campaignCharacters.create(id, character);
+    45	
+    46	  return json(character);
+    47	}
+
+exec
+/bin/zsh -lc "nl -ba 'app/v1/campaigns/[id]/events/route.ts'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+     1	import { badRequest, isRecord, json, readJson } from "../../../../api.js";
+     2	import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
+     3	
+     4	export const runtime = "nodejs";
+     5	
+     6	type RouteContext = {
+     7	  params: Promise<{ id: string }>;
+     8	};
+     9	
+    10	export async function POST(request: Request, context: RouteContext) {
+    11	  const { id } = await context.params;
+    12	  if (campaigns.get(id) === undefined) {
+    13	    return json({ error: "not_found" }, 404);
+    14	  }
+    15	
+    16	  const body = await readJson(request);
+    17	  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
+    18	    return badRequest();
+    19	  }
+    20	
+    21	  if (campaignEvents.has(id, body.id)) {
+    22	    return json({ error: "duplicate_id" }, 409);
+    23	  }
+    24	
+    25	  const event: CampaignEvent = {
+    26	    id: body.id,
+    27	    kind: body.kind,
+    28	    summary: body.summary,
+    29	  };
+    30	  campaignEvents.create(id, event);
+    31	
+    32	  return json({
+    33	    id: event.id,
+    34	    kind: event.kind,
+    35	  });
+    36	}
+
+exec
+/bin/zsh -lc "nl -ba 'app/v1/campaigns/[id]/state/route.ts'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs
+ succeeded in 0ms:
+     1	import { json } from "../../../../api.js";
+     2	import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
+     3	
+     4	export const runtime = "nodejs";
+     5	
+     6	type RouteContext = {
+     7	  params: Promise<{ id: string }>;
+     8	};
+     9	
+    10	export async function GET(_request: Request, context: RouteContext) {
+    11	  const { id } = await context.params;
+    12	  const campaign = campaigns.get(id);
+    13	  if (campaign === undefined) {
+    14	    return json({ error: "not_found" }, 404);
+    15	  }
+    16	
+    17	  return json({
+    18	    id: campaign.id,
+    19	    name: campaign.name,
+    20	    dm: campaign.dm,
+    21	    characters: campaignCharacters.list(id),
+    22	    log_count: campaignEvents.count(id),
+    23	  });
+    24	}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+codex
+Implemented campaign state APIs with SQLite-backed tables and Next route handlers.
+
+Changed:
+- Added campaign tables to [db.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts:66)
+- Added campaign storage helpers in [state.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts:57)
+- Added:
+  - `POST /v1/campaigns`
+  - `POST /v1/campaigns/[id]/characters`
+  - `POST /v1/campaigns/[id]/events`
+  - `GET /v1/campaigns/[id]/state`
+
+Validation:
+- `./node_modules/.bin/tsc --noEmit` passes.
+- I did not start the server, per the stage contract.
+- `run.sh` already starts Next in the foreground on `127.0.0.1` using `$PORT`.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f1c2eb78a2f09ca53efc7beb08257c1ce409c63
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/characters/route.ts
+@@ -0,0 +1,47 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import {
++  campaignCharacters,
++  campaigns,
++  isValidId,
++  isValidLevel,
++  isValidText,
++  type CampaignCharacter,
++} from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (
++    !isRecord(body) ||
++    !isValidId(body.id) ||
++    !isValidText(body.name) ||
++    !isValidLevel(body.level) ||
++    !isValidText(body.class)
++  ) {
++    return badRequest();
++  }
++
++  if (campaignCharacters.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const character: CampaignCharacter = {
++    id: body.id,
++    name: body.name,
++    level: body.level,
++    class: body.class,
++  };
++  campaignCharacters.create(id, character);
++
++  return json(character);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f6a6ee0e86532282e4f90bab5ecc4b45c272357
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/events/route.ts
+@@ -0,0 +1,36 @@
++import { badRequest, isRecord, json, readJson } from "../../../../api.js";
++import { campaignEvents, campaigns, isValidId, isValidText, type CampaignEvent } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function POST(request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  if (campaigns.get(id) === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.kind) || !isValidText(body.summary)) {
++    return badRequest();
++  }
++
++  if (campaignEvents.has(id, body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const event: CampaignEvent = {
++    id: body.id,
++    kind: body.kind,
++    summary: body.summary,
++  };
++  campaignEvents.create(id, event);
++
++  return json({
++    id: event.id,
++    kind: event.kind,
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..239ad6bb0bd8b72a60be974c2069f28b2096fb27
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/[id]/state/route.ts
+@@ -0,0 +1,24 @@
++import { json } from "../../../../api.js";
++import { campaignCharacters, campaignEvents, campaigns } from "../../state.js";
++
++export const runtime = "nodejs";
++
++type RouteContext = {
++  params: Promise<{ id: string }>;
++};
++
++export async function GET(_request: Request, context: RouteContext) {
++  const { id } = await context.params;
++  const campaign = campaigns.get(id);
++  if (campaign === undefined) {
++    return json({ error: "not_found" }, 404);
++  }
++
++  return json({
++    id: campaign.id,
++    name: campaign.name,
++    dm: campaign.dm,
++    characters: campaignCharacters.list(id),
++    log_count: campaignEvents.count(id),
++  });
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f37d904ddf5485e992a808b786cdbeae164f76c1
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/route.ts
+@@ -0,0 +1,24 @@
++import { badRequest, isRecord, json, readJson } from "../../api.js";
++import { campaigns, isValidId, isValidText, type Campaign } from "./state.js";
++
++export const runtime = "nodejs";
++
++export async function POST(request: Request) {
++  const body = await readJson(request);
++  if (!isRecord(body) || !isValidId(body.id) || !isValidText(body.name) || !isValidText(body.dm)) {
++    return badRequest();
++  }
++
++  if (campaigns.has(body.id)) {
++    return json({ error: "duplicate_id" }, 409);
++  }
++
++  const campaign: Campaign = {
++    id: body.id,
++    name: body.name,
++    dm: body.dm,
++  };
++  campaigns.create(campaign);
++
++  return json(campaign);
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..eaecc83a508d3fa375829ca3a739132023f3807f
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/campaigns/state.ts
+@@ -0,0 +1,140 @@
++import { db } from "../storage/db.js";
++
++export type Campaign = {
++  id: string;
++  name: string;
++  dm: string;
++};
++
++export type CampaignCharacter = {
++  id: string;
++  name: string;
++  level: number;
++  class: string;
++};
++
++export type CampaignEvent = {
++  id: string;
++  kind: string;
++  summary: string;
++};
++
++function parseCampaign(row: Record<string, unknown> | undefined): Campaign | undefined {
++  if (
++    row === undefined ||
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.dm !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    dm: row.dm,
++  };
++}
++
++function parseCharacter(row: Record<string, unknown>): CampaignCharacter | undefined {
++  if (
++    typeof row.id !== "string" ||
++    typeof row.name !== "string" ||
++    typeof row.level !== "number" ||
++    typeof row.class !== "string"
++  ) {
++    return undefined;
++  }
++
++  return {
++    id: row.id,
++    name: row.name,
++    level: row.level,
++    class: row.class,
++  };
++}
++
++export const campaigns = {
++  get(id: string): Campaign | undefined {
++    const row = db().prepare("SELECT id, name, dm FROM campaigns WHERE id = ?").get(id);
++    return parseCampaign(row);
++  },
++
++  has(id: string): boolean {
++    return this.get(id) !== undefined;
++  },
++
++  create(campaign: Campaign): void {
++    db().prepare("INSERT INTO campaigns (id, name, dm) VALUES (?, ?, ?)").run(campaign.id, campaign.name, campaign.dm);
++  },
++};
++
++export const campaignCharacters = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_characters WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, character: CampaignCharacter): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_characters (id, campaign_id, name, level, class)
++         VALUES (?, ?, ?, ?, ?)`,
++      )
++      .run(character.id, campaignId, character.name, character.level, character.class);
++  },
++
++  list(campaignId: string): CampaignCharacter[] {
++    const rows = db()
++      .prepare("SELECT id, name, level, class FROM campaign_characters WHERE campaign_id = ? ORDER BY rowid")
++      .all(campaignId);
++
++    return rows.flatMap((row) => {
++      const character = parseCharacter(row);
++      return character === undefined ? [] : [character];
++    });
++  },
++};
++
++export const campaignEvents = {
++  has(campaignId: string, id: string): boolean {
++    const row = db()
++      .prepare("SELECT 1 AS exists_flag FROM campaign_events WHERE campaign_id = ? AND id = ?")
++      .get(campaignId, id);
++
++    return row !== undefined;
++  },
++
++  create(campaignId: string, event: CampaignEvent): void {
++    db()
++      .prepare(
++        `INSERT INTO campaign_events (id, campaign_id, kind, summary)
++         VALUES (?, ?, ?, ?)`,
++      )
++      .run(event.id, campaignId, event.kind, event.summary);
++  },
++
++  count(campaignId: string): number {
++    const row = db().prepare("SELECT COUNT(*) AS log_count FROM campaign_events WHERE campaign_id = ?").get(campaignId);
++    if (row === undefined || typeof row.log_count !== "number") {
++      return 0;
++    }
++
++    return row.log_count;
++  },
++};
++
++export function isValidId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidText(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0;
++}
++
++export function isValidLevel(value: unknown): value is number {
++  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
++}
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+index 9d3e3ba43b60a91e59a6c9e705e04177bb3859ab..be854292372c9dccd893ea5dd13b5fa77e29041e
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T230000Z_codex_gpt-5.5_typescript-nextjs/app/v1/storage/db.ts
+@@ -62,6 +62,31 @@
+       rarity TEXT NOT NULL,
+       cost_gp INTEGER NOT NULL
+     );
++
++    CREATE TABLE IF NOT EXISTS campaigns (
++      id TEXT PRIMARY KEY,
++      name TEXT NOT NULL,
++      dm TEXT NOT NULL
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_characters (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      name TEXT NOT NULL,
++      level INTEGER NOT NULL,
++      class TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
++
++    CREATE TABLE IF NOT EXISTS campaign_events (
++      id TEXT NOT NULL,
++      campaign_id TEXT NOT NULL,
++      kind TEXT NOT NULL,
++      summary TEXT NOT NULL,
++      PRIMARY KEY (campaign_id, id),
++      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++    );
+   `);
+ 
+   connection
+@@ -75,6 +100,9 @@
+     DROP TABLE IF EXISTS monster_tags;
+     DROP TABLE IF EXISTS monsters;
+     DROP TABLE IF EXISTS items;
++    DROP TABLE IF EXISTS campaign_events;
++    DROP TABLE IF EXISTS campaign_characters;
++    DROP TABLE IF EXISTS campaigns;
+     DROP TABLE IF EXISTS combat_sessions;
+     DROP TABLE IF EXISTS users;
+     DROP TABLE IF EXISTS metadata;
+
+tokens used
+34,398

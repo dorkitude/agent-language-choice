@@ -1,0 +1,29 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the three **Character Rules** endpoints to `server.rb` while preserving every existing core endpoint (health, dice/stats, checks/ability, encounters/adjusted-xp, initiative/order — all still passing).
+
+### New endpoints
+
+| Endpoint | What it does |
+|---|---|
+| `POST /v1/characters/ability-modifier` | Validates `score` is an integer 1–30, returns `{"score", "modifier"}` using `floor((score-10)/2)`. Ruby's integer division already floors toward −∞, so score `9` → `-1`. ✓ |
+| `POST /v1/characters/proficiency` | Validates `level` is an integer 1–20, returns `{"level", "proficiency_bonus"}` from the DMG tier table (2/3/4/5/6). ✓ |
+| `POST /v1/characters/derived-stats` | Validates level, all six abilities (1–30), and armor (`base`/`dex_cap` ints). Computes all modifiers, proficiency, `hp_max = level*(6+con_mod)`, and `armor_class = base + min(dex_mod, dex_cap) + shield_bonus`. ✓ |
+
+### Design choices
+- **Strict integer validation** (`is_a?(Integer) && between?`) — rejects floats like `9.0` and out-of-range values with `400`, matching the "must be an integer" spec.
+- **Shared helpers** (`ability_modifier`, `proficiency_bonus`) so derived-stats uses the *exact* same formulas as the standalone endpoints.
+- **`shield_bonus`** is `2` when `armor.shield` is truthy, else `0` (missing shield defaults to no bonus).
+- **All values are Integers**, so JSON emits clean `35`/`-1` rather than `35.0`/`-1.0`.
+- Followed the existing nil-on-invalid → `400` pattern used by `dice_stats` and `adjusted_xp`.
+
+### Verified
+- Spec example for derived-stats returns exactly `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{...}}` ✓
+- Boundary scores/levels (1, 30, 20, etc.) and invalid cases (0, 31, 21, missing fields, float scores) all return correct results/`400` ✓
+- Legacy core suite (8/8) still green ✓
+- `ruby -c server.rb` → Syntax OK ✓
+- `./run.sh` unchanged, starts server in foreground on `127.0.0.1:$PORT` ✓
+
+`./run.sh` is ready to go. 🚀

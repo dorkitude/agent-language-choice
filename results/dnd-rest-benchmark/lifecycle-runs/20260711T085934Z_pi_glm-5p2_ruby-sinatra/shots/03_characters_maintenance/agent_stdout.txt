@@ -1,0 +1,24 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I inherited the existing Sinatra D&D REST API (Ruby 4.0.5 / Sinatra 4.2.1 / Rack 3.2.6 / Puma 8.0.2) and added the three **Character Rules** endpoints for this maintenance stage, preserving all prior core endpoints.
+
+### What I added (`app.rb`)
+
+**Two helpers:**
+- `ability_modifier(score)` → `((score - 10) / 2.0).floor` — uses float division + `floor` so negative halves floor correctly (score 9 → -1, not 0).
+- `proficiency_bonus(level)` → `2 + (level - 1) / 4` — Ruby's integer division floors toward −∞, giving the exact tier table (1-4→2, 5-8→3, … 17-20→6).
+
+**Three routes:**
+- `POST /v1/characters/ability-modifier` — validates `score` is an integer in 1–30, returns `{"score", "modifier"}`.
+- `POST /v1/characters/proficiency` — validates `level` is an integer in 1–20, returns `{"level", "proficiency_bonus"}`.
+- `POST /v1/characters/derived-stats` — validates `level`, all six `abilities` (str/dex/con/int/wis/cha) as integers, and `armor.{base,dex_cap}` as integers; computes `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus` (shield true → +2), and all modifiers.
+
+### Verification
+Every spec example reproduces exactly:
+- score 9 → `{"score":9,"modifier":-1}`
+- level 9 → `{"level":9,"proficiency_bonus":4}`
+- derived-stats example → `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{...}}`
+
+Invalid inputs (out-of-range, wrong type, missing fields, empty body) all return `400`. All existing core endpoints (health, dice-stats, ability-check, adjusted-xp, initiative) still respond correctly. `run.sh` starts the server in the foreground on `127.0.0.1:$PORT`. 🚀

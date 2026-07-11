@@ -18,15 +18,15 @@ preserving every earlier behavior.
 
 | File | Stage | Status | Evaluator suite |
 | --- | --- | --- | --- |
-| [001-core.md](001-core.md) | Core D&D engine API | Completed in first matrix | `core` |
-| [002-characters.md](002-characters.md) | Character rules | Completed in first matrix | `characters` |
-| [003-combat-state.md](003-combat-state.md) | Stateful combat sessions | Completed in first matrix | `combat-state` |
-| [004-auth-users.md](004-auth-users.md) | Username/password auth | Specified, evaluator added | `auth-users` |
-| [005-sqlite-storage.md](005-sqlite-storage.md) | SQLite persistence | Specified, evaluator added | `sqlite-storage` |
-| [006-compendium.md](006-compendium.md) | Monster/item compendium | Specified, evaluator added | `compendium` |
-| [007-campaign-state.md](007-campaign-state.md) | Campaign state APIs | Specified, evaluator added | `campaign-state` |
-| [008-phb-rules.md](008-phb-rules.md) | Selected PHB rules | Specified, evaluator added | `phb-rules` |
-| [009-dm-tools.md](009-dm-tools.md) | DM-facing helpers | Specified, evaluator added | `dm-tools` |
+| [001-core.md](001-core.md) | Core D&D engine API | Completed in full lifecycle matrix | `core` |
+| [002-characters.md](002-characters.md) | Character rules | Completed in full lifecycle matrix | `characters` |
+| [003-combat-state.md](003-combat-state.md) | Stateful combat sessions | Completed in full lifecycle matrix | `combat-state` |
+| [004-auth-users.md](004-auth-users.md) | Username/password auth | Completed in full lifecycle matrix | `auth-users` |
+| [005-sqlite-storage.md](005-sqlite-storage.md) | SQLite persistence | Completed in full lifecycle matrix | `sqlite-storage` |
+| [006-compendium.md](006-compendium.md) | Monster/item compendium | Completed in full lifecycle matrix | `compendium` |
+| [007-campaign-state.md](007-campaign-state.md) | Campaign state APIs | Completed in full lifecycle matrix | `campaign-state` |
+| [008-phb-rules.md](008-phb-rules.md) | Selected PHB rules | Completed in full lifecycle matrix | `phb-rules` |
+| [009-dm-tools.md](009-dm-tools.md) | DM-facing helpers | Completed in full lifecycle matrix | `dm-tools` |
 | [010-prompt-template.md](010-prompt-template.md) | Agent prompt contract | Active | n/a |
 
 ## Harness Hooks
@@ -43,4 +43,3 @@ Run the planned matrix without invoking agents:
 ```sh
 python3 experiments/dnd-rest-benchmark/rest_harness.py lifecycle-plan --max-fix-shots 1
 ```
-

@@ -1,0 +1,22 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the three **character** stage endpoints to `index.php` while preserving all 5 prior core endpoints (health, dice, ability-check, adjusted-xp, initiative) untouched.
+
+### New endpoints
+
+| Endpoint | Handler | Validation |
+|---|---|---|
+| `POST /v1/characters/ability-modifier` | `handle_ability_modifier` | `score` int 1–30 → `modifier = floor((score-10)/2)` |
+| `POST /v1/characters/proficiency` | `handle_proficiency` | `level` int 1–20 → tiered bonus 2/3/4/5/6 |
+| `POST /v1/characters/derived-stats` | `handle_derived_stats` | `level` 1–20, six integer abilities, integer `armor.base`/`dex_cap`, boolean `shield` |
+
+### Key implementation notes
+- **Shared helpers** `ability_modifier()` and `proficiency_bonus()` keep the derived-stats logic identical to the standalone endpoints (single source of truth for the formula).
+- **Floor correctness**: PHP's `floor((9-10)/2) = floor(-0.5) = -1` ✓ — negative halves handled correctly.
+- **Strict typing**: `is_int()` rejects floats/strings (e.g. `9.5` → 400), `is_bool()` rejects truthy ints like `1` for `shield` (→ 400), matching the "must be an integer / boolean" contract.
+- **Derived stats**: `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + (shield?2:0)`.
+
+### Verification
+Confirmed against the spec examples (score 9→-1, level 9→4, full derived-stats→`hp_max:35, armor_class:16`), boundary cases (level 1/20/13/17, score 8/10/16), invalid inputs (score 0/31/9.5, level 0/21, missing ability, non-bool shield → all 400), and confirmed prior core endpoints still work. `run.sh` is executable and starts the server in the foreground on `127.0.0.1:$PORT`. PHP 8.5.8, no Composer packages added. 🛡️

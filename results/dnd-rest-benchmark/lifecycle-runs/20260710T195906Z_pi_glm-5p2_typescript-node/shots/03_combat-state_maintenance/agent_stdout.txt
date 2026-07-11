@@ -1,0 +1,24 @@
+Everything works, Chef! 🎲✨
+
+## Summary
+
+I inherited the existing D&D REST API (core + character-rule suites already passing) and added the **Stateful Combat** stage endpoints to `src/server.ts`, preserving all prior behavior.
+
+### What was added
+
+**In-memory state:** a `SESSIONS: Map<string, CombatSession>` keyed by client-supplied id, where each session holds the sorted initiative `order`, `round`, `turn_index`, and a `conditions` map per combatant.
+
+**Three new endpoints** (all JSON, all on `127.0.0.1` via `PORT`):
+
+1. `POST /v1/combat/sessions` — validates `id` + `combatants` (name/dex/roll integers, no duplicate names, no duplicate session id → `400`), computes `score = roll + dex`, sorts by **score desc → dex desc → name asc**, starts at `round=1, turn_index=0`, returns `{id, round, turn_index, active, order}`.
+
+2. `POST /v1/combat/sessions/{id}/conditions` — `404` for unknown session, `400` for unknown target / non-string condition / non-positive `duration_rounds`; attaches the condition and returns `{target, conditions}`.
+
+3. `POST /v1/combat/sessions/{id}/advance` — `404` for unknown session; advances `turn_index` (wrapping → `round++`), then **decrements only the new active combatant's conditions** at the start of their turn, removing any that hit `0`; returns `{id, round, turn_index, active, conditions}`.
+
+### Verification
+- `tsc` (TypeScript 7.0.2, strict) compiles clean.
+- Ran the spec's exact example: create → add condition → advance produces the byte-for-byte expected response (`turn_index:1, active:mage, fighter still 2`), and continued the trace to confirm conditions only decrement on the owning combatant's turn and expire at `0`.
+- Error matrix confirmed: unknown session → `404`; duplicate id / bad target / `duration_rounds` ≤ 0 / missing or empty combatants / bad JSON → `400`.
+- Prior-stage endpoints (`/health`, dice, ability checks, adjusted-xp, initiative, character rules) still respond correctly.
+- `./run.sh` starts the server in the foreground on `PORT` and serves the new routes. 🗡️

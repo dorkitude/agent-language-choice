@@ -1,0 +1,3697 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4d5f-47ae-7e10-beb1-4a9d26afd81f
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-node
+        Language: typescript
+        Framework/runtime: node-stdlib
+        Lifecycle stage: auth-users
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use TypeScript 7.0.2 and Node 26.4.0 built-in HTTP APIs. Do not add frameworks.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 3: Users and Password Login
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core, character-rule, and combat-state suites and add deterministic
+username/password APIs.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status: use `400` for malformed input, `401` for bad credentials, and `409` for
+duplicate usernames.
+
+Security note for this benchmark: implement real password hashing when the
+language/framework gives you a reasonable standard or framework-provided option.
+If the target has no reasonable built-in option, isolate password handling
+behind a small helper so a production hash can replace it. Do not store or echo
+the plain password in API responses.
+
+## Register User
+
+`POST /v1/auth/register`
+
+Request:
+
+```json
+{"username": "dm", "password": "swordfish", "role": "dm"}
+```
+
+Rules:
+
+- `username` must be 2-32 characters, lowercase letters, digits, `_`, or `-`.
+- `password` must be at least 8 characters.
+- `role` must be either `dm` or `player`.
+- A duplicate `username` returns HTTP 409.
+
+Response:
+
+```json
+{"username": "dm", "role": "dm"}
+```
+
+## Login
+
+`POST /v1/auth/login`
+
+Request:
+
+```json
+{"username": "dm", "password": "swordfish"}
+```
+
+Rules:
+
+- Correct credentials return a deterministic token for the benchmark:
+  `session-<username>`.
+- Bad credentials return HTTP 401.
+
+Response:
+
+```json
+{"username": "dm", "token": "session-dm"}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing TypeScript server and tests first, then patch the smallest surface needed for auth while preserving current endpoints.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 124ms:
+src/server.ts
+src/node-shims.d.ts
+shots/02_core_bugfix/dndeval-core-report.json
+shots/02_core_bugfix/server_stderr.txt
+shots/02_core_bugfix/agent_stderr.txt
+shots/02_core_bugfix/server_stdout.txt
+shots/02_core_bugfix/PROMPT.md
+shots/02_core_bugfix/agent_stdout.txt
+shots/02_core_bugfix/agent_last_message.txt
+shots/02_core_bugfix/setup.json
+shots/06_auth-users_maintenance/PROMPT.md
+shots/04_combat-state_maintenance/server_stderr.txt
+shots/04_combat-state_maintenance/agent_stderr.txt
+shots/04_combat-state_maintenance/server_stdout.txt
+shots/04_combat-state_maintenance/PROMPT.md
+shots/04_combat-state_maintenance/agent_stdout.txt
+shots/04_combat-state_maintenance/agent_last_message.txt
+shots/04_combat-state_maintenance/setup.json
+shots/04_combat-state_maintenance/dndeval-combat-state-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/05_combat-state_bugfix/server_stderr.txt
+shots/05_combat-state_bugfix/agent_stderr.txt
+shots/05_combat-state_bugfix/server_stdout.txt
+shots/05_combat-state_bugfix/PROMPT.md
+shots/05_combat-state_bugfix/agent_stdout.txt
+shots/05_combat-state_bugfix/agent_last_message.txt
+shots/05_combat-state_bugfix/setup.json
+shots/05_combat-state_bugfix/dndeval-combat-state-report.json
+shots/03_characters_maintenance/server_stderr.txt
+shots/03_characters_maintenance/agent_stderr.txt
+shots/03_characters_maintenance/server_stdout.txt
+shots/03_characters_maintenance/PROMPT.md
+shots/03_characters_maintenance/agent_stdout.txt
+shots/03_characters_maintenance/dndeval-characters-report.json
+shots/03_characters_maintenance/agent_last_message.txt
+shots/03_characters_maintenance/setup.json
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+tsconfig.json
+package.json
+package-lock.json
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+dndeval-combat-state-report.json
+
+codex
+The repo is a compact Node stdlib server. I’m reading the current router and package scripts now so the auth endpoints fit the existing response conventions.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+const CR_XP: Record<string, number> = {
+  "0": 10,
+  "1/8": 25,
+  "1/4": 50,
+  "1/2": 100,
+  "1": 200,
+  "2": 450,
+  "3": 700,
+  "4": 1100,
+  "5": 1800,
+};
+
+const LEVEL_THRESHOLDS: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
+
+type CombatantOrderEntry = {
+  name: string;
+  dex: number;
+  score: number;
+};
+
+type Condition = {
+  condition: string;
+  remaining_rounds: number;
+};
+
+type CombatSession = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order: CombatantOrderEntry[];
+  conditions: Map<string, Condition[]>;
+};
+
+const combatSessions = new Map<string, CombatSession>();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+function sendJson(response: ServerResponse, status: number, body: JsonValue): void {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+  });
+  response.end(payload);
+}
+
+function badRequest(response: ServerResponse): void {
+  sendJson(response, 400, { error: "bad_request" });
+}
+
+function notFound(response: ServerResponse): void {
+  sendJson(response, 404, { error: "not_found" });
+}
+
+function readBody(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new Error("request body too large"));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try {
+        resolve(body === "" ? {} : JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function diceStats(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || typeof body.expression !== "string") {
+    return undefined;
+  }
+
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+  if (match === null) {
+    return undefined;
+  }
+
+  const diceCount = Number(match[1]);
+  const sides = Number(match[2]);
+  const modifierValue = match[4] === undefined ? 0 : Number(match[4]);
+  const modifier = match[3] === "-" ? -modifierValue : modifierValue;
+
+  if (
+    !Number.isSafeInteger(diceCount) ||
+    !Number.isSafeInteger(sides) ||
+    !Number.isSafeInteger(modifier) ||
+    diceCount <= 0 ||
+    sides <= 0
+  ) {
+    return undefined;
+  }
+
+  const min = diceCount + modifier;
+  const max = diceCount * sides + modifier;
+  const average = diceCount * (sides + 1) / 2 + modifier;
+
+  return {
+    dice_count: diceCount,
+    sides,
+    modifier,
+    min,
+    max,
+    average,
+  };
+}
+
+function abilityCheck(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isInteger(body.roll) || !isInteger(body.modifier) || !isInteger(body.dc)) {
+    return undefined;
+  }
+
+  const total = body.roll + body.modifier;
+  return {
+    total,
+    success: total >= body.dc,
+    margin: total - body.dc,
+  };
+}
+
+function isAbilityScore(value: unknown): value is number {
+  return isInteger(value) && value >= 1 && value <= 30;
+}
+
+function isCharacterLevel(value: unknown): value is number {
+  return isInteger(value) && value >= 1 && value <= 20;
+}
+
+function abilityModifierForScore(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function proficiencyBonusForLevel(level: number): number {
+  return 2 + Math.floor((level - 1) / 4);
+}
+
+function abilityModifier(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isAbilityScore(body.score)) {
+    return undefined;
+  }
+
+  return {
+    score: body.score,
+    modifier: abilityModifierForScore(body.score),
+  };
+}
+
+function proficiency(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isCharacterLevel(body.level)) {
+    return undefined;
+  }
+
+  return {
+    level: body.level,
+    proficiency_bonus: proficiencyBonusForLevel(body.level),
+  };
+}
+
+function derivedStats(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !isCharacterLevel(body.level) || !isRecord(body.abilities) || !isRecord(body.armor)) {
+    return undefined;
+  }
+  if (!isInteger(body.armor.base) || typeof body.armor.shield !== "boolean" || !isInteger(body.armor.dex_cap)) {
+    return undefined;
+  }
+
+  const modifiers: Record<string, number> = {};
+  for (const key of ABILITY_KEYS) {
+    const score = body.abilities[key];
+    if (!isAbilityScore(score)) {
+      return undefined;
+    }
+    modifiers[key] = abilityModifierForScore(score);
+  }
+
+  const proficiencyBonus = proficiencyBonusForLevel(body.level);
+  const shieldBonus = body.armor.shield ? 2 : 0;
+
+  return {
+    level: body.level,
+    proficiency_bonus: proficiencyBonus,
+    hp_max: body.level * (6 + modifiers.con),
+    armor_class: body.armor.base + Math.min(modifiers.dex, body.armor.dex_cap) + shieldBonus,
+    modifiers,
+  };
+}
+
+function monsterMultiplier(monsterCount: number): number {
+  if (monsterCount <= 1) {
+    return 1;
+  }
+  if (monsterCount === 2) {
+    return 1.5;
+  }
+  if (monsterCount <= 6) {
+    return 2;
+  }
+  if (monsterCount <= 10) {
+    return 2.5;
+  }
+  if (monsterCount <= 14) {
+    return 3;
+  }
+  return 4;
+}
+
+function adjustedXp(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !Array.isArray(body.party) || !Array.isArray(body.monsters)) {
+    return undefined;
+  }
+
+  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+  for (const member of body.party) {
+    if (!isRecord(member) || !isInteger(member.level)) {
+      return undefined;
+    }
+
+    const memberThresholds = LEVEL_THRESHOLDS[member.level];
+    if (memberThresholds === undefined) {
+      return undefined;
+    }
+
+    thresholds.easy += memberThresholds.easy;
+    thresholds.medium += memberThresholds.medium;
+    thresholds.hard += memberThresholds.hard;
+    thresholds.deadly += memberThresholds.deadly;
+  }
+
+  let baseXp = 0;
+  let monsterCount = 0;
+  for (const monster of body.monsters) {
+    if (!isRecord(monster) || typeof monster.cr !== "string" || !isInteger(monster.count) || monster.count <= 0) {
+      return undefined;
+    }
+
+    const xp = CR_XP[monster.cr];
+    if (xp === undefined) {
+      return undefined;
+
+exec
+/bin/zsh -lc "sed -n '1,220p' package.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bash ./run.sh"
+  },
+  "dependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "26.1.1"
+  },
+  "devDependencies": {}
+}
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+tsc && node dist/server.js
+
+exec
+/bin/zsh -lc "sed -n '1,160p' tsconfig.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "vite.config.ts"
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '261,620p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+    }
+
+    baseXp += xp * monster.count;
+    monsterCount += monster.count;
+  }
+
+  const multiplier = monsterMultiplier(monsterCount);
+  const adjusted = baseXp * multiplier;
+  let difficulty = "trivial";
+  if (adjusted >= thresholds.deadly) {
+    difficulty = "deadly";
+  } else if (adjusted >= thresholds.hard) {
+    difficulty = "hard";
+  } else if (adjusted >= thresholds.medium) {
+    difficulty = "medium";
+  } else if (adjusted >= thresholds.easy) {
+    difficulty = "easy";
+  }
+
+  return {
+    base_xp: baseXp,
+    monster_count: monsterCount,
+    multiplier,
+    adjusted_xp: adjusted,
+    difficulty,
+    thresholds,
+  };
+}
+
+function initiativeOrder(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || !Array.isArray(body.combatants)) {
+    return undefined;
+  }
+
+  const combatants = [];
+  for (const combatant of body.combatants) {
+    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+      return undefined;
+    }
+    combatants.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  combatants.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  return {
+    order: combatants.map(({ name, score }) => ({ name, score })),
+  };
+}
+
+function publicOrder(order: CombatantOrderEntry[]): JsonValue[] {
+  return order.map(({ name, score }) => ({ name, score }));
+}
+
+function activeCombatant(session: CombatSession): JsonValue {
+  const active = session.order[session.turn_index];
+  return { name: active.name, score: active.score };
+}
+
+function publicConditions(session: CombatSession): JsonValue {
+  const conditions: { [key: string]: JsonValue } = {};
+  for (const [name, entries] of session.conditions) {
+    conditions[name] = entries.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds }));
+  }
+  return conditions;
+}
+
+function createCombatSession(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || typeof body.id !== "string" || body.id === "" || !Array.isArray(body.combatants)) {
+    return undefined;
+  }
+  if (combatSessions.has(body.id) || body.combatants.length === 0) {
+    return undefined;
+  }
+
+  const order: CombatantOrderEntry[] = [];
+  for (const combatant of body.combatants) {
+    if (!isRecord(combatant) || typeof combatant.name !== "string" || !isInteger(combatant.dex) || !isInteger(combatant.roll)) {
+      return undefined;
+    }
+    order.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  order.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  const session: CombatSession = {
+    id: body.id,
+    round: 1,
+    turn_index: 0,
+    order,
+    conditions: new Map(),
+  };
+  combatSessions.set(session.id, session);
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: activeCombatant(session),
+    order: publicOrder(session.order),
+  };
+}
+
+function addCombatCondition(session: CombatSession, body: unknown): JsonValue | undefined {
+  if (
+    !isRecord(body) ||
+    typeof body.target !== "string" ||
+    typeof body.condition !== "string" ||
+    !isInteger(body.duration_rounds) ||
+    body.duration_rounds <= 0
+  ) {
+    return undefined;
+  }
+
+  if (!session.order.some((combatant) => combatant.name === body.target)) {
+    return undefined;
+  }
+
+  const conditions = session.conditions.get(body.target) ?? [];
+  conditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
+  session.conditions.set(body.target, conditions);
+
+  return {
+    target: body.target,
+    conditions: conditions.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds })),
+  };
+}
+
+function advanceCombatSession(session: CombatSession): JsonValue {
+  session.turn_index += 1;
+  if (session.turn_index >= session.order.length) {
+    session.turn_index = 0;
+    session.round += 1;
+  }
+
+  const active = session.order[session.turn_index];
+  const conditions = session.conditions.get(active.name);
+  if (conditions !== undefined) {
+    const remaining = conditions
+      .map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds: remaining_rounds - 1 }))
+      .filter(({ remaining_rounds }) => remaining_rounds > 0);
+    if (remaining.length > 0) {
+      session.conditions.set(active.name, remaining);
+    } else {
+      session.conditions.set(active.name, []);
+    }
+  }
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: activeCombatant(session),
+    conditions: publicConditions(session),
+  };
+}
+
+async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const method = request.method ?? "";
+  const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+
+  if (method === "GET" && path === "/health") {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (method !== "POST") {
+    notFound(response);
+    return;
+  }
+
+  let body: unknown;
+  try {
+    body = await readBody(request);
+  } catch {
+    badRequest(response);
+    return;
+  }
+
+  let result: JsonValue | undefined;
+  switch (path) {
+    case "/v1/dice/stats":
+      result = diceStats(body);
+      break;
+    case "/v1/checks/ability":
+      result = abilityCheck(body);
+      break;
+    case "/v1/characters/ability-modifier":
+      result = abilityModifier(body);
+      break;
+    case "/v1/characters/proficiency":
+      result = proficiency(body);
+      break;
+    case "/v1/characters/derived-stats":
+      result = derivedStats(body);
+      break;
+    case "/v1/encounters/adjusted-xp":
+      result = adjustedXp(body);
+      break;
+    case "/v1/initiative/order":
+      result = initiativeOrder(body);
+      break;
+    case "/v1/combat/sessions":
+      result = createCombatSession(body);
+      break;
+    default:
+      {
+        const match = /^\/v1\/combat\/sessions\/([^/]+)\/(conditions|advance)$/.exec(path);
+        if (match === null) {
+          notFound(response);
+          return;
+        }
+
+        const session = combatSessions.get(decodeURIComponent(match[1]));
+        if (session === undefined) {
+          notFound(response);
+          return;
+        }
+
+        result = match[2] === "conditions" ? addCombatCondition(session, body) : advanceCombatSession(session);
+        break;
+      }
+  }
+
+  if (result === undefined) {
+    badRequest(response);
+    return;
+  }
+
+  sendJson(response, 200, result);
+}
+
+const port = Number(process.env.PORT);
+if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+  throw new Error("PORT must be an integer from 1 to 65535");
+}
+
+const server = createServer((request, response) => {
+  void handleRequest(request, response).catch(() => {
+    if (!response.headersSent) {
+      sendJson(response, 500, { error: "internal_server_error" });
+    } else {
+      response.end();
+    }
+  });
+});
+
+server.listen(port, "127.0.0.1");
+
+codex
+I’m going to add an in-memory user store plus a tiny password helper backed by Node’s built-in `crypto.scryptSync`, then route the two auth endpoints before the existing switch so prior behavior stays unchanged.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..da90f9dc1b7ccfca064cab7961793bc0c0e0f026
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..da90f9dc1b7ccfca064cab7961793bc0c0e0f026
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+
+codex
+The password helper and validation are in place. I’m wiring the handlers into the request path and then I’ll compile and run a short foreground-server smoke test without leaving it running.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+
+exec
+/bin/zsh -lc 'npx tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+
+ exited 1 in 536ms:
+src/server.ts(2,58): error TS2591: Cannot find name 'node:crypto'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/server.ts(120,20): error TS2591: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/server.ts(121,18): error TS2591: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+
+codex
+Compilation found the local Node shims only declare the HTTP module, so the new crypto import is missing from the project’s type surface even though `@types/node` is installed. I’m checking the shim setup and will fix that without changing package versions.
+exec
+/bin/zsh -lc "sed -n '1,220p' src/node-shims.d.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+declare module "node:http" {
+  export interface IncomingMessage {
+    method?: string;
+    url?: string;
+    setEncoding(encoding: string): void;
+    on(event: "data", listener: (chunk: string) => void): this;
+    on(event: "end", listener: () => void): this;
+    on(event: "error", listener: (error: Error) => void): this;
+    destroy(): void;
+  }
+
+  export interface ServerResponse {
+    headersSent: boolean;
+    writeHead(statusCode: number, headers?: Record<string, string | number>): this;
+    end(data?: string): void;
+  }
+
+  export function createServer(
+    listener: (request: IncomingMessage, response: ServerResponse) => void,
+  ): {
+    listen(port: number, hostname: string): void;
+  };
+}
+
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
+exec
+/bin/zsh -lc "find node_modules/@types/node -maxdepth 1 -type f | sort | sed -n '1,80p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+node_modules/@types/node/LICENSE
+node_modules/@types/node/README.md
+node_modules/@types/node/assert.d.ts
+node_modules/@types/node/async_hooks.d.ts
+node_modules/@types/node/buffer.buffer.d.ts
+node_modules/@types/node/buffer.d.ts
+node_modules/@types/node/child_process.d.ts
+node_modules/@types/node/cluster.d.ts
+node_modules/@types/node/console.d.ts
+node_modules/@types/node/constants.d.ts
+node_modules/@types/node/crypto.d.ts
+node_modules/@types/node/dgram.d.ts
+node_modules/@types/node/diagnostics_channel.d.ts
+node_modules/@types/node/dns.d.ts
+node_modules/@types/node/domain.d.ts
+node_modules/@types/node/events.d.ts
+node_modules/@types/node/ffi.d.ts
+node_modules/@types/node/fs.d.ts
+node_modules/@types/node/globals.d.ts
+node_modules/@types/node/globals.typedarray.d.ts
+node_modules/@types/node/http.d.ts
+node_modules/@types/node/http2.d.ts
+node_modules/@types/node/https.d.ts
+node_modules/@types/node/index.d.ts
+node_modules/@types/node/inspector.d.ts
+node_modules/@types/node/inspector.generated.d.ts
+node_modules/@types/node/module.d.ts
+node_modules/@types/node/net.d.ts
+node_modules/@types/node/os.d.ts
+node_modules/@types/node/package.json
+node_modules/@types/node/path.d.ts
+node_modules/@types/node/perf_hooks.d.ts
+node_modules/@types/node/process.d.ts
+node_modules/@types/node/punycode.d.ts
+node_modules/@types/node/querystring.d.ts
+node_modules/@types/node/quic.d.ts
+node_modules/@types/node/readline.d.ts
+node_modules/@types/node/repl.d.ts
+node_modules/@types/node/sea.d.ts
+node_modules/@types/node/sqlite.d.ts
+node_modules/@types/node/stream.d.ts
+node_modules/@types/node/string_decoder.d.ts
+node_modules/@types/node/test.d.ts
+node_modules/@types/node/timers.d.ts
+node_modules/@types/node/tls.d.ts
+node_modules/@types/node/trace_events.d.ts
+node_modules/@types/node/tty.d.ts
+node_modules/@types/node/url.d.ts
+node_modules/@types/node/util.d.ts
+node_modules/@types/node/v8.d.ts
+node_modules/@types/node/vm.d.ts
+node_modules/@types/node/wasi.d.ts
+node_modules/@types/node/worker_threads.d.ts
+node_modules/@types/node/zlib.d.ts
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+
+codex
+The clean fix is to let TypeScript include the pinned `@types/node` package instead of relying only on the local shim. I’m updating `tsconfig.json` for that and then recompiling.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+exec
+/bin/zsh -lc 'npx tsc --noEmit' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+ succeeded in 290ms:
+codex
+The project now type-checks with the pinned Node types. I’m doing a final static check of the changed files and `run.sh`; I won’t start the HTTP server because the stage contract says not to before the final answer.
+exec
+/bin/zsh -lc 'git diff -- src/server.ts tsconfig.json run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  65 Jul 10 11:43 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+exec
+/bin/zsh -lc "sed -n '1,170p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+const CR_XP: Record<string, number> = {
+  "0": 10,
+  "1/8": 25,
+  "1/4": 50,
+  "1/2": 100,
+  "1": 200,
+  "2": 450,
+  "3": 700,
+  "4": 1100,
+  "5": 1800,
+};
+
+const LEVEL_THRESHOLDS: Record<number, { easy: number; medium: number; hard: number; deadly: number }> = {
+  3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+};
+
+const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"] as const;
+
+type CombatantOrderEntry = {
+  name: string;
+  dex: number;
+  score: number;
+};
+
+type Condition = {
+  condition: string;
+  remaining_rounds: number;
+};
+
+type CombatSession = {
+  id: string;
+  round: number;
+  turn_index: number;
+  order: CombatantOrderEntry[];
+  conditions: Map<string, Condition[]>;
+};
+
+type UserRole = "dm" | "player";
+
+type User = {
+  username: string;
+  role: UserRole;
+  passwordSalt: string;
+  passwordHash: string;
+};
+
+const combatSessions = new Map<string, CombatSession>();
+const users = new Map<string, User>();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+function sendJson(response: ServerResponse, status: number, body: JsonValue): void {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+  });
+  response.end(payload);
+}
+
+function badRequest(response: ServerResponse): void {
+  sendJson(response, 400, { error: "bad_request" });
+}
+
+function notFound(response: ServerResponse): void {
+  sendJson(response, 404, { error: "not_found" });
+}
+
+function conflict(response: ServerResponse): void {
+  sendJson(response, 409, { error: "duplicate_username" });
+}
+
+function unauthorized(response: ServerResponse): void {
+  sendJson(response, 401, { error: "bad_credentials" });
+}
+
+function readBody(request: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new Error("request body too large"));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try {
+        resolve(body === "" ? {} : JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function hashPassword(password: string, salt: string): string {
+  return scryptSync(password, salt, 64).toString("hex");
+}
+
+function createPasswordRecord(password: string): { salt: string; hash: string } {
+  const salt = randomBytes(16).toString("hex");
+  return { salt, hash: hashPassword(password, salt) };
+}
+
+function verifyPassword(password: string, user: User): boolean {
+  const expected = Buffer.from(user.passwordHash, "hex");
+  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+function isUsername(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
+}
+
+function isPassword(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 8;
+}
+
+function isUserRole(value: unknown): value is UserRole {
+  return value === "dm" || value === "player";
+}
+
+function registerUser(body: unknown): { status: number; body: JsonValue } {
+  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  if (users.has(body.username)) {
+    return { status: 409, body: { error: "duplicate_username" } };
+  }
+
+  const passwordRecord = createPasswordRecord(body.password);
+  const user: User = {
+    username: body.username,
+    role: body.role,
+    passwordSalt: passwordRecord.salt,
+    passwordHash: passwordRecord.hash,
+  };
+  users.set(user.username, user);
+
+  return {
+    status: 200,
+    body: { username: user.username, role: user.role },
+  };
+}
+
+function loginUser(body: unknown): { status: number; body: JsonValue } {
+  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  const user = users.get(body.username);
+  if (user === undefined || !verifyPassword(body.password, user)) {
+    return { status: 401, body: { error: "bad_credentials" } };
+  }
+
+
+exec
+/bin/zsh -lc "sed -n '430,540p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+    order.push({
+      name: combatant.name,
+      dex: combatant.dex,
+      score: combatant.roll + combatant.dex,
+    });
+  }
+
+  order.sort((a, b) => b.score - a.score || b.dex - a.dex || a.name.localeCompare(b.name));
+
+  const session: CombatSession = {
+    id: body.id,
+    round: 1,
+    turn_index: 0,
+    order,
+    conditions: new Map(),
+  };
+  combatSessions.set(session.id, session);
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: activeCombatant(session),
+    order: publicOrder(session.order),
+  };
+}
+
+function addCombatCondition(session: CombatSession, body: unknown): JsonValue | undefined {
+  if (
+    !isRecord(body) ||
+    typeof body.target !== "string" ||
+    typeof body.condition !== "string" ||
+    !isInteger(body.duration_rounds) ||
+    body.duration_rounds <= 0
+  ) {
+    return undefined;
+  }
+
+  if (!session.order.some((combatant) => combatant.name === body.target)) {
+    return undefined;
+  }
+
+  const conditions = session.conditions.get(body.target) ?? [];
+  conditions.push({ condition: body.condition, remaining_rounds: body.duration_rounds });
+  session.conditions.set(body.target, conditions);
+
+  return {
+    target: body.target,
+    conditions: conditions.map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds })),
+  };
+}
+
+function advanceCombatSession(session: CombatSession): JsonValue {
+  session.turn_index += 1;
+  if (session.turn_index >= session.order.length) {
+    session.turn_index = 0;
+    session.round += 1;
+  }
+
+  const active = session.order[session.turn_index];
+  const conditions = session.conditions.get(active.name);
+  if (conditions !== undefined) {
+    const remaining = conditions
+      .map(({ condition, remaining_rounds }) => ({ condition, remaining_rounds: remaining_rounds - 1 }))
+      .filter(({ remaining_rounds }) => remaining_rounds > 0);
+    if (remaining.length > 0) {
+      session.conditions.set(active.name, remaining);
+    } else {
+      session.conditions.set(active.name, []);
+    }
+  }
+
+  return {
+    id: session.id,
+    round: session.round,
+    turn_index: session.turn_index,
+    active: activeCombatant(session),
+    conditions: publicConditions(session),
+  };
+}
+
+async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const method = request.method ?? "";
+  const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
+
+  if (method === "GET" && path === "/health") {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (method !== "POST") {
+    notFound(response);
+    return;
+  }
+
+  let body: unknown;
+  try {
+    body = await readBody(request);
+  } catch {
+    badRequest(response);
+    return;
+  }
+
+  if (path === "/v1/auth/register") {
+    const result = registerUser(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  if (path === "/v1/auth/login") {
+    const result = loginUser(body);
+
+exec
+/bin/zsh -lc "sed -n '1,60p' tsconfig.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "vite.config.ts"
+  ]
+}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+exec
+/bin/zsh -lc "sed -n '150,190p' src/server.ts && sed -n '540,575p' src/server.ts" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+    passwordSalt: passwordRecord.salt,
+    passwordHash: passwordRecord.hash,
+  };
+  users.set(user.username, user);
+
+  return {
+    status: 200,
+    body: { username: user.username, role: user.role },
+  };
+}
+
+function loginUser(body: unknown): { status: number; body: JsonValue } {
+  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
+    return { status: 400, body: { error: "bad_request" } };
+  }
+
+  const user = users.get(body.username);
+  if (user === undefined || !verifyPassword(body.password, user)) {
+    return { status: 401, body: { error: "bad_credentials" } };
+  }
+
+  return {
+    status: 200,
+    body: { username: user.username, token: `session-${user.username}` },
+  };
+}
+
+function diceStats(body: unknown): JsonValue | undefined {
+  if (!isRecord(body) || typeof body.expression !== "string") {
+    return undefined;
+  }
+
+  const match = /^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/.exec(body.expression);
+  if (match === null) {
+    return undefined;
+  }
+
+  const diceCount = Number(match[1]);
+  const sides = Number(match[2]);
+  const modifierValue = match[4] === undefined ? 0 : Number(match[4]);
+  const modifier = match[3] === "-" ? -modifierValue : modifierValue;
+    const result = loginUser(body);
+    sendJson(response, result.status, result.body);
+    return;
+  }
+
+  let result: JsonValue | undefined;
+  switch (path) {
+    case "/v1/dice/stats":
+      result = diceStats(body);
+      break;
+    case "/v1/checks/ability":
+      result = abilityCheck(body);
+      break;
+    case "/v1/characters/ability-modifier":
+      result = abilityModifier(body);
+      break;
+    case "/v1/characters/proficiency":
+      result = proficiency(body);
+      break;
+    case "/v1/characters/derived-stats":
+      result = derivedStats(body);
+      break;
+    case "/v1/encounters/adjusted-xp":
+      result = adjustedXp(body);
+      break;
+    case "/v1/initiative/order":
+      result = initiativeOrder(body);
+      break;
+    case "/v1/combat/sessions":
+      result = createCombatSession(body);
+      break;
+    default:
+      {
+        const match = /^\/v1\/combat\/sessions\/([^/]+)\/(conditions|advance)$/.exec(path);
+        if (match === null) {
+          notFound(response);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..d65d29bfa9d53f7650afe2cc39bce832237f3f7d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -65,6 +76,14 @@
+   sendJson(response, 404, { error: "not_found" });
+ }
+ 
++function conflict(response: ServerResponse): void {
++  sendJson(response, 409, { error: "duplicate_username" });
++}
++
++function unauthorized(response: ServerResponse): void {
++  sendJson(response, 401, { error: "bad_credentials" });
++}
++
+ function readBody(request: IncomingMessage): Promise<unknown> {
+   return new Promise((resolve, reject) => {
+     let body = "";
+@@ -88,6 +107,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +530,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+codex
+The static review showed two response helpers that became unnecessary after I returned status/body from the auth handlers. I’m removing those to keep the patch tight, then I’ll run the normal compile path.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..fc8e67d8a269745041665a0e2bc88156eaf2dde2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -88,6 +99,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +522,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..fc8e67d8a269745041665a0e2bc88156eaf2dde2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -88,6 +99,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +522,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+exec
+/bin/zsh -lc 'npx tsc' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..fc8e67d8a269745041665a0e2bc88156eaf2dde2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -88,6 +99,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +522,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+ succeeded in 283ms:
+exec
+/bin/zsh -lc 'git status --short .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+?? ./
+
+exec
+/bin/zsh -lc 'find dist -maxdepth 2 -type f -print' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node
+ succeeded in 0ms:
+dist/server.js
+dist/src/server.js
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..fc8e67d8a269745041665a0e2bc88156eaf2dde2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -88,6 +99,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +522,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+codex
+Implemented Stage 3 auth in [src/server.ts](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts):
+
+- Added `POST /v1/auth/register` with username/password/role validation, duplicate `409`, and no plaintext password storage or echoing.
+- Added `POST /v1/auth/login` with `401` for bad credentials and deterministic `session-<username>` tokens.
+- Passwords are hashed with Node built-in `crypto.scryptSync` and per-user salts.
+- Updated [tsconfig.json](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json) to include the pinned Node types for `node:crypto`.
+
+Verification: `npx tsc` passes. I did not start the server, per the stage contract. `run.sh` is present, executable, and still starts the server in the foreground with `tsc && node dist/server.js`.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+index 36db53f8f25b81825695a35320d482095cdcefb8..fc8e67d8a269745041665a0e2bc88156eaf2dde2
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/src/server.ts
+@@ -1,4 +1,5 @@
+ import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
++import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+ 
+ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+ 
+@@ -39,7 +40,17 @@
+   conditions: Map<string, Condition[]>;
+ };
+ 
++type UserRole = "dm" | "player";
++
++type User = {
++  username: string;
++  role: UserRole;
++  passwordSalt: string;
++  passwordHash: string;
++};
++
+ const combatSessions = new Map<string, CombatSession>();
++const users = new Map<string, User>();
+ 
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+@@ -88,6 +99,73 @@
+   });
+ }
+ 
++function hashPassword(password: string, salt: string): string {
++  return scryptSync(password, salt, 64).toString("hex");
++}
++
++function createPasswordRecord(password: string): { salt: string; hash: string } {
++  const salt = randomBytes(16).toString("hex");
++  return { salt, hash: hashPassword(password, salt) };
++}
++
++function verifyPassword(password: string, user: User): boolean {
++  const expected = Buffer.from(user.passwordHash, "hex");
++  const actual = Buffer.from(hashPassword(password, user.passwordSalt), "hex");
++  return expected.length === actual.length && timingSafeEqual(expected, actual);
++}
++
++function isUsername(value: unknown): value is string {
++  return typeof value === "string" && /^[a-z0-9_-]{2,32}$/.test(value);
++}
++
++function isPassword(value: unknown): value is string {
++  return typeof value === "string" && value.length >= 8;
++}
++
++function isUserRole(value: unknown): value is UserRole {
++  return value === "dm" || value === "player";
++}
++
++function registerUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || !isUsername(body.username) || !isPassword(body.password) || !isUserRole(body.role)) {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  if (users.has(body.username)) {
++    return { status: 409, body: { error: "duplicate_username" } };
++  }
++
++  const passwordRecord = createPasswordRecord(body.password);
++  const user: User = {
++    username: body.username,
++    role: body.role,
++    passwordSalt: passwordRecord.salt,
++    passwordHash: passwordRecord.hash,
++  };
++  users.set(user.username, user);
++
++  return {
++    status: 200,
++    body: { username: user.username, role: user.role },
++  };
++}
++
++function loginUser(body: unknown): { status: number; body: JsonValue } {
++  if (!isRecord(body) || typeof body.username !== "string" || typeof body.password !== "string") {
++    return { status: 400, body: { error: "bad_request" } };
++  }
++
++  const user = users.get(body.username);
++  if (user === undefined || !verifyPassword(body.password, user)) {
++    return { status: 401, body: { error: "bad_credentials" } };
++  }
++
++  return {
++    status: 200,
++    body: { username: user.username, token: `session-${user.username}` },
++  };
++}
++
+ function diceStats(body: unknown): JsonValue | undefined {
+   if (!isRecord(body) || typeof body.expression !== "string") {
+     return undefined;
+@@ -444,6 +522,18 @@
+     return;
+   }
+ 
++  if (path === "/v1/auth/register") {
++    const result = registerUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
++  if (path === "/v1/auth/login") {
++    const result = loginUser(body);
++    sendJson(response, result.status, result.body);
++    return;
++  }
++
+   let result: JsonValue | undefined;
+   switch (path) {
+     case "/v1/dice/stats":
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+index 8c97a609f6c5196fa8beab2ebfaebae2bab9da1d..e9de207d11cd9c3404935a61787a03745a374135
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260710T184344Z_codex_gpt-5.5_typescript-node/tsconfig.json
+@@ -3,6 +3,9 @@
+     "target": "ES2024",
+     "module": "NodeNext",
+     "moduleResolution": "NodeNext",
++    "types": [
++      "node"
++    ],
+     "strict": true,
+     "skipLibCheck": true,
+     "rootDir": "src",
+
+tokens used
+38,937

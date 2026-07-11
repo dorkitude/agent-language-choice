@@ -1,0 +1,1703 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f504b-4c7f-77e1-a149-14274cb34408
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-sinatra
+        Language: ruby
+        Framework/runtime: sinatra
+        Lifecycle stage: phb-rules
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5, Sinatra 4.2.1, Rack 3.2.6, and Puma 8.0.2.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 7: Selected PHB Rules
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add deterministic endpoints for selected Player's Handbook-style
+rules.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status.
+
+## Spell Slots
+
+`POST /v1/phb/spell-slots`
+
+Request:
+
+```json
+{"class": "wizard", "level": 5}
+```
+
+For this benchmark, support wizard level 5.
+
+Response:
+
+```json
+{"class": "wizard", "level": 5, "slots": {"1": 4, "2": 3, "3": 2}}
+```
+
+## Long Rest
+
+`POST /v1/phb/rests/long`
+
+Request:
+
+```json
+{"level": 5, "hp_current": 9, "hp_max": 35, "hit_dice_spent": 3, "exhaustion_level": 1}
+```
+
+Rules:
+
+- Long rest restores current HP to max HP.
+- Long rest restores spent hit dice up to half the character level, rounded
+  down, minimum 1.
+- Long rest reduces exhaustion by 1, to a minimum of 0.
+
+Response:
+
+```json
+{"hp_current": 35, "hit_dice_spent": 1, "exhaustion_level": 0}
+```
+
+## Equipment Load
+
+`POST /v1/phb/equipment-load`
+
+Request:
+
+```json
+{"strength": 12, "weight": 181}
+```
+
+Rules:
+
+- Carrying capacity is `strength * 15`.
+- `encumbered` is true when carried weight exceeds capacity.
+
+Response:
+
+```json
+{"capacity": 180, "weight": 181, "encumbered": true}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Sinatra app structure and existing routes first so the new PHB endpoints fit the current JSON/error patterns without changing prior behavior.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ./
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+shots/11_phb-rules_maintenance/PROMPT.md
+shots/02_core_bugfix/dndeval-core-report.json
+shots/02_core_bugfix/server_stderr.txt
+shots/02_core_bugfix/agent_stderr.txt
+shots/02_core_bugfix/server_stdout.txt
+shots/02_core_bugfix/PROMPT.md
+shots/02_core_bugfix/agent_stdout.txt
+shots/02_core_bugfix/agent_last_message.txt
+shots/02_core_bugfix/setup.json
+shots/09_compendium_maintenance/server_stderr.txt
+shots/09_compendium_maintenance/agent_stderr.txt
+shots/09_compendium_maintenance/dndeval-compendium-report.json
+shots/09_compendium_maintenance/server_stdout.txt
+shots/09_compendium_maintenance/PROMPT.md
+shots/09_compendium_maintenance/agent_stdout.txt
+shots/09_compendium_maintenance/agent_last_message.txt
+shots/09_compendium_maintenance/setup.json
+shots/06_auth-users_maintenance/server_stderr.txt
+shots/06_auth-users_maintenance/agent_stderr.txt
+shots/06_auth-users_maintenance/dndeval-auth-users-report.json
+shots/06_auth-users_maintenance/server_stdout.txt
+shots/06_auth-users_maintenance/PROMPT.md
+shots/06_auth-users_maintenance/agent_stdout.txt
+shots/06_auth-users_maintenance/agent_last_message.txt
+shots/06_auth-users_maintenance/setup.json
+shots/04_combat-state_maintenance/server_stderr.txt
+shots/04_combat-state_maintenance/agent_stderr.txt
+shots/04_combat-state_maintenance/server_stdout.txt
+shots/04_combat-state_maintenance/PROMPT.md
+shots/04_combat-state_maintenance/agent_stdout.txt
+shots/04_combat-state_maintenance/agent_last_message.txt
+shots/04_combat-state_maintenance/setup.json
+shots/04_combat-state_maintenance/dndeval-combat-state-report.json
+shots/08_sqlite-storage_maintenance/server_stderr.txt
+shots/08_sqlite-storage_maintenance/agent_stderr.txt
+shots/08_sqlite-storage_maintenance/server_stdout.txt
+shots/08_sqlite-storage_maintenance/PROMPT.md
+shots/08_sqlite-storage_maintenance/agent_stdout.txt
+shots/08_sqlite-storage_maintenance/agent_last_message.txt
+shots/08_sqlite-storage_maintenance/setup.json
+shots/08_sqlite-storage_maintenance/dndeval-sqlite-storage-report.json
+shots/10_campaign-state_maintenance/server_stderr.txt
+shots/10_campaign-state_maintenance/agent_stderr.txt
+shots/10_campaign-state_maintenance/server_stdout.txt
+shots/10_campaign-state_maintenance/PROMPT.md
+shots/10_campaign-state_maintenance/agent_stdout.txt
+shots/10_campaign-state_maintenance/agent_last_message.txt
+shots/10_campaign-state_maintenance/setup.json
+shots/10_campaign-state_maintenance/dndeval-campaign-state-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/05_combat-state_bugfix/server_stderr.txt
+shots/05_combat-state_bugfix/agent_stderr.txt
+shots/05_combat-state_bugfix/server_stdout.txt
+shots/05_combat-state_bugfix/PROMPT.md
+shots/05_combat-state_bugfix/agent_stdout.txt
+shots/05_combat-state_bugfix/agent_last_message.txt
+shots/05_combat-state_bugfix/setup.json
+shots/05_combat-state_bugfix/dndeval-combat-state-report.json
+shots/07_auth-users_bugfix/server_stderr.txt
+shots/07_auth-users_bugfix/agent_stderr.txt
+shots/07_auth-users_bugfix/dndeval-auth-users-report.json
+shots/07_auth-users_bugfix/server_stdout.txt
+shots/07_auth-users_bugfix/PROMPT.md
+shots/07_auth-users_bugfix/agent_stdout.txt
+shots/07_auth-users_bugfix/agent_last_message.txt
+shots/07_auth-users_bugfix/setup.json
+shots/03_characters_maintenance/server_stderr.txt
+shots/03_characters_maintenance/agent_stderr.txt
+shots/03_characters_maintenance/server_stdout.txt
+shots/03_characters_maintenance/PROMPT.md
+shots/03_characters_maintenance/agent_stdout.txt
+shots/03_characters_maintenance/dndeval-characters-report.json
+shots/03_characters_maintenance/agent_last_message.txt
+shots/03_characters_maintenance/setup.json
+server.rb
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+game.db
+agent_stderr.txt
+Gemfile.lock
+Gemfile
+dndeval-auth-users-report.json
+lifecycle-result.json
+dndeval-compendium-report.json
+run.sh
+server_stdout.txt
+PROMPT.md
+app.rb
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+dndeval-campaign-state-report.json
+dndeval-combat-state-report.json
+dndeval-sqlite-storage-report.json
+
+codex
+The repository root has unrelated dirty state outside this run directory, so I’m ignoring that and focusing only on the current workspace files. Next I’m reading the existing app entrypoints and dependency pins.
+exec
+/bin/zsh -lc "sed -n '1,260p' app.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+require 'json'
+require 'open3'
+require 'openssl'
+require 'securerandom'
+require 'sinatra'
+
+set :bind, '127.0.0.1'
+set :port, ENV.fetch('PORT', '4567')
+set :run, false
+
+APP_ROOT = File.expand_path(__dir__)
+DB_PATH = File.join(APP_ROOT, 'game.db')
+SCHEMA_VERSION = 1
+PASSWORD_ITERATIONS = 100_000
+
+module GameStorage
+  module_function
+
+  def sqlite!(sql)
+    stdout, stderr, status = Open3.capture3('sqlite3', DB_PATH, stdin_data: sql)
+    raise "sqlite failed: #{stderr}" unless status.success?
+
+    stdout
+  end
+
+  def initialize!
+    sqlite!(<<~SQL)
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE IF NOT EXISTS schema_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS combat_sessions (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS compendium_monsters (
+        slug TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS compendium_items (
+        slug TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS campaign_characters (
+        campaign_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (campaign_id, id),
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS campaign_events (
+        campaign_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (campaign_id, id),
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
+
+      INSERT OR REPLACE INTO schema_metadata (key, value)
+      VALUES ('schema_version', '#{SCHEMA_VERSION}');
+    SQL
+  end
+
+  def reset!
+    sqlite!(<<~SQL)
+      DROP TABLE IF EXISTS campaign_events;
+      DROP TABLE IF EXISTS campaign_characters;
+      DROP TABLE IF EXISTS campaigns;
+      DROP TABLE IF EXISTS compendium_items;
+      DROP TABLE IF EXISTS compendium_monsters;
+      DROP TABLE IF EXISTS combat_sessions;
+      DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS schema_metadata;
+    SQL
+    initialize!
+  end
+
+  def initialized?
+    return false unless File.exist?(DB_PATH)
+
+    row = select_one(
+      "SELECT value FROM schema_metadata WHERE key = #{sql_string('schema_version')}"
+    )
+    row && row['value'].to_i == SCHEMA_VERSION
+  rescue RuntimeError, JSON::ParserError
+    false
+  end
+
+  def user(username)
+    row = select_one("SELECT data FROM users WHERE username = #{sql_string(username)}")
+    row ? JSON.parse(row['data'], symbolize_names: true) : nil
+  end
+
+  def user_exists?(username)
+    !!select_one("SELECT 1 AS found FROM users WHERE username = #{sql_string(username)} LIMIT 1")
+  end
+
+  def save_user(user)
+    sqlite!(<<~SQL)
+      INSERT OR REPLACE INTO users (username, data)
+      VALUES (#{sql_string(user[:username])}, #{sql_string(JSON.generate(user))});
+    SQL
+  end
+
+  def combat_session(id)
+    row = select_one("SELECT data FROM combat_sessions WHERE id = #{sql_string(id)}")
+    row ? decode_combat_session(row['data']) : nil
+  end
+
+  def combat_session_exists?(id)
+    !!select_one("SELECT 1 AS found FROM combat_sessions WHERE id = #{sql_string(id)} LIMIT 1")
+  end
+
+  def save_combat_session(session)
+    sqlite!(<<~SQL)
+      INSERT OR REPLACE INTO combat_sessions (id, data)
+      VALUES (#{sql_string(session[:id])}, #{sql_string(JSON.generate(session))});
+    SQL
+  end
+
+  def monster(slug)
+    row = select_one("SELECT data FROM compendium_monsters WHERE slug = #{sql_string(slug)}")
+    row ? JSON.parse(row['data'], symbolize_names: true) : nil
+  end
+
+  def monster_exists?(slug)
+    !!select_one("SELECT 1 AS found FROM compendium_monsters WHERE slug = #{sql_string(slug)} LIMIT 1")
+  end
+
+  def save_monster(monster)
+    sqlite!(<<~SQL)
+      INSERT INTO compendium_monsters (slug, data)
+      VALUES (#{sql_string(monster[:slug])}, #{sql_string(JSON.generate(monster))});
+    SQL
+  end
+
+  def item(slug)
+    row = select_one("SELECT data FROM compendium_items WHERE slug = #{sql_string(slug)}")
+    row ? JSON.parse(row['data'], symbolize_names: true) : nil
+  end
+
+  def item_exists?(slug)
+    !!select_one("SELECT 1 AS found FROM compendium_items WHERE slug = #{sql_string(slug)} LIMIT 1")
+  end
+
+  def save_item(item)
+    sqlite!(<<~SQL)
+      INSERT INTO compendium_items (slug, data)
+      VALUES (#{sql_string(item[:slug])}, #{sql_string(JSON.generate(item))});
+    SQL
+  end
+
+  def campaign(id)
+    row = select_one("SELECT data FROM campaigns WHERE id = #{sql_string(id)}")
+    row ? JSON.parse(row['data'], symbolize_names: true) : nil
+  end
+
+  def campaign_exists?(id)
+    !!select_one("SELECT 1 AS found FROM campaigns WHERE id = #{sql_string(id)} LIMIT 1")
+  end
+
+  def save_campaign(campaign)
+    sqlite!(<<~SQL)
+      INSERT INTO campaigns (id, data)
+      VALUES (#{sql_string(campaign[:id])}, #{sql_string(JSON.generate(campaign))});
+    SQL
+  end
+
+  def campaign_character_exists?(campaign_id, id)
+    !!select_one(<<~SQL)
+      SELECT 1 AS found
+      FROM campaign_characters
+      WHERE campaign_id = #{sql_string(campaign_id)} AND id = #{sql_string(id)}
+      LIMIT 1
+    SQL
+  end
+
+  def save_campaign_character(campaign_id, character)
+    sqlite!(<<~SQL)
+      INSERT INTO campaign_characters (campaign_id, id, data)
+      VALUES (
+        #{sql_string(campaign_id)},
+        #{sql_string(character[:id])},
+        #{sql_string(JSON.generate(character))}
+      );
+    SQL
+  end
+
+  def campaign_characters(campaign_id)
+    select_all(<<~SQL).map { |row| JSON.parse(row['data'], symbolize_names: true) }
+      SELECT data
+      FROM campaign_characters
+      WHERE campaign_id = #{sql_string(campaign_id)}
+      ORDER BY rowid
+    SQL
+  end
+
+  def campaign_event_exists?(campaign_id, id)
+    !!select_one(<<~SQL)
+      SELECT 1 AS found
+      FROM campaign_events
+      WHERE campaign_id = #{sql_string(campaign_id)} AND id = #{sql_string(id)}
+      LIMIT 1
+    SQL
+  end
+
+  def save_campaign_event(campaign_id, event)
+    sqlite!(<<~SQL)
+      INSERT INTO campaign_events (campaign_id, id, data)
+      VALUES (
+        #{sql_string(campaign_id)},
+        #{sql_string(event[:id])},
+        #{sql_string(JSON.generate(event))}
+      );
+    SQL
+  end
+
+  def campaign_log_count(campaign_id)
+    row = select_one(<<~SQL)
+      SELECT COUNT(*) AS count
+      FROM campaign_events
+      WHERE campaign_id = #{sql_string(campaign_id)}
+    SQL
+    row.fetch('count')
+  end
+
+  def select_one(sql)
+    select_all(sql).first
+  end
+
+  def select_all(sql)
+    output = sqlite!(".mode json\n#{sql};\n")
+    output.strip.empty? ? [] : JSON.parse(output)
+  end
+
+  def sql_string(value)
+    "'#{value.to_s.gsub("'", "''")}'"
+  end
+
+  def decode_combat_session(json)
+    data = JSON.parse(json)
+    {
+      id: data.fetch('id'),
+      round: data.fetch('round'),
+
+exec
+/bin/zsh -lc "sed -n '1,220p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+require_relative 'app'
+require 'puma'
+require 'puma/server'
+
+port = Integer(ENV.fetch('PORT'))
+
+server = Puma::Server.new(
+  Sinatra::Application,
+  nil,
+  min_threads: 0,
+  max_threads: 5,
+  environment: ENV.fetch('RACK_ENV', 'production')
+)
+
+server.add_tcp_listener('127.0.0.1', port)
+thread = server.run
+
+shutdown = proc { server.stop(true) }
+Signal.trap('INT', &shutdown)
+Signal.trap('TERM', &shutdown)
+
+thread.join
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+bundle exec ruby server.rb
+
+exec
+/bin/zsh -lc "sed -n '1,160p' Gemfile" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+source 'https://rubygems.org'
+
+gem 'sinatra', '4.2.1'
+gem 'rack', '3.2.6'
+gem 'puma', '8.0.2'
+
+codex
+The app is a single Sinatra file backed by SQLite shell calls, with `server.rb` already binding Puma to `127.0.0.1:$PORT`. I’m scanning the route helpers now so validation for the new endpoints is consistent with the existing API.
+exec
+/bin/zsh -lc "sed -n '261,620p' app.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+exec
+/bin/zsh -lc "sed -n '621,1040p' app.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+end
+
+post '/v1/auth/register' do
+  data = json_body
+  username = username!(data.fetch('username'))
+  password = password!(data.fetch('password'))
+  role = role!(data.fetch('role'))
+  conflict! if GameStorage.user_exists?(username)
+
+  GameStorage.save_user(
+    username: username,
+    role: role,
+    password: hash_password(password)
+  )
+
+  status 201
+  { username: username, role: role }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/auth/login' do
+  data = json_body
+  username = username!(data.fetch('username'))
+  password = data.fetch('password')
+  bad_request! unless password.is_a?(String)
+
+  user = GameStorage.user(username)
+  unauthorized! unless user && password_matches?(password, user[:password])
+
+  { username: username, token: "session-#{username}" }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/dice/stats' do
+  expression = json_body['expression']
+  match = expression.to_s.match(/\A([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?\z/)
+  bad_request! unless match
+
+  dice_count = match[1].to_i
+  sides = match[2].to_i
+  bad_request! if dice_count <= 0 || sides <= 0
+
+  modifier = match[4].to_i
+  modifier = -modifier if match[3] == '-'
+  min = dice_count + modifier
+  max = dice_count * sides + modifier
+  average_sum = min + max
+  average = average_sum.even? ? average_sum / 2 : average_sum / 2.0
+
+  {
+    dice_count: dice_count,
+    sides: sides,
+    modifier: modifier,
+    min: min,
+    max: max,
+    average: average
+  }.to_json
+end
+
+post '/v1/checks/ability' do
+  data = json_body
+  total = data.fetch('roll') + data.fetch('modifier')
+  dc = data.fetch('dc')
+
+  {
+    total: total,
+    success: total >= dc,
+    margin: total - dc
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/encounters/adjusted-xp' do
+  xp_by_cr = {
+    '0' => 10,
+    '1/8' => 25,
+    '1/4' => 50,
+    '1/2' => 100,
+    '1' => 200,
+    '2' => 450,
+    '3' => 700,
+    '4' => 1100,
+    '5' => 1800
+  }
+  level_thresholds = {
+    3 => { easy: 75, medium: 150, hard: 225, deadly: 400 }
+  }
+
+  data = json_body
+  party = data.fetch('party')
+  monsters = data.fetch('monsters')
+
+  base_xp = monsters.sum do |monster|
+    cr = monster.fetch('cr').to_s
+    count = monster.fetch('count')
+    bad_request! unless xp_by_cr.key?(cr) && count.is_a?(Integer) && count >= 0
+    xp_by_cr.fetch(cr) * count
+  end
+
+  monster_count = monsters.sum { |monster| monster.fetch('count') }
+  multiplier =
+    case monster_count
+    when 0 then 0
+    when 1 then 1
+    when 2 then 1.5
+    when 3..6 then 2
+    when 7..10 then 2.5
+    when 11..14 then 3
+    else 4
+    end
+  adjusted_xp = base_xp * multiplier
+  adjusted_xp = adjusted_xp.to_i if adjusted_xp.is_a?(Float) && adjusted_xp == adjusted_xp.to_i
+
+  thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 }
+  party.each do |member|
+    level = member.fetch('level')
+    member_thresholds = level_thresholds[level]
+    bad_request! unless member_thresholds
+    thresholds.each_key { |name| thresholds[name] += member_thresholds[name] }
+  end
+
+  difficulty =
+    if adjusted_xp >= thresholds[:deadly]
+      'deadly'
+    elsif adjusted_xp >= thresholds[:hard]
+      'hard'
+    elsif adjusted_xp >= thresholds[:medium]
+      'medium'
+    elsif adjusted_xp >= thresholds[:easy]
+      'easy'
+    else
+      'trivial'
+    end
+
+  {
+    base_xp: base_xp,
+    monster_count: monster_count,
+    multiplier: multiplier,
+    adjusted_xp: adjusted_xp,
+    difficulty: difficulty,
+    thresholds: thresholds
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/initiative/order' do
+  order = public_order(initiative_order(json_body.fetch('combatants')))
+
+  { order: order }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/combat/sessions' do
+  data = json_body
+  id = string!(data.fetch('id'))
+  bad_request! if GameStorage.combat_session_exists?(id)
+
+  order = initiative_order(data.fetch('combatants'), allow_empty: false)
+  combatant_names = order.map { |combatant| combatant[:name] }
+  bad_request! unless combatant_names.uniq.length == combatant_names.length
+
+  session = {
+    id: id,
+    round: 1,
+    turn_index: 0,
+    order: order,
+    conditions: combatant_names.to_h { |name| [name, []] },
+    condition_targets: []
+  }
+  GameStorage.save_combat_session(session)
+
+  public_session(session).to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/combat/sessions/:id/conditions' do
+  session = combat_session!(params[:id])
+  data = json_body
+  target = string!(data.fetch('target'))
+  bad_request! unless session[:conditions].key?(target)
+
+  condition = string!(data.fetch('condition'))
+  duration_rounds = positive_integer!(data.fetch('duration_rounds'))
+  session[:condition_targets] << target unless session[:condition_targets].include?(target)
+  session[:conditions][target] << {
+    condition: condition,
+    remaining_rounds: duration_rounds
+  }
+  GameStorage.save_combat_session(session)
+
+  {
+    target: target,
+    conditions: public_conditions(session).fetch(target)
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/combat/sessions/:id/advance' do
+  session = combat_session!(params[:id])
+  session[:turn_index] = (session[:turn_index] + 1) % session[:order].length
+  session[:round] += 1 if session[:turn_index].zero?
+
+  active_name = session[:order][session[:turn_index]][:name]
+  session[:conditions][active_name].each do |condition|
+    condition[:remaining_rounds] -= 1
+  end
+  session[:conditions][active_name].reject! { |condition| condition[:remaining_rounds].zero? }
+  GameStorage.save_combat_session(session)
+
+  {
+    id: session[:id],
+    round: session[:round],
+    turn_index: session[:turn_index],
+    active: public_active(session),
+    conditions: public_conditions(session)
+  }.to_json
+end
+
+post '/v1/characters/ability-modifier' do
+  score = integer_in_range!(json_body.fetch('score'), 1..30)
+
+  {
+    score: score,
+    modifier: ability_modifier(score)
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/characters/proficiency' do
+  level = integer_in_range!(json_body.fetch('level'), 1..20)
+
+  {
+    level: level,
+    proficiency_bonus: proficiency_bonus(level)
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/characters/derived-stats' do
+  data = json_body
+  level = integer_in_range!(data.fetch('level'), 1..20)
+  abilities = data.fetch('abilities')
+  armor = data.fetch('armor')
+  bad_request! unless abilities.is_a?(Hash) && armor.is_a?(Hash)
+
+  modifiers = %w[str dex con int wis cha].to_h do |name|
+    score = integer_in_range!(abilities.fetch(name), 1..30)
+    [name.to_sym, ability_modifier(score)]
+  end
+
+  armor_base = integer!(armor.fetch('base'))
+  dex_cap = integer!(armor.fetch('dex_cap'))
+  shield = armor.fetch('shield')
+  bad_request! unless shield == true || shield == false
+
+  {
+    level: level,
+    proficiency_bonus: proficiency_bonus(level),
+    hp_max: level * (6 + modifiers[:con]),
+    armor_class: armor_base + [modifiers[:dex], dex_cap].min + (shield ? 2 : 0),
+    modifiers: modifiers
+  }.to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+ succeeded in 0ms:
+      turn_index: data.fetch('turn_index'),
+      order: data.fetch('order').map do |combatant|
+        {
+          name: combatant.fetch('name'),
+          dex: combatant.fetch('dex'),
+          score: combatant.fetch('score')
+        }
+      end,
+      conditions: data.fetch('conditions').transform_values do |conditions|
+        conditions.map do |condition|
+          {
+            condition: condition.fetch('condition'),
+            remaining_rounds: condition.fetch('remaining_rounds')
+          }
+        end
+      end,
+      condition_targets: data.fetch('condition_targets', [])
+    }
+  end
+end
+
+GameStorage.initialize!
+
+before do
+  content_type :json
+end
+
+helpers do
+  def json_body
+    body = request.body.read
+    body.empty? ? {} : JSON.parse(body)
+  rescue JSON::ParserError
+    halt 400, { error: 'invalid_json' }.to_json
+  end
+
+  def bad_request!
+    halt 400, { error: 'bad_request' }.to_json
+  end
+
+  def unauthorized!
+    halt 401, { error: 'unauthorized' }.to_json
+  end
+
+  def conflict!
+    halt 409, { error: 'conflict' }.to_json
+  end
+
+  def integer_in_range!(value, range)
+    bad_request! unless value.is_a?(Integer) && range.cover?(value)
+    value
+  end
+
+  def integer!(value)
+    bad_request! unless value.is_a?(Integer)
+    value
+  end
+
+  def ability_modifier(score)
+    ((score - 10) / 2.0).floor
+  end
+
+  def proficiency_bonus(level)
+    2 + ((level - 1) / 4)
+  end
+
+  def not_found!
+    halt 404, { error: 'not_found' }.to_json
+  end
+
+  def positive_integer!(value)
+    bad_request! unless value.is_a?(Integer) && value.positive?
+    value
+  end
+
+  def string!(value)
+    bad_request! unless value.is_a?(String) && !value.empty?
+    value
+  end
+
+  def username!(value)
+    bad_request! unless value.is_a?(String) && value.match?(/\A[a-z0-9_-]{2,32}\z/)
+    value
+  end
+
+  def password!(value)
+    bad_request! unless value.is_a?(String) && value.length >= 8
+    value
+  end
+
+  def role!(value)
+    bad_request! unless %w[dm player].include?(value)
+    value
+  end
+
+  def password_digest(password, salt)
+    OpenSSL::PKCS5.pbkdf2_hmac(
+      password,
+      salt,
+      PASSWORD_ITERATIONS,
+      32,
+      OpenSSL::Digest.new('SHA256')
+    ).unpack1('H*')
+  end
+
+  def hash_password(password)
+    salt = SecureRandom.hex(16)
+    { salt: salt, digest: password_digest(password, salt) }
+  end
+
+  def password_matches?(password, stored)
+    digest = password_digest(password, stored[:salt])
+    return false unless digest.bytesize == stored[:digest].bytesize
+
+    Rack::Utils.secure_compare(digest, stored[:digest])
+  end
+
+  def combat_session!(id)
+    GameStorage.combat_session(id) || not_found!
+  end
+
+  def initiative_order(combatants, allow_empty: true)
+    bad_request! unless combatants.is_a?(Array)
+    bad_request! if combatants.empty? && !allow_empty
+
+    combatants
+      .map do |combatant|
+        bad_request! unless combatant.is_a?(Hash)
+
+        name = string!(combatant.fetch('name'))
+        dex = integer!(combatant.fetch('dex'))
+        roll = integer!(combatant.fetch('roll'))
+        { name: name, dex: dex, score: roll + dex }
+      end
+      .sort_by { |combatant| [-combatant[:score], -combatant[:dex], combatant[:name]] }
+  rescue KeyError
+    bad_request!
+  end
+
+  def public_order(order)
+    order.map { |combatant| { name: combatant[:name], score: combatant[:score] } }
+  end
+
+  def public_active(session)
+    public_order([session[:order][session[:turn_index]]]).first
+  end
+
+  def public_conditions(session)
+    session[:conditions].each_with_object({}) do |(target, conditions), result|
+      next if conditions.empty? && !session.fetch(:condition_targets, []).include?(target)
+
+      result[target] = conditions.map do |condition|
+        {
+          condition: condition[:condition],
+          remaining_rounds: condition[:remaining_rounds]
+        }
+      end
+    end
+  end
+
+  def public_session(session)
+    {
+      id: session[:id],
+      round: session[:round],
+      turn_index: session[:turn_index],
+      active: public_active(session),
+      order: public_order(session[:order])
+    }
+  end
+
+  def tags!(value)
+    bad_request! unless value.is_a?(Array)
+    value.map { |tag| string!(tag) }
+  end
+
+  def public_monster(monster, include_tags: true)
+    response = {
+      slug: monster[:slug],
+      name: monster[:name],
+      cr: monster[:cr],
+      armor_class: monster[:armor_class],
+      hit_points: monster[:hit_points]
+    }
+    response[:tags] = monster[:tags] if include_tags
+    response
+  end
+
+  def public_item(item)
+    {
+      slug: item[:slug],
+      name: item[:name],
+      type: item[:type],
+      rarity: item[:rarity],
+      cost_gp: item[:cost_gp]
+    }
+  end
+
+  def campaign!(id)
+    GameStorage.campaign(id) || not_found!
+  end
+
+  def public_campaign(campaign)
+    {
+      id: campaign[:id],
+      name: campaign[:name],
+      dm: campaign[:dm]
+    }
+  end
+
+  def public_campaign_character(character)
+    {
+      id: character[:id],
+      name: character[:name],
+      level: character[:level],
+      class: character[:class]
+    }
+  end
+
+  def public_campaign_event(event)
+    {
+      id: event[:id],
+      kind: event[:kind]
+    }
+  end
+end
+
+get '/health' do
+  { ok: true }.to_json
+end
+
+get '/v1/storage/status' do
+  {
+    driver: 'sqlite',
+    schema_version: SCHEMA_VERSION,
+    initialized: GameStorage.initialized?
+  }.to_json
+end
+
+post '/v1/storage/reset' do
+  GameStorage.reset!
+
+  { ok: true, schema_version: SCHEMA_VERSION }.to_json
+end
+
+post '/v1/campaigns' do
+  data = json_body
+  id = string!(data.fetch('id'))
+  conflict! if GameStorage.campaign_exists?(id)
+
+  campaign = {
+    id: id,
+    name: string!(data.fetch('name')),
+    dm: string!(data.fetch('dm'))
+  }
+  GameStorage.save_campaign(campaign)
+
+  status 201
+  public_campaign(campaign).to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/campaigns/:id/characters' do
+  campaign!(params[:id])
+  data = json_body
+  id = string!(data.fetch('id'))
+  conflict! if GameStorage.campaign_character_exists?(params[:id], id)
+
+  character = {
+    id: id,
+    name: string!(data.fetch('name')),
+    level: integer!(data.fetch('level')),
+    class: string!(data.fetch('class'))
+  }
+  GameStorage.save_campaign_character(params[:id], character)
+
+  status 201
+  public_campaign_character(character).to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+post '/v1/campaigns/:id/events' do
+  campaign!(params[:id])
+  data = json_body
+  id = string!(data.fetch('id'))
+  conflict! if GameStorage.campaign_event_exists?(params[:id], id)
+
+  event = {
+    id: id,
+    kind: string!(data.fetch('kind')),
+    summary: string!(data.fetch('summary'))
+  }
+  GameStorage.save_campaign_event(params[:id], event)
+
+  status 201
+  public_campaign_event(event).to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+get '/v1/campaigns/:id/state' do
+  campaign = campaign!(params[:id])
+
+  public_campaign(campaign).merge(
+    characters: GameStorage.campaign_characters(params[:id]).map { |character| public_campaign_character(character) },
+    log_count: GameStorage.campaign_log_count(params[:id])
+  ).to_json
+end
+
+post '/v1/compendium/monsters' do
+  data = json_body
+  slug = string!(data.fetch('slug'))
+  conflict! if GameStorage.monster_exists?(slug)
+
+  monster = {
+    slug: slug,
+    name: string!(data.fetch('name')),
+    cr: string!(data.fetch('cr')),
+    armor_class: integer!(data.fetch('armor_class')),
+    hit_points: integer!(data.fetch('hit_points')),
+    tags: tags!(data.fetch('tags'))
+  }
+  GameStorage.save_monster(monster)
+
+  status 201
+  public_monster(monster, include_tags: false).to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+get '/v1/compendium/monsters/:slug' do
+  monster = GameStorage.monster(params[:slug]) || not_found!
+
+  public_monster(monster).to_json
+end
+
+post '/v1/compendium/items' do
+  data = json_body
+  slug = string!(data.fetch('slug'))
+  conflict! if GameStorage.item_exists?(slug)
+
+  item = {
+    slug: slug,
+    name: string!(data.fetch('name')),
+    type: string!(data.fetch('type')),
+    rarity: string!(data.fetch('rarity')),
+    cost_gp: integer!(data.fetch('cost_gp'))
+  }
+  GameStorage.save_item(item)
+
+  status 201
+  public_item(item).to_json
+rescue KeyError, TypeError, NoMethodError
+  bad_request!
+end
+
+get '/v1/compendium/items/:slug' do
+  item = GameStorage.item(params[:slug]) || not_found!
+
+  public_item(item).to_json
+
+exec
+/bin/zsh -lc "rg \"def json_body|halt|post '/v1\" -n app.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+289:  def json_body
+293:    halt 400, { error: 'invalid_json' }.to_json
+297:    halt 400, { error: 'bad_request' }.to_json
+301:    halt 401, { error: 'unauthorized' }.to_json
+305:    halt 409, { error: 'conflict' }.to_json
+327:    halt 404, { error: 'not_found' }.to_json
+498:post '/v1/storage/reset' do
+504:post '/v1/campaigns' do
+522:post '/v1/campaigns/:id/characters' do
+542:post '/v1/campaigns/:id/events' do
+570:post '/v1/compendium/monsters' do
+597:post '/v1/compendium/items' do
+623:post '/v1/auth/register' do
+642:post '/v1/auth/login' do
+656:post '/v1/dice/stats' do
+682:post '/v1/checks/ability' do
+696:post '/v1/encounters/adjusted-xp' do
+770:post '/v1/initiative/order' do
+778:post '/v1/combat/sessions' do
+802:post '/v1/combat/sessions/:id/conditions' do
+825:post '/v1/combat/sessions/:id/advance' do
+846:post '/v1/characters/ability-modifier' do
+857:post '/v1/characters/proficiency' do
+868:post '/v1/characters/derived-stats' do
+
+codex
+I found the validation helpers and route layout. I’m going to add three `POST /v1/phb/...` routes near the other rules-style endpoints, using the same `bad_request!` response for malformed or unsupported inputs.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index ac47c503298b385eeeef21ca563f6efbaf471b8c..625432c24f8b174d341301b3018da5c8a6b618b4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -892,3 +892,56 @@
+ rescue KeyError, TypeError, NoMethodError
+   bad_request!
+ end
++
++post '/v1/phb/spell-slots' do
++  data = json_body
++  character_class = string!(data.fetch('class'))
++  level = integer!(data.fetch('level'))
++  bad_request! unless character_class == 'wizard' && level == 5
++
++  {
++    class: character_class,
++    level: level,
++    slots: { '1' => 4, '2' => 3, '3' => 2 }
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/rests/long' do
++  data = json_body
++  level = positive_integer!(data.fetch('level'))
++  hp_max = integer!(data.fetch('hp_max'))
++  hp_current = integer!(data.fetch('hp_current'))
++  hit_dice_spent = integer!(data.fetch('hit_dice_spent'))
++  exhaustion_level = integer!(data.fetch('exhaustion_level'))
++  bad_request! if hp_max.negative? || hp_current.negative? || hp_current > hp_max
++  bad_request! if hit_dice_spent.negative? || exhaustion_level.negative?
++
++  hit_dice_restored = [level / 2, 1].max
++
++  {
++    hp_current: hp_max,
++    hit_dice_spent: [hit_dice_spent - hit_dice_restored, 0].max,
++    exhaustion_level: [exhaustion_level - 1, 0].max
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/equipment-load' do
++  data = json_body
++  strength = integer!(data.fetch('strength'))
++  weight = integer!(data.fetch('weight'))
++  bad_request! if strength.negative? || weight.negative?
++
++  capacity = strength * 15
++
++  {
++    capacity: capacity,
++    weight: weight,
++    encumbered: weight > capacity
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index ac47c503298b385eeeef21ca563f6efbaf471b8c..625432c24f8b174d341301b3018da5c8a6b618b4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -892,3 +892,56 @@
+ rescue KeyError, TypeError, NoMethodError
+   bad_request!
+ end
++
++post '/v1/phb/spell-slots' do
++  data = json_body
++  character_class = string!(data.fetch('class'))
++  level = integer!(data.fetch('level'))
++  bad_request! unless character_class == 'wizard' && level == 5
++
++  {
++    class: character_class,
++    level: level,
++    slots: { '1' => 4, '2' => 3, '3' => 2 }
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/rests/long' do
++  data = json_body
++  level = positive_integer!(data.fetch('level'))
++  hp_max = integer!(data.fetch('hp_max'))
++  hp_current = integer!(data.fetch('hp_current'))
++  hit_dice_spent = integer!(data.fetch('hit_dice_spent'))
++  exhaustion_level = integer!(data.fetch('exhaustion_level'))
++  bad_request! if hp_max.negative? || hp_current.negative? || hp_current > hp_max
++  bad_request! if hit_dice_spent.negative? || exhaustion_level.negative?
++
++  hit_dice_restored = [level / 2, 1].max
++
++  {
++    hp_current: hp_max,
++    hit_dice_spent: [hit_dice_spent - hit_dice_restored, 0].max,
++    exhaustion_level: [exhaustion_level - 1, 0].max
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/equipment-load' do
++  data = json_body
++  strength = integer!(data.fetch('strength'))
++  weight = integer!(data.fetch('weight'))
++  bad_request! if strength.negative? || weight.negative?
++
++  capacity = strength * 15
++
++  {
++    capacity: capacity,
++    weight: weight,
++    encumbered: weight > capacity
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
+
+codex
+The routes are in place. I’m validating syntax and exercising the new endpoints through Rack’s in-process mock request path, which does not start the HTTP server.
+exec
+/bin/zsh -lc 'bundle exec ruby -c app.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc "bundle exec ruby -rrack/mock -r./app -e 'req = Rack::MockRequest.new(Sinatra::Application); [{path:\"/v1/phb/spell-slots\", body:{class:\"wizard\", level:5}}, {path:\"/v1/phb/rests/long\", body:{level:5, hp_current:9, hp_max:35, hit_dice_spent:3, exhaustion_level:1}}, {path:\"/v1/phb/equipment-load\", body:{strength:12, weight:181}}].each { |c| r = req.post(c[:path], \"CONTENT_TYPE\" => \"application/json\", input: JSON.generate(c[:body])); puts \"#{c[:path]} #{r.status} #{r.body}\" }; bad = req.post(\"/v1/phb/spell-slots\", \"CONTENT_TYPE\" => \"application/json\", input: JSON.generate({class:\"cleric\", level:5})); puts \"/v1/phb/spell-slots bad #{bad.status} #{bad.body}\"'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index ac47c503298b385eeeef21ca563f6efbaf471b8c..625432c24f8b174d341301b3018da5c8a6b618b4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -892,3 +892,56 @@
+ rescue KeyError, TypeError, NoMethodError
+   bad_request!
+ end
++
++post '/v1/phb/spell-slots' do
++  data = json_body
++  character_class = string!(data.fetch('class'))
++  level = integer!(data.fetch('level'))
++  bad_request! unless character_class == 'wizard' && level == 5
++
++  {
++    class: character_class,
++    level: level,
++    slots: { '1' => 4, '2' => 3, '3' => 2 }
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/rests/long' do
++  data = json_body
++  level = positive_integer!(data.fetch('level'))
++  hp_max = integer!(data.fetch('hp_max'))
++  hp_current = integer!(data.fetch('hp_current'))
++  hit_dice_spent = integer!(data.fetch('hit_dice_spent'))
++  exhaustion_level = integer!(data.fetch('exhaustion_level'))
++  bad_request! if hp_max.negative? || hp_current.negative? || hp_current > hp_max
++  bad_request! if hit_dice_spent.negative? || exhaustion_level.negative?
++
++  hit_dice_restored = [level / 2, 1].max
++
++  {
++    hp_current: hp_max,
++    hit_dice_spent: [hit_dice_spent - hit_dice_restored, 0].max,
++    exhaustion_level: [exhaustion_level - 1, 0].max
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/equipment-load' do
++  data = json_body
++  strength = integer!(data.fetch('strength'))
++  weight = integer!(data.fetch('weight'))
++  bad_request! if strength.negative? || weight.negative?
++
++  capacity = strength * 15
++
++  {
++    capacity: capacity,
++    weight: weight,
++    encumbered: weight > capacity
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
+
+ succeeded in 338ms:
+/v1/phb/spell-slots 200 {"class":"wizard","level":5,"slots":{"1":4,"2":3,"3":2}}
+/v1/phb/rests/long 200 {"hp_current":35,"hit_dice_spent":1,"exhaustion_level":0}
+/v1/phb/equipment-load 200 {"capacity":180,"weight":181,"encumbered":true}
+/v1/phb/spell-slots bad 400 {"error":"bad_request"}
+
+codex
+The new PHB examples all return the exact expected JSON, and an unsupported spell-slot request returns `400`. I’m checking the final diff and run script state now.
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  65 Jul 11 01:13 run.sh
+
+exec
+/bin/zsh -lc 'git diff -- app.rb run.sh server.rb Gemfile' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "nl -ba app.rb | sed -n '890,980p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra
+ succeeded in 0ms:
+   890	    modifiers: modifiers
+   891	  }.to_json
+   892	rescue KeyError, TypeError, NoMethodError
+   893	  bad_request!
+   894	end
+   895	
+   896	post '/v1/phb/spell-slots' do
+   897	  data = json_body
+   898	  character_class = string!(data.fetch('class'))
+   899	  level = integer!(data.fetch('level'))
+   900	  bad_request! unless character_class == 'wizard' && level == 5
+   901	
+   902	  {
+   903	    class: character_class,
+   904	    level: level,
+   905	    slots: { '1' => 4, '2' => 3, '3' => 2 }
+   906	  }.to_json
+   907	rescue KeyError, TypeError, NoMethodError
+   908	  bad_request!
+   909	end
+   910	
+   911	post '/v1/phb/rests/long' do
+   912	  data = json_body
+   913	  level = positive_integer!(data.fetch('level'))
+   914	  hp_max = integer!(data.fetch('hp_max'))
+   915	  hp_current = integer!(data.fetch('hp_current'))
+   916	  hit_dice_spent = integer!(data.fetch('hit_dice_spent'))
+   917	  exhaustion_level = integer!(data.fetch('exhaustion_level'))
+   918	  bad_request! if hp_max.negative? || hp_current.negative? || hp_current > hp_max
+   919	  bad_request! if hit_dice_spent.negative? || exhaustion_level.negative?
+   920	
+   921	  hit_dice_restored = [level / 2, 1].max
+   922	
+   923	  {
+   924	    hp_current: hp_max,
+   925	    hit_dice_spent: [hit_dice_spent - hit_dice_restored, 0].max,
+   926	    exhaustion_level: [exhaustion_level - 1, 0].max
+   927	  }.to_json
+   928	rescue KeyError, TypeError, NoMethodError
+   929	  bad_request!
+   930	end
+   931	
+   932	post '/v1/phb/equipment-load' do
+   933	  data = json_body
+   934	  strength = integer!(data.fetch('strength'))
+   935	  weight = integer!(data.fetch('weight'))
+   936	  bad_request! if strength.negative? || weight.negative?
+   937	
+   938	  capacity = strength * 15
+   939	
+   940	  {
+   941	    capacity: capacity,
+   942	    weight: weight,
+   943	    encumbered: weight > capacity
+   944	  }.to_json
+   945	rescue KeyError, TypeError, NoMethodError
+   946	  bad_request!
+   947	end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index ac47c503298b385eeeef21ca563f6efbaf471b8c..625432c24f8b174d341301b3018da5c8a6b618b4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -892,3 +892,56 @@
+ rescue KeyError, TypeError, NoMethodError
+   bad_request!
+ end
++
++post '/v1/phb/spell-slots' do
++  data = json_body
++  character_class = string!(data.fetch('class'))
++  level = integer!(data.fetch('level'))
++  bad_request! unless character_class == 'wizard' && level == 5
++
++  {
++    class: character_class,
++    level: level,
++    slots: { '1' => 4, '2' => 3, '3' => 2 }
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/rests/long' do
++  data = json_body
++  level = positive_integer!(data.fetch('level'))
++  hp_max = integer!(data.fetch('hp_max'))
++  hp_current = integer!(data.fetch('hp_current'))
++  hit_dice_spent = integer!(data.fetch('hit_dice_spent'))
++  exhaustion_level = integer!(data.fetch('exhaustion_level'))
++  bad_request! if hp_max.negative? || hp_current.negative? || hp_current > hp_max
++  bad_request! if hit_dice_spent.negative? || exhaustion_level.negative?
++
++  hit_dice_restored = [level / 2, 1].max
++
++  {
++    hp_current: hp_max,
++    hit_dice_spent: [hit_dice_spent - hit_dice_restored, 0].max,
++    exhaustion_level: [exhaustion_level - 1, 0].max
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/equipment-load' do
++  data = json_body
++  strength = integer!(data.fetch('strength'))
++  weight = integer!(data.fetch('weight'))
++  bad_request! if strength.negative? || weight.negative?
++
++  capacity = strength * 15
++
++  {
++    capacity: capacity,
++    weight: weight,
++    encumbered: weight > capacity
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
+
+codex
+`run.sh` is executable and still starts `bundle exec ruby server.rb`; `server.rb` remains the foreground Puma runner on `127.0.0.1` using `PORT`. Because this lifecycle directory is untracked from the parent repo, `git diff` does not report the local file change, so I verified by reading the edited lines directly.
+codex
+Implemented Stage 7 PHB rules in [app.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb:896):
+
+- `POST /v1/phb/spell-slots`
+- `POST /v1/phb/rests/long`
+- `POST /v1/phb/equipment-load`
+
+`run.sh` is present, executable, and still starts the Puma/Sinatra server in the foreground via `bundle exec ruby server.rb`, binding to `127.0.0.1` with `PORT`.
+
+Verification run, without starting the server:
+- `bundle exec ruby -c app.rb`
+- Rack mock requests for all three new endpoints, matching the expected JSON responses
+- Unsupported spell-slot input returns `400 {"error":"bad_request"}`
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+index ac47c503298b385eeeef21ca563f6efbaf471b8c..625432c24f8b174d341301b3018da5c8a6b618b4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T080759Z_codex_gpt-5.5_ruby-sinatra/app.rb
+@@ -892,3 +892,56 @@
+ rescue KeyError, TypeError, NoMethodError
+   bad_request!
+ end
++
++post '/v1/phb/spell-slots' do
++  data = json_body
++  character_class = string!(data.fetch('class'))
++  level = integer!(data.fetch('level'))
++  bad_request! unless character_class == 'wizard' && level == 5
++
++  {
++    class: character_class,
++    level: level,
++    slots: { '1' => 4, '2' => 3, '3' => 2 }
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/rests/long' do
++  data = json_body
++  level = positive_integer!(data.fetch('level'))
++  hp_max = integer!(data.fetch('hp_max'))
++  hp_current = integer!(data.fetch('hp_current'))
++  hit_dice_spent = integer!(data.fetch('hit_dice_spent'))
++  exhaustion_level = integer!(data.fetch('exhaustion_level'))
++  bad_request! if hp_max.negative? || hp_current.negative? || hp_current > hp_max
++  bad_request! if hit_dice_spent.negative? || exhaustion_level.negative?
++
++  hit_dice_restored = [level / 2, 1].max
++
++  {
++    hp_current: hp_max,
++    hit_dice_spent: [hit_dice_spent - hit_dice_restored, 0].max,
++    exhaustion_level: [exhaustion_level - 1, 0].max
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
++
++post '/v1/phb/equipment-load' do
++  data = json_body
++  strength = integer!(data.fetch('strength'))
++  weight = integer!(data.fetch('weight'))
++  bad_request! if strength.negative? || weight.negative?
++
++  capacity = strength * 15
++
++  {
++    capacity: capacity,
++    weight: weight,
++    encumbered: weight > capacity
++  }.to_json
++rescue KeyError, TypeError, NoMethodError
++  bad_request!
++end
+
+tokens used
+21,996

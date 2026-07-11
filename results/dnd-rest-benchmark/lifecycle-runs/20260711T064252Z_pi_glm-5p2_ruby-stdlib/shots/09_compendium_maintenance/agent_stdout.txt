@@ -1,0 +1,28 @@
+All wired up correctly, Chef 🍳. Here's the summary of what I did:
+
+## What changed in `server.rb`
+
+**1. Schema (2 new tables)** — added `compendium_monsters` and `compendium_items` to `SCHEMA_SQL`. Both are created idempotently (`CREATE TABLE IF NOT EXISTS`) on boot and on reset. Monster `tags` are stored as `tags_json` TEXT, mirroring the existing `order_json`/`conditions_json` pattern.
+
+**2. `storage_reset`** — now also `DELETE`s from the two compendium tables so reset wipes all benchmark data (cumulative suite expects a clean slate).
+
+**3. Six new functions** following the existing code style:
+- `validate_monster` / `validate_item` → strict type validation (String slugs/names, Integer `armor_class`/`hit_points`/`cost_gp`); returns `nil` → 400 on malformed input. Monster `tags` optional, defaults to `[]`.
+- `create_monster` / `create_item` → SELECT-then-INSERT inside `db_locked` (atomic, race-safe); 409 on duplicate slug; **201** on success (consistent with `register_user`).
+- `read_monster` / `read_item` → 404 on unknown slug, 200 with the stored record otherwise.
+
+**4. Routing** — four new `when` clauses in `handle`: exact-match for the two POSTs, regex captures for the two GETs.
+
+## Key spec details honored
+- **Create monster response omits `tags`**; **read monster response includes `tags`** — exactly as specified. ✅
+- Item create/read responses are identical in shape. ✅
+- Status codes: `201` create, `200` read, `400` malformed, `404` unknown, `409` duplicate. ✅
+- `schema_version` kept at `1` so the existing `storage/status` test stays green. ✅
+
+## Verification
+- `ruby -c server.rb` → Syntax OK
+- All 4 compendium endpoints tested (create/read/duplicate/unknown/malformed/bad-json/missing-fields/non-integer) ✅
+- 22 regression checks across core / characters / combat / auth / storage all pass ✅
+- `storage/reset` correctly clears compendium data ✅
+
+`run.sh` is intact and boots the server in the foreground on `127.0.0.1:$PORT` — ready to go 🚀

@@ -1,0 +1,31 @@
+All done, Chef! 🍳✨
+
+## Summary
+
+I inherited the existing PHP/Symfony D&D REST API (5 core endpoints, all passing) and added the **Stage 1: Character Rules** endpoints while preserving all prior behavior.
+
+### What I added to `index.php`
+
+**Two shared helpers** (so the formula stays identical across endpoints):
+- `abilityModifierFor(int $score): int` — `(int) floor(($score - 10) / 2)`, floors negative halves correctly (score 9 → -1)
+- `proficiencyFor(int $level): int` — `(int) ceil($level / 4) + 1`, yielding the 2/3/4/5/6 tiers
+
+**Three new route handlers**:
+1. `POST /v1/characters/ability-modifier` — validates `score` is an int in 1–30, returns `{"score","modifier"}`
+2. `POST /v1/characters/proficiency` — validates `level` is an int in 1–20, returns `{"level","proficiency_bonus"}`
+3. `POST /v1/characters/derived-stats` — validates `level`, all six `abilities` (str/dex/con/int/wis/cha, each int 1–30), and `armor` (`base` int, `dex_cap` int, `shield` bool). Computes proficiency, `hp_max = level * (6 + con_mod)`, and `armor_class = base + min(dex_mod, dex_cap) + (shield ? 2 : 0)`.
+
+**Three new routes** registered in the existing `RouteCollection` with `methods: ['POST']`.
+
+### Validation choices
+- Used strict `is_int` for `score`/`level`/`base`/`dex_cap` (the spec says "integer"), so non-integer types and out-of-range values cleanly return **400**.
+- `shield` uses strict `=== true` → +2, otherwise +0 (matches the spec's "when armor.shield is true" exactly).
+- Malformed JSON / missing fields / out-of-range all return `400`.
+
+### Verification
+- `php -l index.php` → no syntax errors
+- Spec example reproduced byte-for-byte: `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}`
+- Edge cases (negative flooring, dex cap clamp, out-of-range, missing fields, bad JSON, wrong types) all behave correctly
+- All 5 original core endpoints still respond correctly (verified `/health` and `/v1/dice/stats`)
+
+`./run.sh` is unchanged, executable, and starts the server in the foreground on `127.0.0.1:$PORT`. Ready for the evaluator! 🚀

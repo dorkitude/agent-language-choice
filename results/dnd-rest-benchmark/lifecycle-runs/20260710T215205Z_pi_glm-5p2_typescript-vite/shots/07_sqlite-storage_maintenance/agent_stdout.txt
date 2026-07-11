@@ -1,0 +1,27 @@
+All done, Chef! 🐉 Here's the summary of what I built for **Stage 4: SQLite Game Storage**.
+
+## What changed
+
+**New: `src/storage.ts`** — a SQLite-backed durable storage layer using Node 26's built-in `node:sqlite` (`DatabaseSync`), no extra deps.
+- Opens `game.db` in the project root (resolved via `import.meta.url`, so it's cwd-independent).
+- `initSchema()` creates `meta`, `combat_sessions`, `users` tables (idempotent `IF NOT EXISTS`) and stamps `schema_version = 1` on startup.
+- Combat sessions stored as `{id, round, turn_index, order_json, conditions_json}`; users as `{username, role, hash, salt}`.
+- `resetStorage()` drops + recreates all tables (clears benchmark data, preserves process health).
+
+**Refactored: `src/dndPlugin.ts`** — moved durable data behind SQLite (no more in-memory `Map`s):
+- Combat sessions + conditions now round-trip through `getSession`/`putSession`. The exact advance/decrement/expire/empty-key-persistence semantics are preserved (verified against the full combat lifecycle).
+- Users now round-trip through `getUser`/`putUser`; scrypt hashing + `timingSafeEqual` untouched, `201`/`409`/`401`/`400` behavior unchanged.
+- All pure endpoints (dice, ability, encounter, initiative, character rules) kept verbatim.
+- New routes: `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`, `POST /v1/storage/reset` → `{"ok":true,"schema_version":1}`.
+- `initSchema()` runs in `configureServer`; `ensureSchema()` guards every request.
+
+**`run.sh`** — now `cd`s to its own dir first, so `game.db` always lands in the project directory; still `exec vite` in foreground on `127.0.0.1:$PORT`.
+
+## Verified (all green ✅)
+- Cumulative core + characters + combat-state (full 7-step lifecycle incl. round-wrap, condition decrement/expire, empty-key retention, 404/400s) + auth-users (register 201, dup 409, login 200, bad/unknown 401, validation 400s).
+- `storage/status` and `storage/reset` exact contract.
+- **Durability**: killed + restarted the server — combat round advanced `2→3` and user still logged in, loaded from `game.db`. 🎲
+- Post-reset: tables recreated, fresh session/register succeed.
+- `tsc --noEmit` clean; `game.db` created in project dir on startup.
+
+Left the workspace clean: test server stopped and `game.db` removed so the evaluator starts fresh (the server recreates it on boot). `./run.sh` is ready. 🚀

@@ -1,0 +1,32 @@
+Everything's ready, Chef! 🎲✨
+
+## Summary
+
+I added the three Stage 7 PHB-rules endpoints to `index.php` while preserving all prior-stage behavior.
+
+### New endpoints (all `POST`, all return JSON)
+
+**`POST /v1/phb/spell-slots`** — `phbSpellSlots()`
+- Supports wizard level 5 only (per spec); returns `slots: {"1": 4, "2": 3, "3": 2}`.
+- Non-wizard or non-level-5 → `400`. PHP's `json_encode` renders the integer-keyed array as a JSON object with string keys, exactly matching the spec.
+
+**`POST /v1/phb/rests/long`** — `phbLongRest()`
+- HP → max HP.
+- Hit dice recovered = `max(1, floor(level / 2))` → spent reduced by that, floored at 0.
+- Exhaustion reduced by 1, floored at 0.
+- Example: level 5 → recover 2 dice → `3 − 2 = 1`; exhaustion `1 → 0`. ✓
+
+**`POST /v1/phb/equipment-load`** — `phbEquipmentLoad()`
+- `capacity = strength * 15`; `encumbered = weight > capacity`.
+- Example: `12 * 15 = 180`, `181 > 180` → encumbered `true`. ✓
+
+### Validation
+All three handlers follow the existing codebase pattern: parse JSON body, require integer fields with sensible bounds, return `400` for invalid input (non-2xx for invalid requests, as the contract requires).
+
+### Verification
+- `php -l index.php` → no syntax errors.
+- Smoke-tested all three new endpoints (happy path + one invalid case) against a live `php -S` server — outputs match the spec byte-for-byte.
+- Regression-checked `GET /health`, `POST /v1/dice/stats`, and `GET /v1/campaigns/{id}/state` (404 path) — all still correct.
+- `run.sh` is unchanged and still starts the server in the foreground on `127.0.0.1:$PORT`.
+
+No server is left running. 🛡️

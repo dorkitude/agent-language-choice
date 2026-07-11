@@ -1,0 +1,2734 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4fc9-8067-7d42-95b2-9bd5b016d38a
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: core
+        Shot kind: creative
+
+        Create the first implementation from the seeded starter files.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the seeded files and existing project shape first, then implement the stdlib Ruby server with the required `run.sh` contract.
+exec
+/bin/zsh -lc 'ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+total 32
+drwxr-xr-x@   6 dorkitude  staff   192 Jul 10 23:07 .
+drwxr-xr-x@ 115 dorkitude  staff  3680 Jul 10 23:07 ..
+-rw-r--r--@   1 dorkitude  staff  4236 Jul 10 23:07 PROMPT.md
+-rw-r--r--@   1 dorkitude  staff   635 Jul 10 23:07 VERSION-PINS.json
+-rwxr-xr-x@   1 dorkitude  staff    53 Jul 10 23:07 run.sh
+drwxr-xr-x@   3 dorkitude  staff    96 Jul 10 23:07 shots
+
+exec
+/bin/zsh -lc 'pwd && rg --files -uu' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 104ms:
+run.sh
+PROMPT.md
+VERSION-PINS.json
+shots/01_core_creative/PROMPT.md
+
+codex
+The workspace is minimal: only the prompt, version pins, and an existing `run.sh`. I’m going to read those and then add the smallest Ruby stdlib implementation around them.
+exec
+/bin/zsh -lc "sed -n '1,220p' PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: core
+        Shot kind: creative
+
+        Create the first implementation from the seeded starter files.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Core D&D REST Engine Challenge
+
+Build a REST API server that implements the following endpoints. All request
+and response bodies are JSON unless otherwise stated.
+
+## `GET /health`
+
+Returns:
+
+```json
+{"ok": true}
+```
+
+## `POST /v1/dice/stats`
+
+Request:
+
+```json
+{"expression": "2d6+3"}
+```
+
+Supported expression grammar:
+
+```text
+<count>d<sides>[+<modifier>|-<modifier>]
+```
+
+Rules:
+
+- `count`, `sides`, and `modifier` are base-10 integers.
+- `count` and `sides` must be positive.
+- The modifier is optional and defaults to zero.
+- Invalid expressions return HTTP 400.
+
+Response fields:
+
+```json
+{
+  "dice_count": 2,
+  "sides": 6,
+  "modifier": 3,
+  "min": 5,
+  "max": 15,
+  "average": 10
+}
+```
+
+## `POST /v1/checks/ability`
+
+Request:
+
+```json
+{"roll": 9, "modifier": 5, "dc": 15}
+```
+
+Rules:
+
+- `total = roll + modifier`
+- `success = total >= dc`
+- `margin = total - dc`
+
+Response:
+
+```json
+{"total": 14, "success": false, "margin": -1}
+```
+
+## `POST /v1/encounters/adjusted-xp`
+
+Request:
+
+```json
+{
+  "party": [{"level": 3}, {"level": 3}, {"level": 3}, {"level": 3}],
+  "monsters": [{"cr": "1", "count": 2}, {"cr": "2", "count": 1}]
+}
+```
+
+For the first benchmark suite, support these challenge ratings:
+
+| CR | XP |
+|---|---:|
+| `0` | 10 |
+| `1/8` | 25 |
+| `1/4` | 50 |
+| `1/2` | 100 |
+| `1` | 200 |
+| `2` | 450 |
+| `3` | 700 |
+| `4` | 1100 |
+| `5` | 1800 |
+
+Monster count multipliers:
+
+| Monster count | Multiplier |
+|---:|---:|
+| 1 | 1 |
+| 2 | 1.5 |
+| 3-6 | 2 |
+| 7-10 | 2.5 |
+| 11-14 | 3 |
+| 15+ | 4 |
+
+For the first benchmark suite, support level-3 encounter thresholds:
+
+| Level | Easy | Medium | Hard | Deadly |
+|---:|---:|---:|---:|---:|
+| 3 | 75 | 150 | 225 | 400 |
+
+Rules:
+
+- `base_xp = sum(monster_xp[cr] * count)`
+- `monster_count = sum(count)`
+- `adjusted_xp = base_xp * multiplier`
+- Party thresholds are summed across party members.
+- Difficulty is the highest threshold reached: `trivial`, `easy`, `medium`,
+  `hard`, or `deadly`.
+
+Response for the sample request:
+
+```json
+{
+  "base_xp": 850,
+  "monster_count": 3,
+  "multiplier": 2,
+  "adjusted_xp": 1700,
+  "difficulty": "deadly",
+  "thresholds": {"easy": 300, "medium": 600, "hard": 900, "deadly": 1600}
+}
+```
+
+## `POST /v1/initiative/order`
+
+Request:
+
+```json
+{
+  "combatants": [
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "ogre", "dex": -1, "roll": 16}
+  ]
+}
+```
+
+Rules:
+
+- `score = roll + dex`
+- Sort by score descending.
+- Break ties by dex descending.
+- Break remaining ties by name ascending.
+
+Response:
+
+```json
+{
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "ogre", "score": 15}
+  ]
+}
+```
+
+
+
+exec
+/bin/zsh -lc 'cat VERSION-PINS.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+{
+  "go": "1.26.5",
+  "node": "26.4.0",
+  "typescript": "7.0.2",
+  "vite": "8.1.3",
+  "next": "16.2.10",
+  "react": "19.2.7",
+  "react-dom": "19.2.7",
+  "@vitejs/plugin-react": "6.0.3",
+  "@types/node": "26.1.1",
+  "@types/react": "19.2.17",
+  "@types/react-dom": "19.2.3",
+  "python": "3.14.6",
+  "django": "6.0.7",
+  "flask": "3.1.3",
+  "ruby": "4.0.5",
+  "sinatra": "4.2.1",
+  "rails": "8.1.3",
+  "rack": "3.2.6",
+  "rackup": "2.3.1",
+  "puma": "8.0.2",
+  "php": "8.5.8",
+  "composer": "2.10.2",
+  "slim": "4.15.2",
+  "slim-psr7": "1.8.0",
+  "symfony-http-foundation": "8.1.1",
+  "symfony-routing": "8.1.0",
+  "openjdk": "26.0.1"
+}
+
+codex
+I found `run.sh` already points to `ruby server.rb`, so the main edit is adding `server.rb`. I’m using only Ruby stdlib pieces (`socket` and `json`) to avoid relying on WEBrick or any gem-shaped server dependency.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d8f1ea921482c55eea1d17a11175add08c2335a
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.chomp
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.chomp
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d8f1ea921482c55eea1d17a11175add08c2335a
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.chomp
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.chomp
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+codex
+`server.rb` is in place now. I’m checking syntax and the launch script metadata without starting the HTTP listener, per the benchmark contract.
+exec
+/bin/zsh -lc 'ls -l run.sh server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff    53 Jul 10 23:07 run.sh
+-rw-r--r--@ 1 dorkitude  staff  5848 Jul 10 23:08 server.rb
+
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d8f1ea921482c55eea1d17a11175add08c2335a
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.chomp
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.chomp
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+codex
+One parser issue is worth tightening before I call it done: raw HTTP header lines end in `\r\n`, so the blank-line detector needs to remove both characters. I’m patching that now.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf7c4dcaaae7b159f2d179824ec4f1787f512519
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.delete_suffix("\n").delete_suffix("\r")
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf7c4dcaaae7b159f2d179824ec4f1787f512519
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.delete_suffix("\n").delete_suffix("\r")
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+codex
+The CRLF handling is fixed. I’m doing one final non-listening verification pass.
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc "sed -n '1,260p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "socket"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+def json_response(status, body)
+  payload = JSON.generate(body)
+  reason = {
+    200 => "OK",
+    400 => "Bad Request",
+    404 => "Not Found",
+    405 => "Method Not Allowed"
+  }.fetch(status, "OK")
+
+  [
+    "HTTP/1.1 #{status} #{reason}",
+    "Content-Type: application/json",
+    "Content-Length: #{payload.bytesize}",
+    "Connection: close",
+    "",
+    payload
+  ].join("\r\n")
+end
+
+def integer_value?(value)
+  value.is_a?(Integer)
+end
+
+def parse_json_body(body)
+  parsed = JSON.parse(body)
+  raise ArgumentError unless parsed.is_a?(Hash)
+
+  parsed
+rescue JSON::ParserError
+  raise ArgumentError
+end
+
+def dice_stats(params)
+  expression = params["expression"]
+  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+  raise ArgumentError unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  average = (count * (sides + 1) / 2.0) + modifier
+  average = average.to_i if average == average.to_i
+
+  {
+    "dice_count" => count,
+    "sides" => sides,
+    "modifier" => modifier,
+    "min" => count + modifier,
+    "max" => (count * sides) + modifier,
+    "average" => average
+  }
+end
+
+def ability_check(params)
+  roll = params["roll"]
+  modifier = params["modifier"]
+  dc = params["dc"]
+  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
+
+  total = roll + modifier
+  {
+    "total" => total,
+    "success" => total >= dc,
+    "margin" => total - dc
+  }
+end
+
+def monster_multiplier(count)
+  case count
+  when 1 then 1
+  when 2 then 1.5
+  when 3..6 then 2
+  when 7..10 then 2.5
+  when 11..14 then 3
+  else 4
+  end
+end
+
+def adjusted_xp(params)
+  party = params["party"]
+  monsters = params["monsters"]
+  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
+
+  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
+  party.each do |member|
+    level = member.is_a?(Hash) && member["level"]
+    level_thresholds = LEVEL_THRESHOLDS[level]
+    raise ArgumentError unless level_thresholds
+
+    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
+  end
+
+  base_xp = 0
+  monster_count = 0
+  monsters.each do |monster|
+    raise ArgumentError unless monster.is_a?(Hash)
+
+    cr = monster["cr"]
+    count = monster["count"]
+    xp = CR_XP[cr]
+    raise ArgumentError unless xp && integer_value?(count) && count.positive?
+
+    base_xp += xp * count
+    monster_count += count
+  end
+
+  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
+  adjusted = base_xp * multiplier
+  adjusted = adjusted.to_i if adjusted == adjusted.to_i
+  difficulty = "trivial"
+  %w[easy medium hard deadly].each do |name|
+    difficulty = name if adjusted >= thresholds[name]
+  end
+
+  {
+    "base_xp" => base_xp,
+    "monster_count" => monster_count,
+    "multiplier" => multiplier,
+    "adjusted_xp" => adjusted,
+    "difficulty" => difficulty,
+    "thresholds" => thresholds
+  }
+end
+
+def initiative_order(params)
+  combatants = params["combatants"]
+  raise ArgumentError unless combatants.is_a?(Array)
+
+  order = combatants.map do |combatant|
+    raise ArgumentError unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  {
+    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+  }
+end
+
+def route(method, path, body)
+  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+
+  unless method == "POST"
+    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+  end
+
+  params = parse_json_body(body)
+  response = case path
+             when "/v1/dice/stats" then dice_stats(params)
+             when "/v1/checks/ability" then ability_check(params)
+             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
+             when "/v1/initiative/order" then initiative_order(params)
+             else
+               return json_response(404, { "error" => "not found" })
+             end
+
+  json_response(200, response)
+rescue ArgumentError
+  json_response(400, { "error" => "bad request" })
+end
+
+def read_request(client)
+  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
+  return unless request_line
+
+  method, raw_path, = request_line.split(" ", 3)
+  headers = {}
+  while (line = client.gets)
+    line = line.delete_suffix("\n").delete_suffix("\r")
+    break if line.empty?
+
+    key, value = line.split(":", 2)
+    headers[key.downcase] = value.strip if key && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? client.read(length) : ""
+  path = raw_path.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+port = Integer(ENV.fetch("PORT"))
+server = TCPServer.new("127.0.0.1", port)
+
+trap("INT") { server.close }
+trap("TERM") { server.close }
+
+loop do
+  client = server.accept
+  request = read_request(client)
+  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
+rescue IOError, Errno::EBADF
+  break
+rescue StandardError
+  client&.write(json_response(400, { "error" => "bad request" }))
+ensure
+  client&.close
+end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf7c4dcaaae7b159f2d179824ec4f1787f512519
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.delete_suffix("\n").delete_suffix("\r")
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+codex
+Syntax is clean. I’m checking the final diff so the close-out reflects exactly what changed.
+exec
+/bin/zsh -lc 'git diff -- run.sh server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf7c4dcaaae7b159f2d179824ec4f1787f512519
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.delete_suffix("\n").delete_suffix("\r")
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+codex
+Implemented the Ruby stdlib REST server in [server.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb:1). It uses `socket` and `json` only, binds to `127.0.0.1` with `ENV["PORT"]`, and supports all required core endpoints.
+
+`run.sh` was already present and executable, and still starts the server in the foreground with `ruby server.rb`.
+
+Verification: `ruby -c server.rb` passes. I did not start the server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf7c4dcaaae7b159f2d179824ec4f1787f512519
+--- /dev/null
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -0,0 +1,229 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++require "json"
++require "socket"
++
++CR_XP = {
++  "0" => 10,
++  "1/8" => 25,
++  "1/4" => 50,
++  "1/2" => 100,
++  "1" => 200,
++  "2" => 450,
++  "3" => 700,
++  "4" => 1100,
++  "5" => 1800
++}.freeze
++
++LEVEL_THRESHOLDS = {
++  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
++}.freeze
++
++def json_response(status, body)
++  payload = JSON.generate(body)
++  reason = {
++    200 => "OK",
++    400 => "Bad Request",
++    404 => "Not Found",
++    405 => "Method Not Allowed"
++  }.fetch(status, "OK")
++
++  [
++    "HTTP/1.1 #{status} #{reason}",
++    "Content-Type: application/json",
++    "Content-Length: #{payload.bytesize}",
++    "Connection: close",
++    "",
++    payload
++  ].join("\r\n")
++end
++
++def integer_value?(value)
++  value.is_a?(Integer)
++end
++
++def parse_json_body(body)
++  parsed = JSON.parse(body)
++  raise ArgumentError unless parsed.is_a?(Hash)
++
++  parsed
++rescue JSON::ParserError
++  raise ArgumentError
++end
++
++def dice_stats(params)
++  expression = params["expression"]
++  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
++  raise ArgumentError unless match
++
++  count = match[1].to_i
++  sides = match[2].to_i
++  raise ArgumentError unless count.positive? && sides.positive?
++
++  modifier = match[4] ? match[4].to_i : 0
++  modifier = -modifier if match[3] == "-"
++  average = (count * (sides + 1) / 2.0) + modifier
++  average = average.to_i if average == average.to_i
++
++  {
++    "dice_count" => count,
++    "sides" => sides,
++    "modifier" => modifier,
++    "min" => count + modifier,
++    "max" => (count * sides) + modifier,
++    "average" => average
++  }
++end
++
++def ability_check(params)
++  roll = params["roll"]
++  modifier = params["modifier"]
++  dc = params["dc"]
++  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
++
++  total = roll + modifier
++  {
++    "total" => total,
++    "success" => total >= dc,
++    "margin" => total - dc
++  }
++end
++
++def monster_multiplier(count)
++  case count
++  when 1 then 1
++  when 2 then 1.5
++  when 3..6 then 2
++  when 7..10 then 2.5
++  when 11..14 then 3
++  else 4
++  end
++end
++
++def adjusted_xp(params)
++  party = params["party"]
++  monsters = params["monsters"]
++  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
++
++  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
++  party.each do |member|
++    level = member.is_a?(Hash) && member["level"]
++    level_thresholds = LEVEL_THRESHOLDS[level]
++    raise ArgumentError unless level_thresholds
++
++    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
++  end
++
++  base_xp = 0
++  monster_count = 0
++  monsters.each do |monster|
++    raise ArgumentError unless monster.is_a?(Hash)
++
++    cr = monster["cr"]
++    count = monster["count"]
++    xp = CR_XP[cr]
++    raise ArgumentError unless xp && integer_value?(count) && count.positive?
++
++    base_xp += xp * count
++    monster_count += count
++  end
++
++  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
++  adjusted = base_xp * multiplier
++  adjusted = adjusted.to_i if adjusted == adjusted.to_i
++  difficulty = "trivial"
++  %w[easy medium hard deadly].each do |name|
++    difficulty = name if adjusted >= thresholds[name]
++  end
++
++  {
++    "base_xp" => base_xp,
++    "monster_count" => monster_count,
++    "multiplier" => multiplier,
++    "adjusted_xp" => adjusted,
++    "difficulty" => difficulty,
++    "thresholds" => thresholds
++  }
++end
++
++def initiative_order(params)
++  combatants = params["combatants"]
++  raise ArgumentError unless combatants.is_a?(Array)
++
++  order = combatants.map do |combatant|
++    raise ArgumentError unless combatant.is_a?(Hash)
++
++    name = combatant["name"]
++    dex = combatant["dex"]
++    roll = combatant["roll"]
++    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
++
++    { "name" => name, "dex" => dex, "score" => roll + dex }
++  end
++
++  {
++    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
++                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
++  }
++end
++
++def route(method, path, body)
++  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
++
++  unless method == "POST"
++    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
++  end
++
++  params = parse_json_body(body)
++  response = case path
++             when "/v1/dice/stats" then dice_stats(params)
++             when "/v1/checks/ability" then ability_check(params)
++             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
++             when "/v1/initiative/order" then initiative_order(params)
++             else
++               return json_response(404, { "error" => "not found" })
++             end
++
++  json_response(200, response)
++rescue ArgumentError
++  json_response(400, { "error" => "bad request" })
++end
++
++def read_request(client)
++  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
++  return unless request_line
++
++  method, raw_path, = request_line.split(" ", 3)
++  headers = {}
++  while (line = client.gets)
++    line = line.delete_suffix("\n").delete_suffix("\r")
++    break if line.empty?
++
++    key, value = line.split(":", 2)
++    headers[key.downcase] = value.strip if key && value
++  end
++
++  length = headers.fetch("content-length", "0").to_i
++  body = length.positive? ? client.read(length) : ""
++  path = raw_path.to_s.split("?", 2).first
++  [method, path, body]
++end
++
++port = Integer(ENV.fetch("PORT"))
++server = TCPServer.new("127.0.0.1", port)
++
++trap("INT") { server.close }
++trap("TERM") { server.close }
++
++loop do
++  client = server.accept
++  request = read_request(client)
++  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
++rescue IOError, Errno::EBADF
++  break
++rescue StandardError
++  client&.write(json_response(400, { "error" => "bad request" }))
++ensure
++  client&.close
++end
+
+tokens used
+29,600

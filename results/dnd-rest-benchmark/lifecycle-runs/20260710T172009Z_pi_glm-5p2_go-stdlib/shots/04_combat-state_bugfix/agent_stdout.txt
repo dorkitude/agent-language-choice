@@ -1,0 +1,18 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+**Root cause:** In `handleAdvanceTurn`, when a combatant's last condition expired (remaining rounds reached 0), the code did `delete(sess.Conditions, activeName)` — wiping the combatant's key from the conditions map entirely. This produced `"conditions":{}` instead of the expected `"conditions":{"fighter":[]}`.
+
+The spec says to "Remove a **condition** when its remaining duration reaches 0" — the condition entry, not the combatant's slot. The evaluator's `combat-advance-expired-removed` test expects the fighter's key to remain visible (with an empty array) as evidence the condition was removed.
+
+**Fix** (in `main.go`, `handleAdvanceTurn`):
+- Replaced `delete(sess.Conditions, activeName)` with `sess.Conditions[activeName] = kept` — keeping the key with a non-nil empty slice that serializes to `[]`.
+- Added a `hadConds` guard (via the two-value map lookup `conds, hadConds := sess.Conditions[activeName]`) so we only retain the key for combatants who **actually had conditions**. Combatants who never had conditions (like mage/rogue on their turns) still don't appear in the response — preserving the passing tests.
+
+**Verified:**
+- Full 7-step combat sequence now returns `{"fighter":[]}` on expiry ✅
+- All prior advance steps unchanged (decrement, wrap-round, etc.) ✅
+- Core endpoints (health, dice, ability-modifier, 400/404 errors) unaffected ✅
+- `go vet` + `go build` clean ✅
+- `run.sh` intact and executable ✅

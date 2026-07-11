@@ -1,0 +1,28 @@
+Everything is ready, Chef! 🎲
+
+## Summary
+
+**Root cause:** The previous creative agent **timed out at 900s** (the agent process itself, not a code bug). The `server.rb` it left behind was actually complete and correct — the evaluator just never got to run because the agent never returned control.
+
+**What I did:**
+- Verified the existing `server.rb` (Ruby stdlib only — `socket` + `json`, no Sinatra/Rack/gems) against every spec endpoint and edge case
+- Confirmed `run.sh` starts the server in the foreground on `127.0.0.1:$PORT`
+
+**Verification — all passing:**
+
+| Endpoint | Test | Result |
+|---|---|---|
+| `GET /health` | basic | `{"ok":true}` ✅ |
+| `POST /v1/dice/stats` | `2d6+3` | min=5, max=15, avg=10 ✅ |
+| | `1d20` | avg=10.5 (true fractional avg preserved) ✅ |
+| | `2d6-1` | neg modifier ✅ |
+| | `0d6`, `2d0`, garbage, empty | all → 400 ✅ |
+| `POST /v1/checks/ability` | roll=9,mod=5,dc=15 | total=14, success=false, margin=-1 ✅ |
+| `POST /v1/encounters/adjusted-xp` | spec sample | base=850, mult=2, adj=1700, deadly ✅ |
+| | 2 monsters (mult 1.5) | `num()` → `75` not `75.0` ✅ |
+| | 15 monsters (mult 4) | ✅ |
+| | bad CR | → 400 ✅ |
+| `POST /v1/initiative/order` | spec sample | rogue(17) → ogre(15) ✅ |
+| | 3-way tie | dex desc then name asc ✅ |
+
+No code changes were needed — the implementation was already correct. The fix was confirming it works end-to-end so the evaluator can now run successfully. `./run.sh` is ready. ✨

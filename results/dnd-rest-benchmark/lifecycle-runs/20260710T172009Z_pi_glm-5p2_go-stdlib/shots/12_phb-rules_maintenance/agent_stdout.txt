@@ -1,0 +1,33 @@
+Everything works, Chef 🎲✨
+
+## Summary
+
+I added the three **Selected PHB Rules** endpoints to `main.go` while preserving all prior-stage behavior.
+
+### New endpoints
+
+**`POST /v1/phb/spell-slots`** — Returns the wizard spell-slot progression. I encoded the full PHB full-caster table for wizard levels 1–20 (so level 5 returns `{"1":4,"2":3,"3":2}`). Non-wizard classes and out-of-range levels return `400`.
+
+**`POST /v1/phb/rests/long`** — Applies long-rest mechanics:
+- HP → max HP
+- Hit dice restored = `max(level/2, 1)` (rounded down, min 1), subtracted from spent (floored at 0)
+- Exhaustion reduced by 1, floored at 0
+
+For the spec example: level 5 restores 2 dice → `3−2=1` spent, exhaustion `1−1=0`. ✓
+
+**`POST /v1/phb/equipment-load`** — Capacity = `strength × 15`; `encumbered` when `weight > capacity`. For strength 12: capacity 180, weight 181 → encumbered `true`. ✓
+
+### Design notes
+- All success responses are JSON; invalid JSON / unsupported inputs return non-2xx (`400`).
+- `slots` is a `map[string]int` — `encoding/json` emits keys in sorted order, so `{"1":4,"2":3,"3":2}` renders deterministically.
+- Zero-count slots are omitted (matching the example shape).
+- No third-party packages — pure `net/http` + `encoding/json`, Go 1.26 stdlib only.
+
+### Verification
+- `go build` clean ✅
+- All three spec examples produce byte-exact expected responses ✅
+- Invalid inputs return `400` ✅
+- Prior stages (health, dice-stats, proficiency, storage, auth) still pass ✅
+- `run.sh` unchanged — starts the server in the foreground via `go run .` on `127.0.0.1:$PORT` ✅
+
+The server is **not** left running — ready for the evaluator. 🚀

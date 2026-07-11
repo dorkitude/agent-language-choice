@@ -1,0 +1,5754 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f50bf-af5a-74a1-90c5-29a0f105b56d
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-stdlib
+        Language: php
+        Framework/runtime: stdlib
+        Lifecycle stage: combat-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8 and the built-in PHP server. Do not add Composer packages.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing PHP stdlib app first so the new combat state behavior fits the current router and response conventions.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ../20260711T080759Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260711T083219Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260711T085934Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260711T092405Z_claude_opus_ruby-rails/
+?? ../20260711T093710Z_claude_sonnet_ruby-rails/
+?? ../20260711T093731Z_codex_gpt-5.5_ruby-rails/
+?? ../20260711T100327Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260711T102312Z_pi_glm-5p2_ruby-rails/
+?? ../20260711T103327Z_claude_opus_php-stdlib/
+?? ../20260711T103332Z_claude_sonnet_php-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/03_combat-state_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+index.php
+setup.json
+
+codex
+The repo has a very small surface, so I’m reading the current entrypoint and launcher next. I’ll ignore unrelated dirty files outside this run directory.
+exec
+/bin/zsh -lc "sed -n '1,260p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+<?php
+declare(strict_types=1);
+
+function send_json(mixed $body, int $status = 200): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json');
+    echo json_encode($body, JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function bad_request(string $message = 'bad request'): never
+{
+    send_json(['error' => $message], 400);
+}
+
+function read_json_body(): array
+{
+    $raw = file_get_contents('php://input');
+    $data = json_decode($raw === false ? '' : $raw, true);
+    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
+        bad_request('invalid json');
+    }
+    return $data;
+}
+
+function require_int(mixed $value, string $field): int
+{
+    if (!is_int($value)) {
+        bad_request("invalid $field");
+    }
+    return $value;
+}
+
+function require_int_range(mixed $value, string $field, int $min, int $max): int
+{
+    $number = require_int($value, $field);
+    if ($number < $min || $number > $max) {
+        bad_request("invalid $field");
+    }
+    return $number;
+}
+
+function require_post(string $method): void
+{
+    if ($method !== 'POST') {
+        send_json(['error' => 'not found'], 404);
+    }
+}
+
+function ability_modifier(int $score): int
+{
+    return (int)floor(($score - 10) / 2);
+}
+
+function proficiency_bonus(int $level): int
+{
+    return 2 + intdiv($level - 1, 4);
+}
+
+function monster_multiplier(int $count): float|int
+{
+    if ($count <= 1) {
+        return 1;
+    }
+    if ($count === 2) {
+        return 1.5;
+    }
+    if ($count <= 6) {
+        return 2;
+    }
+    if ($count <= 10) {
+        return 2.5;
+    }
+    if ($count <= 14) {
+        return 3;
+    }
+    return 4;
+}
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+if ($method === 'GET' && $path === '/health') {
+    send_json(['ok' => true]);
+}
+
+if ($path === '/v1/dice/stats') {
+    require_post($method);
+    $data = read_json_body();
+    $expression = $data['expression'] ?? null;
+    if (!is_string($expression)) {
+        bad_request('invalid expression');
+    }
+    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
+        bad_request('invalid expression');
+    }
+
+    $count = (int)$matches[1];
+    $sides = (int)$matches[2];
+    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
+    if ($count <= 0 || $sides <= 0) {
+        bad_request('invalid expression');
+    }
+
+    send_json([
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $count + $modifier,
+        'max' => ($count * $sides) + $modifier,
+        'average' => ($count * ($sides + 1) / 2) + $modifier,
+    ]);
+}
+
+if ($path === '/v1/checks/ability') {
+    require_post($method);
+    $data = read_json_body();
+    $roll = require_int($data['roll'] ?? null, 'roll');
+    $modifier = require_int($data['modifier'] ?? null, 'modifier');
+    $dc = require_int($data['dc'] ?? null, 'dc');
+    $total = $roll + $modifier;
+
+    send_json([
+        'total' => $total,
+        'success' => $total >= $dc,
+        'margin' => $total - $dc,
+    ]);
+}
+
+if ($path === '/v1/encounters/adjusted-xp') {
+    require_post($method);
+    $data = read_json_body();
+    $party = $data['party'] ?? null;
+    $monsters = $data['monsters'] ?? null;
+    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
+        bad_request('invalid encounter');
+    }
+
+    $xpByCr = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+    $levelThresholds = [
+        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
+    ];
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($party as $member) {
+        if (!is_array($member)) {
+            bad_request('invalid party');
+        }
+        $level = require_int($member['level'] ?? null, 'level');
+        if (!isset($levelThresholds[$level])) {
+            bad_request('unsupported level');
+        }
+        foreach ($thresholds as $name => $_) {
+            $thresholds[$name] += $levelThresholds[$level][$name];
+        }
+    }
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($monsters as $monster) {
+        if (!is_array($monster)) {
+            bad_request('invalid monsters');
+        }
+        $cr = $monster['cr'] ?? null;
+        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
+            bad_request('unsupported cr');
+        }
+        $count = require_int($monster['count'] ?? null, 'count');
+        if ($count <= 0) {
+            bad_request('invalid count');
+        }
+        $baseXp += $xpByCr[$cr] * $count;
+        $monsterCount += $count;
+    }
+
+    $multiplier = monster_multiplier($monsterCount);
+    $adjustedXp = $baseXp * $multiplier;
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
+        if ($adjustedXp >= $thresholds[$name]) {
+            $difficulty = $name;
+        }
+    }
+
+    send_json([
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+}
+
+if ($path === '/v1/characters/ability-modifier') {
+    require_post($method);
+    $data = read_json_body();
+    $score = require_int_range($data['score'] ?? null, 'score', 1, 30);
+
+    send_json([
+        'score' => $score,
+        'modifier' => ability_modifier($score),
+    ]);
+}
+
+if ($path === '/v1/characters/proficiency') {
+    require_post($method);
+    $data = read_json_body();
+    $level = require_int_range($data['level'] ?? null, 'level', 1, 20);
+
+    send_json([
+        'level' => $level,
+        'proficiency_bonus' => proficiency_bonus($level),
+    ]);
+}
+
+if ($path === '/v1/characters/derived-stats') {
+    require_post($method);
+    $data = read_json_body();
+    $level = require_int_range($data['level'] ?? null, 'level', 1, 20);
+
+    $abilities = $data['abilities'] ?? null;
+    if (!is_array($abilities)) {
+        bad_request('invalid abilities');
+    }
+
+    $modifiers = [];
+    foreach (['str', 'dex', 'con', 'int', 'wis', 'cha'] as $ability) {
+        $score = require_int_range($abilities[$ability] ?? null, $ability, 1, 30);
+        $modifiers[$ability] = ability_modifier($score);
+    }
+
+    $armor = $data['armor'] ?? null;
+    if (!is_array($armor)) {
+        bad_request('invalid armor');
+    }
+    $armorBase = require_int($armor['base'] ?? null, 'base');
+    $dexCap = require_int($armor['dex_cap'] ?? null, 'dex_cap');
+    $shield = $armor['shield'] ?? null;
+    if (!is_bool($shield)) {
+        bad_request('invalid shield');
+    }
+
+    send_json([
+        'level' => $level,
+        'proficiency_bonus' => proficiency_bonus($level),
+        'hp_max' => $level * (6 + $modifiers['con']),
+        'armor_class' => $armorBase + min($modifiers['dex'], $dexCap) + ($shield ? 2 : 0),
+        'modifiers' => $modifiers,
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-core-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:60587",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+exec
+/bin/zsh -lc "sed -n '1,240p' dndeval-characters-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 0ms:
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:60650",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+codex
+I found the existing API implemented in one `index.php` with simple path checks and JSON helpers. I’m going to add a small file-backed process-state layer so combat sessions persist across requests while the built-in PHP server handles each request independently.
+exec
+/bin/zsh -lc "sed -n '261,520p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+    ]);
+}
+
+if ($path === '/v1/initiative/order') {
+    require_post($method);
+    $data = read_json_body();
+    $combatants = $data['combatants'] ?? null;
+    if (!is_array($combatants)) {
+        bad_request('invalid combatants');
+    }
+
+    $rows = [];
+    foreach ($combatants as $combatant) {
+        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+            bad_request('invalid combatant');
+        }
+        $dex = require_int($combatant['dex'] ?? null, 'dex');
+        $roll = require_int($combatant['roll'] ?? null, 'roll');
+        $rows[] = [
+            'name' => $combatant['name'],
+            'dex' => $dex,
+            'score' => $roll + $dex,
+        ];
+    }
+
+    usort($rows, function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+
+    send_json([
+        'order' => array_map(
+            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+            $rows
+        ),
+    ]);
+}
+
+send_json(['error' => 'not found'], 404);
+
+exec
+/bin/zsh -lc "rg -n \"initiative|combat|/v1\" index.php shots -g '*.md' -g '*.json'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+index.php:88:if ($path === '/v1/dice/stats') {
+index.php:116:if ($path === '/v1/checks/ability') {
+index.php:131:if ($path === '/v1/encounters/adjusted-xp') {
+index.php:206:if ($path === '/v1/characters/ability-modifier') {
+index.php:217:if ($path === '/v1/characters/proficiency') {
+index.php:228:if ($path === '/v1/characters/derived-stats') {
+index.php:264:if ($path === '/v1/initiative/order') {
+index.php:267:    $combatants = $data['combatants'] ?? null;
+index.php:268:    if (!is_array($combatants)) {
+index.php:269:        bad_request('invalid combatants');
+index.php:273:    foreach ($combatants as $combatant) {
+index.php:274:        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+index.php:275:            bad_request('invalid combatant');
+index.php:277:        $dex = require_int($combatant['dex'] ?? null, 'dex');
+index.php:278:        $roll = require_int($combatant['roll'] ?? null, 'roll');
+index.php:280:            'name' => $combatant['name'],
+shots/02_characters_maintenance/PROMPT.md:68:`POST /v1/characters/ability-modifier`
+shots/02_characters_maintenance/PROMPT.md:90:`POST /v1/characters/proficiency`
+shots/02_characters_maintenance/PROMPT.md:115:`POST /v1/characters/derived-stats`
+shots/03_combat-state_maintenance/PROMPT.md:7:        Lifecycle stage: combat-state
+shots/03_combat-state_maintenance/PROMPT.md:71:`POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/PROMPT.md:78:  "combatants": [
+shots/03_combat-state_maintenance/PROMPT.md:90:- Sort initiative by score descending, then dex descending, then name ascending.
+shots/03_combat-state_maintenance/PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+shots/03_combat-state_maintenance/PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/PROMPT.md:126:- `target` must name a combatant in the session.
+shots/03_combat-state_maintenance/PROMPT.md:129:- Conditions are attached to the named combatant.
+shots/03_combat-state_maintenance/PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+shots/03_combat-state_maintenance/PROMPT.md:148:- Advance `turn_index` to the next combatant.
+shots/03_combat-state_maintenance/PROMPT.md:149:- When the turn index wraps from the end of the initiative order back to `0`,
+shots/03_combat-state_maintenance/PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+shots/03_combat-state_maintenance/PROMPT.md:152:  active combatant.
+shots/03_combat-state_maintenance/PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+shots/02_characters_maintenance/dndeval-characters-report.json:58:      "id": "initiative-order",
+shots/01_core_creative/dndeval-core-report.json:58:      "id": "initiative-order",
+shots/01_core_creative/PROMPT.md:71:## `POST /v1/dice/stats`
+shots/01_core_creative/PROMPT.md:105:## `POST /v1/checks/ability`
+shots/01_core_creative/PROMPT.md:125:## `POST /v1/encounters/adjusted-xp`
+shots/01_core_creative/PROMPT.md:189:## `POST /v1/initiative/order`
+shots/01_core_creative/PROMPT.md:195:  "combatants": [
+
+codex
+I’m editing `index.php` now: extracting initiative sorting into a helper, adding session serialization helpers, and wiring the three combat endpoints without changing the older endpoints’ response shapes.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..7ec6b7335e715b26711736ecab53ce1f088f16f8
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,102 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null) || $combatant['name'] === '') {
++            bad_request('invalid combatant');
++        }
++        if (isset($names[$combatant['name']])) {
++            bad_request('duplicate combatant');
++        }
++        $names[$combatant['name']] = true;
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..7ec6b7335e715b26711736ecab53ce1f088f16f8
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,102 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null) || $combatant['name'] === '') {
++            bad_request('invalid combatant');
++        }
++        if (isset($names[$combatant['name']])) {
++            bad_request('duplicate combatant');
++        }
++        $names[$combatant['name']] = true;
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+
+codex
+The shared helpers are in place. Next I’m replacing the duplicated initiative sort in the old endpoint and adding the stateful combat routes just before the final 404.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..9ad2f5f29823d83e44dab25037752b15409b6616
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,102 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null) || $combatant['name'] === '') {
++            bad_request('invalid combatant');
++        }
++        if (isset($names[$combatant['name']])) {
++            bad_request('duplicate combatant');
++        }
++        $names[$combatant['name']] = true;
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -265,36 +361,123 @@
+     require_post($method);
+     $data = read_json_body();
+     $combatants = $data['combatants'] ?? null;
+-    if (!is_array($combatants)) {
++    if (!is_array($combatants) || count($combatants) === 0) {
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
+     }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
++    }
+ 
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..9ad2f5f29823d83e44dab25037752b15409b6616
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,102 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null) || $combatant['name'] === '') {
++            bad_request('invalid combatant');
++        }
++        if (isset($names[$combatant['name']])) {
++            bad_request('duplicate combatant');
++        }
++        $names[$combatant['name']] = true;
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -265,36 +361,123 @@
+     require_post($method);
+     $data = read_json_body();
+     $combatants = $data['combatants'] ?? null;
+-    if (!is_array($combatants)) {
++    if (!is_array($combatants) || count($combatants) === 0) {
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
+     }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
++    }
+ 
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+codex
+I noticed one preservation issue while reviewing the diff: the shared sorter was stricter than the old initiative endpoint. I’m loosening it for the existing route and keeping stricter validation only for named combat sessions.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..7139cd3da7d8be138d87be0db2950d67ac8e3e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -265,36 +366,123 @@
+     require_post($method);
+     $data = read_json_body();
+     $combatants = $data['combatants'] ?? null;
+-    if (!is_array($combatants)) {
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
++    }
++
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
+ 
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..7139cd3da7d8be138d87be0db2950d67ac8e3e49
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -265,36 +366,123 @@
+     require_post($method);
+     $data = read_json_body();
+     $combatants = $data['combatants'] ?? null;
+-    if (!is_array($combatants)) {
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
++    }
++
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
+ 
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+codex
+I found one more small compatibility change: the old initiative route accepted an empty combatants array. I’m restoring that behavior while the new session creation still requires at least one combatant.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..f2fe30ba1c454ef68d1d9a9c79480bf6d3e42ea4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +370,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..f2fe30ba1c454ef68d1d9a9c79480bf6d3e42ea4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +370,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+codex
+The route changes are complete. I’m running static syntax checks now; I won’t start the HTTP server because the benchmark contract explicitly says not to before the final answer.
+exec
+/bin/zsh -lc 'bash -n run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..f2fe30ba1c454ef68d1d9a9c79480bf6d3e42ea4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +370,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+ succeeded in 303ms:
+No syntax errors detected in index.php
+
+codex
+Syntax checks passed for both the PHP entrypoint and `run.sh`. I’m doing a final diff review for behavior shape and state persistence details.
+exec
+/bin/zsh -lc 'git diff --stat -- index.php run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git diff -- index.php run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..f2fe30ba1c454ef68d1d9a9c79480bf6d3e42ea4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +370,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+codex
+`git diff` is empty because this run directory appears to be untracked from the parent repository’s perspective, not because the file is unchanged. I’m checking local file contents directly for the final sanity pass.
+exec
+/bin/zsh -lc "sed -n '1,380p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+<?php
+declare(strict_types=1);
+
+function send_json(mixed $body, int $status = 200): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json');
+    echo json_encode($body, JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function bad_request(string $message = 'bad request'): never
+{
+    send_json(['error' => $message], 400);
+}
+
+function read_json_body(): array
+{
+    $raw = file_get_contents('php://input');
+    $data = json_decode($raw === false ? '' : $raw, true);
+    if (!is_array($data) || json_last_error() !== JSON_ERROR_NONE) {
+        bad_request('invalid json');
+    }
+    return $data;
+}
+
+function require_int(mixed $value, string $field): int
+{
+    if (!is_int($value)) {
+        bad_request("invalid $field");
+    }
+    return $value;
+}
+
+function require_int_range(mixed $value, string $field, int $min, int $max): int
+{
+    $number = require_int($value, $field);
+    if ($number < $min || $number > $max) {
+        bad_request("invalid $field");
+    }
+    return $number;
+}
+
+function require_post(string $method): void
+{
+    if ($method !== 'POST') {
+        send_json(['error' => 'not found'], 404);
+    }
+}
+
+function ability_modifier(int $score): int
+{
+    return (int)floor(($score - 10) / 2);
+}
+
+function proficiency_bonus(int $level): int
+{
+    return 2 + intdiv($level - 1, 4);
+}
+
+function monster_multiplier(int $count): float|int
+{
+    if ($count <= 1) {
+        return 1;
+    }
+    if ($count === 2) {
+        return 1.5;
+    }
+    if ($count <= 6) {
+        return 2;
+    }
+    if ($count <= 10) {
+        return 2.5;
+    }
+    if ($count <= 14) {
+        return 3;
+    }
+    return 4;
+}
+
+function initiative_order(array $combatants, bool $uniqueNames = false): array
+{
+    $rows = [];
+    $names = [];
+    foreach ($combatants as $combatant) {
+        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+            bad_request('invalid combatant');
+        }
+        if ($uniqueNames) {
+            if ($combatant['name'] === '') {
+                bad_request('invalid combatant');
+            }
+            if (isset($names[$combatant['name']])) {
+                bad_request('duplicate combatant');
+            }
+            $names[$combatant['name']] = true;
+        }
+        $dex = require_int($combatant['dex'] ?? null, 'dex');
+        $roll = require_int($combatant['roll'] ?? null, 'roll');
+        $rows[] = [
+            'name' => $combatant['name'],
+            'dex' => $dex,
+            'score' => $roll + $dex,
+        ];
+    }
+
+    usort($rows, function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+
+    return $rows;
+}
+
+function public_order(array $rows): array
+{
+    return array_map(
+        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+        $rows
+    );
+}
+
+function state_file(): string
+{
+    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
+    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
+}
+
+function load_combat_state(): array
+{
+    $path = state_file();
+    if (!is_file($path)) {
+        return ['sessions' => []];
+    }
+    $raw = file_get_contents($path);
+    $state = json_decode($raw === false ? '' : $raw, true);
+    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
+        return ['sessions' => []];
+    }
+    return $state;
+}
+
+function save_combat_state(array $state): void
+{
+    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
+}
+
+function active_combatant(array $session): array
+{
+    $active = $session['order'][$session['turn_index']];
+    return ['name' => $active['name'], 'score' => $active['score']];
+}
+
+function public_conditions(array $conditions): array
+{
+    $result = [];
+    foreach ($conditions as $target => $items) {
+        if ($items !== []) {
+            $result[$target] = $items;
+        }
+    }
+    return $result;
+}
+
+function session_response(array $session, bool $includeConditions = false): array
+{
+    $response = [
+        'id' => $session['id'],
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => active_combatant($session),
+    ];
+    if ($includeConditions) {
+        $response['conditions'] = public_conditions($session['conditions']);
+    } else {
+        $response['order'] = public_order($session['order']);
+    }
+    return $response;
+}
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+if ($method === 'GET' && $path === '/health') {
+    send_json(['ok' => true]);
+}
+
+if ($path === '/v1/dice/stats') {
+    require_post($method);
+    $data = read_json_body();
+    $expression = $data['expression'] ?? null;
+    if (!is_string($expression)) {
+        bad_request('invalid expression');
+    }
+    if (!preg_match('/^([0-9]+)d([0-9]+)([+-][0-9]+)?$/', $expression, $matches)) {
+        bad_request('invalid expression');
+    }
+
+    $count = (int)$matches[1];
+    $sides = (int)$matches[2];
+    $modifier = isset($matches[3]) && $matches[3] !== '' ? (int)$matches[3] : 0;
+    if ($count <= 0 || $sides <= 0) {
+        bad_request('invalid expression');
+    }
+
+    send_json([
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $count + $modifier,
+        'max' => ($count * $sides) + $modifier,
+        'average' => ($count * ($sides + 1) / 2) + $modifier,
+    ]);
+}
+
+if ($path === '/v1/checks/ability') {
+    require_post($method);
+    $data = read_json_body();
+    $roll = require_int($data['roll'] ?? null, 'roll');
+    $modifier = require_int($data['modifier'] ?? null, 'modifier');
+    $dc = require_int($data['dc'] ?? null, 'dc');
+    $total = $roll + $modifier;
+
+    send_json([
+        'total' => $total,
+        'success' => $total >= $dc,
+        'margin' => $total - $dc,
+    ]);
+}
+
+if ($path === '/v1/encounters/adjusted-xp') {
+    require_post($method);
+    $data = read_json_body();
+    $party = $data['party'] ?? null;
+    $monsters = $data['monsters'] ?? null;
+    if (!is_array($party) || count($party) === 0 || !is_array($monsters) || count($monsters) === 0) {
+        bad_request('invalid encounter');
+    }
+
+    $xpByCr = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+    $levelThresholds = [
+        3 => ['easy' => 75, 'medium' => 150, 'hard' => 225, 'deadly' => 400],
+    ];
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($party as $member) {
+        if (!is_array($member)) {
+            bad_request('invalid party');
+        }
+        $level = require_int($member['level'] ?? null, 'level');
+        if (!isset($levelThresholds[$level])) {
+            bad_request('unsupported level');
+        }
+        foreach ($thresholds as $name => $_) {
+            $thresholds[$name] += $levelThresholds[$level][$name];
+        }
+    }
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($monsters as $monster) {
+        if (!is_array($monster)) {
+            bad_request('invalid monsters');
+        }
+        $cr = $monster['cr'] ?? null;
+        if (!is_string($cr) || !array_key_exists($cr, $xpByCr)) {
+            bad_request('unsupported cr');
+        }
+        $count = require_int($monster['count'] ?? null, 'count');
+        if ($count <= 0) {
+            bad_request('invalid count');
+        }
+        $baseXp += $xpByCr[$cr] * $count;
+        $monsterCount += $count;
+    }
+
+    $multiplier = monster_multiplier($monsterCount);
+    $adjustedXp = $baseXp * $multiplier;
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
+        if ($adjustedXp >= $thresholds[$name]) {
+            $difficulty = $name;
+        }
+    }
+
+    send_json([
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+}
+
+if ($path === '/v1/characters/ability-modifier') {
+    require_post($method);
+    $data = read_json_body();
+    $score = require_int_range($data['score'] ?? null, 'score', 1, 30);
+
+    send_json([
+        'score' => $score,
+        'modifier' => ability_modifier($score),
+    ]);
+}
+
+if ($path === '/v1/characters/proficiency') {
+    require_post($method);
+    $data = read_json_body();
+    $level = require_int_range($data['level'] ?? null, 'level', 1, 20);
+
+    send_json([
+        'level' => $level,
+        'proficiency_bonus' => proficiency_bonus($level),
+    ]);
+}
+
+if ($path === '/v1/characters/derived-stats') {
+    require_post($method);
+    $data = read_json_body();
+    $level = require_int_range($data['level'] ?? null, 'level', 1, 20);
+
+    $abilities = $data['abilities'] ?? null;
+    if (!is_array($abilities)) {
+        bad_request('invalid abilities');
+    }
+
+    $modifiers = [];
+    foreach (['str', 'dex', 'con', 'int', 'wis', 'cha'] as $ability) {
+        $score = require_int_range($abilities[$ability] ?? null, $ability, 1, 30);
+        $modifiers[$ability] = ability_modifier($score);
+    }
+
+    $armor = $data['armor'] ?? null;
+    if (!is_array($armor)) {
+        bad_request('invalid armor');
+    }
+    $armorBase = require_int($armor['base'] ?? null, 'base');
+    $dexCap = require_int($armor['dex_cap'] ?? null, 'dex_cap');
+    $shield = $armor['shield'] ?? null;
+    if (!is_bool($shield)) {
+        bad_request('invalid shield');
+    }
+
+    send_json([
+        'level' => $level,
+        'proficiency_bonus' => proficiency_bonus($level),
+        'hp_max' => $level * (6 + $modifiers['con']),
+        'armor_class' => $armorBase + min($modifiers['dex'], $dexCap) + ($shield ? 2 : 0),
+        'modifiers' => $modifiers,
+    ]);
+}
+
+if ($path === '/v1/initiative/order') {
+    require_post($method);
+    $data = read_json_body();
+    $combatants = $data['combatants'] ?? null;
+    if (!is_array($combatants)) {
+        bad_request('invalid combatants');
+    }
+
+    send_json(['order' => public_order(initiative_order($combatants))]);
+}
+
+if ($path === '/v1/combat/sessions') {
+    require_post($method);
+    $data = read_json_body();
+    $id = $data['id'] ?? null;
+    $combatants = $data['combatants'] ?? null;
+
+exec
+/bin/zsh -lc 'git status --short -- .' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+?? ./
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..f2fe30ba1c454ef68d1d9a9c79480bf6d3e42ea4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +370,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+exec
+/bin/zsh -lc "sed -n '381,520p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+    if (!is_string($id) || $id === '') {
+        bad_request('invalid id');
+    }
+    if (!is_array($combatants) || count($combatants) === 0) {
+        bad_request('invalid combatants');
+    }
+
+    $state = load_combat_state();
+    if (isset($state['sessions'][$id])) {
+        bad_request('duplicate session');
+    }
+
+    $order = initiative_order($combatants, true);
+    $conditions = [];
+    foreach ($order as $combatant) {
+        $conditions[$combatant['name']] = [];
+    }
+
+    $session = [
+        'id' => $id,
+        'round' => 1,
+        'turn_index' => 0,
+        'order' => $order,
+        'conditions' => $conditions,
+    ];
+    $state['sessions'][$id] = $session;
+    save_combat_state($state);
+
+    send_json(session_response($session));
+}
+
+if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
+    require_post($method);
+    $id = urldecode($matches[1]);
+    $data = read_json_body();
+    $target = $data['target'] ?? null;
+    $condition = $data['condition'] ?? null;
+    $duration = $data['duration_rounds'] ?? null;
+    if (!is_string($target) || $target === '') {
+        bad_request('invalid target');
+    }
+    if (!is_string($condition) || $condition === '') {
+        bad_request('invalid condition');
+    }
+    $duration = require_int($duration, 'duration_rounds');
+    if ($duration <= 0) {
+        bad_request('invalid duration_rounds');
+    }
+
+    $state = load_combat_state();
+    if (!isset($state['sessions'][$id])) {
+        send_json(['error' => 'not found'], 404);
+    }
+    $session = $state['sessions'][$id];
+    if (!array_key_exists($target, $session['conditions'])) {
+        bad_request('unknown target');
+    }
+
+    $session['conditions'][$target][] = [
+        'condition' => $condition,
+        'remaining_rounds' => $duration,
+    ];
+    $state['sessions'][$id] = $session;
+    save_combat_state($state);
+
+    send_json([
+        'target' => $target,
+        'conditions' => $session['conditions'][$target],
+    ]);
+}
+
+if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
+    require_post($method);
+    $id = urldecode($matches[1]);
+    $state = load_combat_state();
+    if (!isset($state['sessions'][$id])) {
+        send_json(['error' => 'not found'], 404);
+    }
+
+    $session = $state['sessions'][$id];
+    $nextIndex = $session['turn_index'] + 1;
+    if ($nextIndex >= count($session['order'])) {
+        $nextIndex = 0;
+        $session['round']++;
+    }
+    $session['turn_index'] = $nextIndex;
+
+    $active = active_combatant($session);
+    $activeName = $active['name'];
+    $remaining = [];
+    foreach ($session['conditions'][$activeName] as $item) {
+        $nextRemaining = $item['remaining_rounds'] - 1;
+        if ($nextRemaining > 0) {
+            $remaining[] = [
+                'condition' => $item['condition'],
+                'remaining_rounds' => $nextRemaining,
+            ];
+        }
+    }
+    $session['conditions'][$activeName] = $remaining;
+
+    $state['sessions'][$id] = $session;
+    save_combat_state($state);
+
+    send_json(session_response($session, true));
+}
+
+send_json(['error' => 'not found'], 404);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..f2fe30ba1c454ef68d1d9a9c79480bf6d3e42ea4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,107 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +370,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
++
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+codex
+One important runtime detail: file-backed state should still behave like process-lifetime state. I’m updating `run.sh` to clear and point the state file at startup so a restarted server on the same port cannot inherit stale sessions.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..cea1da44129b2d9a29e2d73cd7875e9c24d62884
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,111 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $configured = getenv('COMBAT_STATE_FILE');
++    if (is_string($configured) && $configured !== '') {
++        return $configured;
++    }
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +374,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
+ 
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..cea1da44129b2d9a29e2d73cd7875e9c24d62884
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,111 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $configured = getenv('COMBAT_STATE_FILE');
++    if (is_string($configured) && $configured !== '') {
++        return $configured;
++    }
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +374,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
+ 
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..cea1da44129b2d9a29e2d73cd7875e9c24d62884
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,111 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $configured = getenv('COMBAT_STATE_FILE');
++    if (is_string($configured) && $configured !== '') {
++        return $configured;
++    }
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +374,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
+ 
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..5c3728579f737df6af886a0b48d3454e6bcfc25d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+@@ -1,3 +1,5 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++export COMBAT_STATE_FILE="$PWD/.combat-state-${PORT}.json"
++rm -f "$COMBAT_STATE_FILE"
+ php -S 127.0.0.1:"$PORT" index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..cea1da44129b2d9a29e2d73cd7875e9c24d62884
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,111 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $configured = getenv('COMBAT_STATE_FILE');
++    if (is_string($configured) && $configured !== '') {
++        return $configured;
++    }
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +374,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
+ 
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..5c3728579f737df6af886a0b48d3454e6bcfc25d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+@@ -1,3 +1,5 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++export COMBAT_STATE_FILE="$PWD/.combat-state-${PORT}.json"
++rm -f "$COMBAT_STATE_FILE"
+ php -S 127.0.0.1:"$PORT" index.php
+
+codex
+The launcher now resets the combat state file before handing off to the PHP built-in server. I’m re-running syntax checks after that final adjustment.
+exec
+/bin/zsh -lc 'bash -n run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib
+ succeeded in 0ms:
+No syntax errors detected in index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..cea1da44129b2d9a29e2d73cd7875e9c24d62884
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,111 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $configured = getenv('COMBAT_STATE_FILE');
++    if (is_string($configured) && $configured !== '') {
++        return $configured;
++    }
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +374,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
+ 
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..5c3728579f737df6af886a0b48d3454e6bcfc25d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+@@ -1,3 +1,5 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++export COMBAT_STATE_FILE="$PWD/.combat-state-${PORT}.json"
++rm -f "$COMBAT_STATE_FILE"
+ php -S 127.0.0.1:"$PORT" index.php
+
+codex
+Implemented stateful combat support in [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php):
+
+- `POST /v1/combat/sessions`
+- `POST /v1/combat/sessions/{id}/conditions`
+- `POST /v1/combat/sessions/{id}/advance`
+
+Also updated [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh) so combat state is reset on server startup and then persisted across requests for that server process.
+
+Verification run:
+
+```bash
+php -l index.php
+bash -n run.sh
+```
+
+Both passed. I did not start the HTTP server, per the benchmark contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+index aa21b955c191987a3850318f78f4fa985d26ce75..cea1da44129b2d9a29e2d73cd7875e9c24d62884
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/index.php
+@@ -78,6 +78,111 @@
+     return 4;
+ }
+ 
++function initiative_order(array $combatants, bool $uniqueNames = false): array
++{
++    $rows = [];
++    $names = [];
++    foreach ($combatants as $combatant) {
++        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
++            bad_request('invalid combatant');
++        }
++        if ($uniqueNames) {
++            if ($combatant['name'] === '') {
++                bad_request('invalid combatant');
++            }
++            if (isset($names[$combatant['name']])) {
++                bad_request('duplicate combatant');
++            }
++            $names[$combatant['name']] = true;
++        }
++        $dex = require_int($combatant['dex'] ?? null, 'dex');
++        $roll = require_int($combatant['roll'] ?? null, 'roll');
++        $rows[] = [
++            'name' => $combatant['name'],
++            'dex' => $dex,
++            'score' => $roll + $dex,
++        ];
++    }
++
++    usort($rows, function (array $a, array $b): int {
++        return ($b['score'] <=> $a['score'])
++            ?: ($b['dex'] <=> $a['dex'])
++            ?: strcmp($a['name'], $b['name']);
++    });
++
++    return $rows;
++}
++
++function public_order(array $rows): array
++{
++    return array_map(
++        fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
++        $rows
++    );
++}
++
++function state_file(): string
++{
++    $configured = getenv('COMBAT_STATE_FILE');
++    if (is_string($configured) && $configured !== '') {
++        return $configured;
++    }
++    $port = $_SERVER['SERVER_PORT'] ?? getenv('PORT') ?: 'default';
++    return sys_get_temp_dir() . '/dnd-rest-php-combat-' . preg_replace('/[^A-Za-z0-9_.-]/', '_', (string)$port) . '.json';
++}
++
++function load_combat_state(): array
++{
++    $path = state_file();
++    if (!is_file($path)) {
++        return ['sessions' => []];
++    }
++    $raw = file_get_contents($path);
++    $state = json_decode($raw === false ? '' : $raw, true);
++    if (!is_array($state) || !isset($state['sessions']) || !is_array($state['sessions'])) {
++        return ['sessions' => []];
++    }
++    return $state;
++}
++
++function save_combat_state(array $state): void
++{
++    file_put_contents(state_file(), json_encode($state, JSON_UNESCAPED_SLASHES), LOCK_EX);
++}
++
++function active_combatant(array $session): array
++{
++    $active = $session['order'][$session['turn_index']];
++    return ['name' => $active['name'], 'score' => $active['score']];
++}
++
++function public_conditions(array $conditions): array
++{
++    $result = [];
++    foreach ($conditions as $target => $items) {
++        if ($items !== []) {
++            $result[$target] = $items;
++        }
++    }
++    return $result;
++}
++
++function session_response(array $session, bool $includeConditions = false): array
++{
++    $response = [
++        'id' => $session['id'],
++        'round' => $session['round'],
++        'turn_index' => $session['turn_index'],
++        'active' => active_combatant($session),
++    ];
++    if ($includeConditions) {
++        $response['conditions'] = public_conditions($session['conditions']);
++    } else {
++        $response['order'] = public_order($session['order']);
++    }
++    return $response;
++}
++
+ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ 
+@@ -269,32 +374,119 @@
+         bad_request('invalid combatants');
+     }
+ 
+-    $rows = [];
+-    foreach ($combatants as $combatant) {
+-        if (!is_array($combatant) || !is_string($combatant['name'] ?? null)) {
+-            bad_request('invalid combatant');
+-        }
+-        $dex = require_int($combatant['dex'] ?? null, 'dex');
+-        $roll = require_int($combatant['roll'] ?? null, 'roll');
+-        $rows[] = [
+-            'name' => $combatant['name'],
+-            'dex' => $dex,
+-            'score' => $roll + $dex,
+-        ];
++    send_json(['order' => public_order(initiative_order($combatants))]);
++}
++
++if ($path === '/v1/combat/sessions') {
++    require_post($method);
++    $data = read_json_body();
++    $id = $data['id'] ?? null;
++    $combatants = $data['combatants'] ?? null;
++    if (!is_string($id) || $id === '') {
++        bad_request('invalid id');
++    }
++    if (!is_array($combatants) || count($combatants) === 0) {
++        bad_request('invalid combatants');
++    }
++
++    $state = load_combat_state();
++    if (isset($state['sessions'][$id])) {
++        bad_request('duplicate session');
++    }
++
++    $order = initiative_order($combatants, true);
++    $conditions = [];
++    foreach ($order as $combatant) {
++        $conditions[$combatant['name']] = [];
+     }
+ 
+-    usort($rows, function (array $a, array $b): int {
+-        return ($b['score'] <=> $a['score'])
+-            ?: ($b['dex'] <=> $a['dex'])
+-            ?: strcmp($a['name'], $b['name']);
+-    });
++    $session = [
++        'id' => $id,
++        'round' => 1,
++        'turn_index' => 0,
++        'order' => $order,
++        'conditions' => $conditions,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session));
++}
++
++if (preg_match('#^/v1/combat/sessions/([^/]+)/conditions$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $data = read_json_body();
++    $target = $data['target'] ?? null;
++    $condition = $data['condition'] ?? null;
++    $duration = $data['duration_rounds'] ?? null;
++    if (!is_string($target) || $target === '') {
++        bad_request('invalid target');
++    }
++    if (!is_string($condition) || $condition === '') {
++        bad_request('invalid condition');
++    }
++    $duration = require_int($duration, 'duration_rounds');
++    if ($duration <= 0) {
++        bad_request('invalid duration_rounds');
++    }
+ 
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++    $session = $state['sessions'][$id];
++    if (!array_key_exists($target, $session['conditions'])) {
++        bad_request('unknown target');
++    }
++
++    $session['conditions'][$target][] = [
++        'condition' => $condition,
++        'remaining_rounds' => $duration,
++    ];
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
+     send_json([
+-        'order' => array_map(
+-            fn (array $row): array => ['name' => $row['name'], 'score' => $row['score']],
+-            $rows
+-        ),
++        'target' => $target,
++        'conditions' => $session['conditions'][$target],
+     ]);
+ }
+ 
++if (preg_match('#^/v1/combat/sessions/([^/]+)/advance$#', $path, $matches)) {
++    require_post($method);
++    $id = urldecode($matches[1]);
++    $state = load_combat_state();
++    if (!isset($state['sessions'][$id])) {
++        send_json(['error' => 'not found'], 404);
++    }
++
++    $session = $state['sessions'][$id];
++    $nextIndex = $session['turn_index'] + 1;
++    if ($nextIndex >= count($session['order'])) {
++        $nextIndex = 0;
++        $session['round']++;
++    }
++    $session['turn_index'] = $nextIndex;
++
++    $active = active_combatant($session);
++    $activeName = $active['name'];
++    $remaining = [];
++    foreach ($session['conditions'][$activeName] as $item) {
++        $nextRemaining = $item['remaining_rounds'] - 1;
++        if ($nextRemaining > 0) {
++            $remaining[] = [
++                'condition' => $item['condition'],
++                'remaining_rounds' => $nextRemaining,
++            ];
++        }
++    }
++    $session['conditions'][$activeName] = $remaining;
++
++    $state['sessions'][$id] = $session;
++    save_combat_state($state);
++
++    send_json(session_response($session, true));
++}
++
+ send_json(['error' => 'not found'], 404);
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..5c3728579f737df6af886a0b48d3454e6bcfc25d
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T103336Z_codex_gpt-5.5_php-stdlib/run.sh
+@@ -1,3 +1,5 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++export COMBAT_STATE_FILE="$PWD/.combat-state-${PORT}.json"
++rm -f "$COMBAT_STATE_FILE"
+ php -S 127.0.0.1:"$PORT" index.php
+
+tokens used
+31,013

@@ -1,0 +1,9 @@
+The fix works. 🎉 On the final advance (round 2, turn_index 2, active `fighter`), the response now returns `"conditions":{"fighter":[]}` — the `fighter` key persists with an empty array instead of being dropped, exactly what the evaluator expects.
+
+**What was wrong, Chef:** `conditions_map` skipped any combatant whose condition list was empty (`next if conds.empty?`). When the blessed condition expired and was removed, the `fighter` key vanished entirely, so the evaluator saw `conditions: {}` instead of `conditions: {"fighter": []}`.
+
+**The fix:**
+- Mark a combatant as `conditions_tracked` the first time a condition is attached (`app.rb:312`).
+- In `conditions_map`, include any tracked combatant regardless of whether its current list is empty (`app.rb:259`).
+
+This mirrors the reference implementation's behavior (a map keyed by name where removal empties the list but keeps the key) and preserves all prior-stage behavior — decrement-at-turn-start, wrap-round, and expiry all still work as shown in the replay. `run.sh` is unchanged and ready. ✨

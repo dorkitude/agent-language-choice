@@ -1,0 +1,25 @@
+✅ Done, Chef! 🎲
+
+## Root cause
+
+The `combat-advance-expired-removed` test expects that when a combatant's last condition expires, the combatant's key stays in the response as an empty array:
+
+```json
+"conditions": {"fighter": []}
+```
+
+The evaluator's `jsonContains` matcher requires the `"fighter"` key to *exist*. But `advanceTurn` was calling `unset($session['conditions'][$activeName])` once the filtered list became empty, which deleted the key entirely and produced `"conditions":{}` — failing with `missing JSON key "fighter"`.
+
+## The fix
+
+The spec says "Remove a **condition** when its remaining duration reaches 0" — i.e. remove the expired *entry*, not the combatant's bucket. So I removed the `unset(...)` block in `advanceTurn` (in `index.php`), keeping the combatant's key with an empty `[]` array once all their conditions expire.
+
+The output loop (`$conditionsOut[$name] = array_values($conds)`) already handles `[]` correctly, and `addCondition`'s `isset` check still works (an empty array is not null, so a freshly-added condition appends to the existing bucket rather than recreating it).
+
+## Verification
+
+- `combat-state`: **20/20 PASS** (previously 19/20) — `combat-advance-expired-removed` now returns `"conditions":{"fighter":[]}`
+- `core`: **8/8 PASS** — no regression
+- `characters`: **13/13 PASS** — no regression
+
+`./run.sh` is unchanged and ready (cleans stale state, starts `php -S 127.0.0.1:$PORT index.php` in the foreground).

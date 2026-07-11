@@ -1,0 +1,30 @@
+Done, Chef! 🎲🔐
+
+## Summary
+
+Added the **auth-users** stage to the Slim 4 app while preserving all prior endpoints (core, character-rules, combat-state — all still passing).
+
+### What I added to `index.php`
+
+1. **`UserStore`** — mirrors the existing `CombatStore` per-PID temp-file pattern, so user records persist across requests within one server run and reset cleanly per server start. Stores only `username`, `password_hash`, `role` — **never the plaintext password**.
+
+2. **`hashPassword` / `verifyPassword`** helpers — use PHP's standard `password_hash($pw, PASSWORD_DEFAULT)` (real bcrypt, 60-char `$2y$...` hash with random salt) and `password_verify`. Isolated behind helpers so a production hash can be swapped in trivially.
+
+3. **`POST /v1/auth/register`**
+   - `username`: regex `^[a-z0-9_-]{2,32}$` → else `400`
+   - `password`: string ≥ 8 chars → else `400`
+   - `role`: `dm` or `player` → else `400`
+   - duplicate username → `409`
+   - success → `200 {"username","role"}` (no password echoed)
+
+4. **`POST /v1/auth/login`**
+   - invalid JSON / missing or non-string fields → `400`
+   - unknown user **or** wrong password → `401` (no existence leak)
+   - success → `200 {"username","token":"session-<username>"}` (deterministic token)
+
+### Verification
+- `php -l` clean ✅
+- Full smoke test: register (200/409/400 variants), login (200/401/400 variants), plus prior endpoints (`/health`, `/v1/dice/stats`, `/v1/combat/sessions`, `/v1/characters/ability-modifier`, 404-JSON) all behave correctly ✅
+- `run.sh` unchanged & executable — starts `php -S 127.0.0.1:$PORT` in the foreground ✅
+
+`./run.sh` is ready to go. 🚀

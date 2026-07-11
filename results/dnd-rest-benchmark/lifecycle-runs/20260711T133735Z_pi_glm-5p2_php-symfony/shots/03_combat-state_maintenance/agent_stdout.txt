@@ -1,0 +1,27 @@
+All done, Chef! 🎲⚔️ Here's a summary of what I implemented:
+
+## Combat-State Stage — Complete ✅
+
+### New endpoints added
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/v1/combat/sessions` | POST | Create stateful combat session with initiative order |
+| `/v1/combat/sessions/{id}/conditions` | POST | Attach a timed condition to a combatant |
+| `/v1/combat/sessions/{id}/advance` | POST | Advance turn, decrement active combatant's conditions |
+
+### Key design decisions
+
+1. **State persistence** — PHP's built-in server resets all in-memory state per request (statics/globals don't survive). Since the PID is stable across requests, I used a **PID-keyed JSON file** in `sys_get_temp_dir()` for per-process state. `run.sh` cleans up stale files before starting to prevent PID-recycling contamination.
+
+2. **Initiative sorting** — score desc → dex desc → name asc (reuses the same comparator pattern from the existing `initiativeOrder` handler).
+
+3. **Condition lifecycle** — Conditions decrement only when their owner becomes the active combatant. Expired conditions (remaining_rounds → 0) are removed. Empty conditions map renders as `{}` (via `stdClass`) not `[]`.
+
+4. **Route dispatch** — Updated to pass `{id}` route params positionally to handlers. Existing handlers ignore extra args (PHP behavior), so no regressions.
+
+### Verification
+- All 8 existing endpoints pass (regression) ✓
+- All 3 spec examples match byte-for-byte ✓
+- Tie-breaking, single-combatant wrap, multi-condition decrement all verified ✓
+- Error cases: 404 for unknown sessions, 400 for malformed input ✓
+- Stale-state cleanup across restarts ✓

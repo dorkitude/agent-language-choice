@@ -1,0 +1,25 @@
+Everything is ready, Chef! 🎲✨
+
+## Summary
+
+Added two new auth endpoints to the existing D&D REST API while preserving all prior-stage behavior:
+
+### New endpoints
+- **`POST /v1/auth/register`** — validates username (`^[a-z0-9_-]{2,32}$`), password (≥8 chars), and role (`dm`|`player`); returns `{"username","role"}` on 200, `400` on malformed input, `409` on duplicate username.
+- **`POST /v1/auth/login`** — verifies credentials against the stored hash; returns `{"username","token":"session-<username>"}` on 200, `401` on bad credentials, `400` on malformed input.
+
+### Password hashing
+Used Java stdlib's **PBKDF2WithHmacSHA256** (`javax.crypto.SecretKeyFactory` + `PBEKeySpec`) with a random 16-byte salt, 100k iterations, 256-bit key. Verification uses `MessageDigest.isEqual` for constant-time comparison. The plain password is never stored or echoed — only `salt:hash` is kept in the in-memory `USERS` map.
+
+### What changed in `Main.java`
+1. Added imports for `javax.crypto`, `java.security`, and `java.util.Base64`
+2. Added `USERNAME` pattern + `USERS` ConcurrentHashMap
+3. Added two `case` branches in the router switch
+4. Added `register()`, `login()`, PBKDF2 helpers, and a `User` inner class
+
+### Verification (smoke test)
+- Register/duplicate/bad-username/short-password/bad-role/valid-player → all correct status codes ✅
+- Login good/bad-password/unknown-user/missing-field → 200/401/401/400 ✅
+- Prior endpoints (`/health`, `/v1/dice/stats`, `/v1/combat/sessions`) → still 200 ✅
+
+`run.sh` is unchanged — it compiles `Main.java` and starts the server in the foreground on `127.0.0.1:$PORT`. 🗡️

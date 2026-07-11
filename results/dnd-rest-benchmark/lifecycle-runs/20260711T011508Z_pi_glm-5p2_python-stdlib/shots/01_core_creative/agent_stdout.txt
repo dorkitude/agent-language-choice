@@ -1,0 +1,27 @@
+Done, Chef! 🎲✨ The core D&D REST engine is ready.
+
+## What I built
+
+**`server.py`** — pure Python 3.14 stdlib (`http.server` + `json` + `re`), `ThreadingHTTPServer` bound to `127.0.0.1:$PORT`.
+
+**`run.sh`** — `exec python3 server.py` (foreground, clean signal propagation).
+
+### Endpoints (all verified end-to-end against the spec examples)
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | `{"ok": true}` |
+| `POST /v1/dice/stats` | Regex-parsed `<count>d<sides>[±<mod>]`; positivity enforced; `average = (min+max)/2` (whole → int, else float); invalid → 400 |
+| `POST /v1/checks/ability` | `total/modifier/margin` with `success = total >= dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, monster-count multipliers, summed party thresholds, highest-tier difficulty `trivial→deadly` |
+| `POST /v1/initiative/order` | `score = roll+dex`, sort by score desc → dex desc → name asc |
+
+### Notable correctness details
+- **Types match the spec exactly**: `multiplier: 2` (int) vs `1.5`/`2.5` (float); `adjusted_xp` is `1700` (int) but `437.5` (float) for odd base × 1.5/2.5 — no premature rounding, per the literal formula `base_xp * multiplier`.
+- **Difficulty tiers** confirmed across all five levels (`trivial`/`easy`/`medium`/`hard`/`deadly`).
+- **Tie-breaking** verified: same score → higher dex → name ascending.
+- **Level-3 thresholds** match the spec row exactly; I included the standard 5e table for levels 1–20 as a harmless superset (level 3 is the spec authority).
+- **Robust 400s**: invalid dice grammar (`2d0`, `0d6`, `2D6`, `2d6+3+4`, empty, non-string), unknown CR, `count < 1`, unknown level, missing fields, malformed JSON, booleans-as-numbers.
+- **404** for unknown paths; query strings stripped via `urlparse`.
+
+The server is **not** running — I started it only briefly on throwaway ports for smoke testing, then killed it and cleaned up `__pycache__`. `./run.sh` is ready to launch it in the foreground. 🐍

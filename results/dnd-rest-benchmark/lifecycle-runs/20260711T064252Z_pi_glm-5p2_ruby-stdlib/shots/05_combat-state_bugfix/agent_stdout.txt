@@ -1,0 +1,26 @@
+The fix is complete and verified. 🎲
+
+## What was wrong
+
+The `combat-advance-expired-removed` test failed because when a combatant's condition expired (reached `remaining_rounds: 0`), the code did **two** things that hid the combatant from the response:
+
+1. `advance_turn` deleted the combatant's key from `session["conditions"]` once its list became empty.
+2. `conditions_view` skipped any combatant whose condition list was `nil`/empty.
+
+So after `fighter`'s `blessed` condition decremented `1 → 0` and was removed, the advance response returned `"conditions":{}` — but the evaluator expects the `fighter` key to still be present (with an empty array, showing the combatant is tracked but no longer affected).
+
+## The fix (in `server.rb`)
+
+- **`conditions_view`**: stopped filtering out empty condition lists — a combatant whose conditions have all expired now appears as `"fighter":[]`. Combatants who *never* had a condition never get a key, so they don't appear (this preserves all earlier test responses exactly).
+- **`advance_turn`**: removed the `session["conditions"].delete(active_name) ...` line so the key survives expiration with an empty array.
+
+No prior-stage behavior was changed — the decremented/expiry logic, round-wrap, initiative ordering, and all core/characters endpoints are untouched.
+
+## Verification
+
+Ran the real `dndeval` binary against the server:
+- `combat-state`: **20/20** ✅ (was 19/20)
+- `core`: **8/8** ✅
+- `characters`: **13/13** ✅
+
+`./run.sh` is ready and starts the server in the foreground on `127.0.0.1:$PORT`. Nice little bug hunt, Chef 🍳

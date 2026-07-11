@@ -1,0 +1,27 @@
+All set, Chef 🎲✨ Here's what I did for the **SQLite Game Storage** maintenance stage:
+
+## Changes
+
+**`db.php` (new)** — SQLite storage module using PDO + `pdo_sqlite` (no Composer packages):
+- Schema v1 tables: `schema_meta`, `combat_sessions` (JSON blob per id), `users` (normalized)
+- `db()` opens a fresh connection per request and idempotently ensures the schema (the built-in server re-executes per request, so this guarantees `initialized: true`)
+- `db_reset()` drops + recreates the data tables
+- Drop-in `load/save_combat_sessions` and `load/save_users` replacing the old JSON-file helpers → **handlers untouched**
+- Runnable directly (`php db.php`) for startup pre-init
+
+**`index.php`** — replaced the JSON-file storage helpers with `require __DIR__ . '/db.php'`, and added two endpoints:
+- `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- `POST /v1/storage/reset` → `{"ok":true,"schema_version":1}` (drops + recreates schema, clears all durable data)
+
+**`run.sh`** — wipes `game.db` on startup (preserves the prior per-process-lifetime semantics), pre-initializes the schema, then starts the built-in server on `127.0.0.1:$PORT`.
+
+## Verification (cumulative)
+Ran the full evaluator flow against a live server — all prior behavior preserved:
+- ✅ core (8) + characters (5) — identical JSON
+- ✅ combat-state incl. the `combat-advance-expired-removed` edge case → `{"conditions":{"fighter":[]}}` survives the SQLite JSON round-trip
+- ✅ auth-users — register 201 / dup 409 / login 200 `session-dm` / bad-pw 401
+- ✅ storage status/reset, wrong-method → 404, reset actually clears data (login→401, advance→404)
+- ✅ `game.db` created in project dir with correct tables; restart wipes state and recreates schema
+- ✅ `php -l` clean on both files; no PHP warnings in server log
+
+`./run.sh` is ready to go — I did **not** leave the server running. 🛡️

@@ -1,0 +1,31 @@
+All done, Chef! 🎲✨ Here's the summary of the implementation:
+
+## What I built
+
+A D&D REST API served through **Vite 8.1.3 dev-server middleware** (a Vite plugin), exactly as the target guidance requires — no plain Node server replacement.
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `src/dndPlugin.ts` | Vite plugin + all route handlers (dice, ability, encounter XP, initiative) |
+| `vite.config.ts` | Registers the plugin via `configureServer` → `server.middlewares.use(...)` |
+| `run.sh` | Resolves local `node_modules/.bin`, then `exec vite --host 127.0.0.1 --port $PORT` in the foreground |
+| `tsconfig.json` | Added `noEmit` + `allowImportingTsExtensions` so the config's `.ts` import type-checks under `NodeNext` |
+| `index.html`, `src/main.ts` | Left untouched — Vite still serves the SPA root at `/` (prior behavior preserved) |
+
+### Endpoints
+- `GET /health` → `{"ok":true}`
+- `POST /v1/dice/stats` — regex-parsed `<count>d<sides>[±<mod>]`, validates count/sides > 0, 400 on invalid
+- `POST /v1/checks/ability` — total/success/margin
+- `POST /v1/encounters/adjusted-xp` — CR→XP table, count multipliers (1, 1.5, 2, 2.5, 3, 4), level-3 thresholds summed across party, difficulty = highest reached
+- `POST /v1/initiative/order` — score = roll+dex, sort by score desc → dex desc → name asc
+
+### Verification
+- ✅ `tsc --noEmit` clean
+- ✅ Versions unchanged (vite 8.1.3, typescript 7.0.2, no downgrades)
+- ✅ 17/17 spec-example + edge-case curl tests passed (including all multiplier tiers, fractional `adjusted_xp` via the literal formula, tie-breaking, and 400 paths for invalid expressions / unknown CR / bad JSON)
+- ✅ `GET /` still serves the Vite SPA — middleware only intercepts API routes and calls `next()` otherwise
+- ✅ Server listens on `127.0.0.1:$PORT`, foreground via `exec`; test server stopped
+
+`./run.sh` is ready to go. 🐉

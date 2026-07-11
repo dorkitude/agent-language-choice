@@ -1,0 +1,4327 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4eab-8812-7b70-a927-83e7fbbfecac
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-stdlib
+        Language: python
+        Framework/runtime: stdlib
+        Lifecycle stage: campaign-state
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 standard library only, such as http.server and json.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 6: Campaign State APIs
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and add SQLite-backed APIs for campaign state.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input, `404` for unknown records, and
+`409` for duplicate IDs.
+
+## Create Campaign
+
+`POST /v1/campaigns`
+
+Request:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+Response:
+
+```json
+{"id": "camp-1", "name": "Lost Mine", "dm": "dm"}
+```
+
+## Add Character
+
+`POST /v1/campaigns/camp-1/characters`
+
+Request:
+
+```json
+{
+  "id": "char-1",
+  "name": "Nyx",
+  "level": 3,
+  "class": "rogue"
+}
+```
+
+Response:
+
+```json
+{"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+```
+
+## Add Session Log Event
+
+`POST /v1/campaigns/camp-1/events`
+
+Request:
+
+```json
+{"id": "evt-1", "kind": "note", "summary": "Nyx scouts the goblin trail."}
+```
+
+Response:
+
+```json
+{"id": "evt-1", "kind": "note"}
+```
+
+## Read Campaign State
+
+`GET /v1/campaigns/camp-1/state`
+
+Response:
+
+```json
+{
+  "id": "camp-1",
+  "name": "Lost Mine",
+  "dm": "dm",
+  "characters": [
+    {"id": "char-1", "name": "Nyx", "level": 3, "class": "rogue"}
+  ],
+  "log_count": 1
+}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing server and tests first so the new campaign state endpoints fit the current routing and response conventions.
+exec
+/bin/zsh -lc 'pwd && ls -la' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+total 1568
+drwxr-xr-x@ 24 dorkitude  staff     768 Jul 10 17:54 .
+drwxr-xr-x@ 95 dorkitude  staff    3040 Jul 10 17:40 ..
+-rw-r--r--@  1 dorkitude  staff    2964 Jul 10 17:54 PROMPT.md
+-rw-r--r--@  1 dorkitude  staff     635 Jul 10 17:40 VERSION-PINS.json
+drwxr-xr-x@  3 dorkitude  staff      96 Jul 10 17:54 __pycache__
+-rw-r--r--@  1 dorkitude  staff     534 Jul 10 17:54 agent_last_message.txt
+-rw-r--r--@  1 dorkitude  staff   50430 Jul 10 17:54 agent_stderr.txt
+-rw-r--r--@  1 dorkitude  staff     535 Jul 10 17:54 agent_stdout.txt
+-rw-r--r--@  1 dorkitude  staff    4161 Jul 10 17:49 dndeval-auth-users-report.json
+-rw-r--r--@  1 dorkitude  staff    2270 Jul 10 17:43 dndeval-characters-report.json
+-rw-r--r--@  1 dorkitude  staff    3496 Jul 10 17:47 dndeval-combat-state-report.json
+-rw-r--r--@  1 dorkitude  staff    5109 Jul 10 17:54 dndeval-compendium-report.json
+-rw-r--r--@  1 dorkitude  staff    1422 Jul 10 17:42 dndeval-core-report.json
+-rw-r--r--@  1 dorkitude  staff    4459 Jul 10 17:52 dndeval-sqlite-storage-report.json
+-rw-r--r--@  1 dorkitude  staff   28672 Jul 10 17:52 game.db
+-rw-r--r--@  1 dorkitude  staff   32768 Jul 10 17:54 game.db-shm
+-rw-r--r--@  1 dorkitude  staff  469712 Jul 10 17:54 game.db-wal
+-rw-r--r--@  1 dorkitude  staff   69015 Jul 10 17:54 lifecycle-result.json
+-rwxr-xr-x@  1 dorkitude  staff      56 Jul 10 17:40 run.sh
+-rw-r--r--@  1 dorkitude  staff   27902 Jul 10 17:54 server.py
+-rw-r--r--@  1 dorkitude  staff       0 Jul 10 17:54 server_stderr.txt
+-rw-r--r--@  1 dorkitude  staff       0 Jul 10 17:54 server_stdout.txt
+-rw-r--r--@  1 dorkitude  staff       3 Jul 10 17:54 setup.json
+drwxr-xr-x@ 12 dorkitude  staff     384 Jul 10 17:54 shots
+
+exec
+/bin/zsh -lc 'rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 141ms:
+game.db-wal
+shots/08_compendium_maintenance/server_stderr.txt
+shots/08_compendium_maintenance/agent_stderr.txt
+shots/08_compendium_maintenance/dndeval-compendium-report.json
+shots/08_compendium_maintenance/server_stdout.txt
+shots/08_compendium_maintenance/PROMPT.md
+shots/08_compendium_maintenance/agent_stdout.txt
+shots/08_compendium_maintenance/agent_last_message.txt
+shots/08_compendium_maintenance/setup.json
+shots/05_auth-users_maintenance/server_stderr.txt
+shots/05_auth-users_maintenance/agent_stderr.txt
+shots/05_auth-users_maintenance/dndeval-auth-users-report.json
+shots/05_auth-users_maintenance/server_stdout.txt
+shots/05_auth-users_maintenance/PROMPT.md
+shots/05_auth-users_maintenance/agent_stdout.txt
+shots/05_auth-users_maintenance/agent_last_message.txt
+shots/05_auth-users_maintenance/setup.json
+shots/10_campaign-state_maintenance/PROMPT.md
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/06_auth-users_bugfix/server_stderr.txt
+shots/06_auth-users_bugfix/agent_stderr.txt
+shots/06_auth-users_bugfix/dndeval-auth-users-report.json
+shots/06_auth-users_bugfix/server_stdout.txt
+shots/06_auth-users_bugfix/PROMPT.md
+shots/06_auth-users_bugfix/agent_stdout.txt
+shots/06_auth-users_bugfix/agent_last_message.txt
+shots/06_auth-users_bugfix/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/server_stderr.txt
+shots/04_combat-state_bugfix/agent_stderr.txt
+shots/04_combat-state_bugfix/server_stdout.txt
+shots/04_combat-state_bugfix/PROMPT.md
+shots/04_combat-state_bugfix/agent_stdout.txt
+shots/04_combat-state_bugfix/agent_last_message.txt
+shots/04_combat-state_bugfix/setup.json
+shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+shots/09_compendium_bugfix/server_stderr.txt
+shots/09_compendium_bugfix/agent_stderr.txt
+shots/09_compendium_bugfix/dndeval-compendium-report.json
+shots/09_compendium_bugfix/server_stdout.txt
+shots/09_compendium_bugfix/PROMPT.md
+shots/09_compendium_bugfix/agent_stdout.txt
+shots/09_compendium_bugfix/agent_last_message.txt
+shots/09_compendium_bugfix/setup.json
+run.sh
+game.db
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+server.py
+dndeval-combat-state-report.json
+dndeval-sqlite-storage-report.json
+lifecycle-result.json
+dndeval-compendium-report.json
+dndeval-auth-users-report.json
+agent_stderr.txt
+dndeval-core-report.json
+VERSION-PINS.json
+game.db-shm
+server_stderr.txt
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/07_sqlite-storage_maintenance/server_stderr.txt
+shots/07_sqlite-storage_maintenance/agent_stderr.txt
+shots/07_sqlite-storage_maintenance/server_stdout.txt
+shots/07_sqlite-storage_maintenance/PROMPT.md
+shots/07_sqlite-storage_maintenance/agent_stdout.txt
+shots/07_sqlite-storage_maintenance/agent_last_message.txt
+shots/07_sqlite-storage_maintenance/setup.json
+shots/07_sqlite-storage_maintenance/dndeval-sqlite-storage-report.json
+
+codex
+The codebase is a single stdlib server with an existing SQLite file, so I’m reading the route structure and database helpers next before editing.
+exec
+/bin/zsh -lc "sed -n '1,240p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+exec
+/bin/zsh -lc "sed -n '240,520p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env python3
+import json
+import hashlib
+import hmac
+import os
+import re
+import sqlite3
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlparse
+
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+
+class BadRequest(ValueError):
+    pass
+
+
+class NotFound(ValueError):
+    pass
+
+
+class Unauthorized(ValueError):
+    pass
+
+
+class Conflict(ValueError):
+    pass
+
+
+COMBAT_LOCK = threading.Lock()
+USERS_LOCK = threading.Lock()
+COMPENDIUM_LOCK = threading.Lock()
+USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+PASSWORD_ITERATIONS = 200_000
+SCHEMA_VERSION = 1
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game.db")
+
+
+def db_connect():
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def initialize_storage():
+    with db_connect() as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                role TEXT NOT NULL,
+                password_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS combat_sessions (
+                id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS compendium_monsters (
+                slug TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                cr TEXT NOT NULL,
+                armor_class INTEGER NOT NULL,
+                hit_points INTEGER NOT NULL,
+                tags_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS compendium_items (
+                slug TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                rarity TEXT NOT NULL,
+                cost_gp INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO metadata(key, value)
+            VALUES('schema_version', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """,
+            (str(SCHEMA_VERSION),),
+        )
+
+
+def reset_storage():
+    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
+        with db_connect() as conn:
+            conn.execute("DROP TABLE IF EXISTS compendium_items")
+            conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+            conn.execute("DROP TABLE IF EXISTS combat_sessions")
+            conn.execute("DROP TABLE IF EXISTS users")
+            conn.execute("DROP TABLE IF EXISTS metadata")
+        initialize_storage()
+    return {"ok": True, "schema_version": SCHEMA_VERSION}
+
+
+def storage_initialized():
+    try:
+        with db_connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            ).fetchone()
+            return row is not None and row["value"] == str(SCHEMA_VERSION)
+    except sqlite3.Error:
+        return False
+
+
+def storage_status():
+    return {
+        "driver": "sqlite",
+        "schema_version": SCHEMA_VERSION,
+        "initialized": storage_initialized(),
+    }
+
+
+def encode_session(session):
+    payload = dict(session)
+    payload["condition_targets"] = sorted(session["condition_targets"])
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+
+def decode_session(raw):
+    session = json.loads(raw)
+    session["condition_targets"] = set(session.get("condition_targets", []))
+    return session
+
+
+def save_combat_session(conn, session):
+    conn.execute(
+        """
+        INSERT INTO combat_sessions(id, payload_json)
+        VALUES(?, ?)
+        ON CONFLICT(id) DO UPDATE SET payload_json=excluded.payload_json
+        """,
+        (session["id"], encode_session(session)),
+    )
+
+
+def require_int(value, name):
+    if type(value) is not int:
+        raise BadRequest(f"{name} must be an integer")
+    return value
+
+
+def require_int_range(value, name, minimum, maximum):
+    value = require_int(value, name)
+    if value < minimum or value > maximum:
+        raise BadRequest(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+def require_string(value, name):
+    if type(value) is not str or value == "":
+        raise BadRequest(f"{name} must be a non-empty string")
+    return value
+
+
+def require_slug(value):
+    if type(value) is not str or not SLUG_RE.fullmatch(value):
+        raise BadRequest("slug is invalid")
+    return value
+
+
+def clean_number(value):
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def hash_password(password):
+    salt = os.urandom(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS
+    )
+    return {
+        "salt": salt.hex(),
+        "hash": digest.hex(),
+        "iterations": PASSWORD_ITERATIONS,
+    }
+
+
+def verify_password(password, stored):
+    salt = bytes.fromhex(stored["salt"])
+    expected = bytes.fromhex(stored["hash"])
+    actual = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, stored["iterations"]
+    )
+    return hmac.compare_digest(actual, expected)
+
+
+def require_auth_body(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    username = body.get("username")
+    password = body.get("password")
+    if type(username) is not str or not USERNAME_RE.fullmatch(username):
+        raise BadRequest("username is invalid")
+    if type(password) is not str or len(password) < 8:
+        raise BadRequest("password is invalid")
+    return username, password
+
+ succeeded in 0ms:
+    return username, password
+
+
+def require_login_body(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    username = body.get("username")
+    password = body.get("password")
+    if type(username) is not str or not USERNAME_RE.fullmatch(username):
+        raise BadRequest("username is invalid")
+    if type(password) is not str:
+        raise BadRequest("password is invalid")
+    return username, password
+
+
+def register_user(body):
+    username, password = require_auth_body(body)
+    role = body.get("role")
+    if role not in ("dm", "player"):
+        raise BadRequest("role is invalid")
+
+    with USERS_LOCK:
+        with db_connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM users WHERE username = ?", (username,)
+            ).fetchone()
+            if existing is not None:
+                raise Conflict("username already exists")
+            conn.execute(
+                "INSERT INTO users(username, role, password_json) VALUES(?, ?, ?)",
+                (
+                    username,
+                    role,
+                    json.dumps(hash_password(password), separators=(",", ":")),
+                ),
+            )
+
+    return {"username": username, "role": role}
+
+
+def login_user(body):
+    username, password = require_login_body(body)
+    with USERS_LOCK:
+        with db_connect() as conn:
+            user = conn.execute(
+                "SELECT password_json FROM users WHERE username = ?", (username,)
+            ).fetchone()
+        if user is None or not verify_password(password, json.loads(user["password_json"])):
+            raise Unauthorized("bad credentials")
+
+    return {"username": username, "token": f"session-{username}"}
+
+
+def dice_stats(body):
+    expression = body.get("expression") if isinstance(body, dict) else None
+    if type(expression) is not str:
+        raise BadRequest("expression must be a string")
+
+    match = DICE_RE.fullmatch(expression)
+    if not match:
+        raise BadRequest("invalid dice expression")
+
+    count = int(match.group(1))
+    sides = int(match.group(2))
+    if count <= 0 or sides <= 0:
+        raise BadRequest("dice count and sides must be positive")
+
+    modifier = int(match.group(4) or "0")
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    average = count * (sides + 1) / 2 + modifier
+    return {
+        "dice_count": count,
+        "sides": sides,
+        "modifier": modifier,
+        "min": count + modifier,
+        "max": count * sides + modifier,
+        "average": clean_number(average),
+    }
+
+
+def ability_check(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    roll = require_int(body.get("roll"), "roll")
+    modifier = require_int(body.get("modifier"), "modifier")
+    dc = require_int(body.get("dc"), "dc")
+    total = roll + modifier
+    return {"total": total, "success": total >= dc, "margin": total - dc}
+
+
+def ability_modifier_for_score(score):
+    return (score - 10) // 2
+
+
+def proficiency_bonus_for_level(level):
+    return 2 + (level - 1) // 4
+
+
+def ability_modifier(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    score = require_int_range(body.get("score"), "score", 1, 30)
+    return {"score": score, "modifier": ability_modifier_for_score(score)}
+
+
+def proficiency(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    level = require_int_range(body.get("level"), "level", 1, 20)
+    return {"level": level, "proficiency_bonus": proficiency_bonus_for_level(level)}
+
+
+def derived_stats(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+
+    level = require_int_range(body.get("level"), "level", 1, 20)
+    abilities = body.get("abilities")
+    armor = body.get("armor")
+    if not isinstance(abilities, dict):
+        raise BadRequest("abilities must be an object")
+    if not isinstance(armor, dict):
+        raise BadRequest("armor must be an object")
+
+    modifiers = {}
+    for ability in ("str", "dex", "con", "int", "wis", "cha"):
+        score = require_int_range(abilities.get(ability), ability, 1, 30)
+        modifiers[ability] = ability_modifier_for_score(score)
+
+    armor_base = require_int(armor.get("base"), "armor base")
+    dex_cap = require_int(armor.get("dex_cap"), "armor dex_cap")
+    shield = armor.get("shield")
+    if type(shield) is not bool:
+        raise BadRequest("armor shield must be a boolean")
+
+    proficiency_bonus = proficiency_bonus_for_level(level)
+    hp_max = level * (6 + modifiers["con"])
+    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+
+    return {
+        "level": level,
+        "proficiency_bonus": proficiency_bonus,
+        "hp_max": hp_max,
+        "armor_class": armor_class,
+        "modifiers": modifiers,
+    }
+
+
+def encounter_multiplier(monster_count):
+    if monster_count <= 0:
+        raise BadRequest("monster count must be positive")
+    if monster_count == 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def adjusted_xp(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+
+    party = body.get("party")
+    monsters = body.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        raise BadRequest("party and monsters must be arrays")
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    for member in party:
+        if not isinstance(member, dict):
+            raise BadRequest("party members must be objects")
+        level = require_int(member.get("level"), "level")
+        if level not in LEVEL_THRESHOLDS:
+            raise BadRequest("unsupported party level")
+        for key, value in LEVEL_THRESHOLDS[level].items():
+            thresholds[key] += value
+
+    base_xp = 0
+    monster_count = 0
+    for monster in monsters:
+        if not isinstance(monster, dict):
+            raise BadRequest("monsters must be objects")
+        cr = monster.get("cr")
+        count = require_int(monster.get("count"), "monster count")
+        if cr not in CR_XP:
+            raise BadRequest("unsupported challenge rating")
+        if count <= 0:
+            raise BadRequest("monster count must be positive")
+        base_xp += CR_XP[cr] * count
+        monster_count += count
+
+    multiplier = encounter_multiplier(monster_count)
+    adjusted = clean_number(base_xp * multiplier)
+
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted >= thresholds[name]:
+            difficulty = name
+
+    return {
+        "base_xp": base_xp,
+        "monster_count": monster_count,
+        "multiplier": multiplier,
+        "adjusted_xp": adjusted,
+        "difficulty": difficulty,
+        "thresholds": thresholds,
+    }
+
+
+def initiative_order(body):
+    ranked = rank_combatants(body)
+    return {"order": [{"name": item["name"], "score": item["score"]} for item in ranked]}
+
+
+def rank_combatants(body, require_nonempty=False, require_unique_names=False):
+    if not isinstance(body, dict) or not isinstance(body.get("combatants"), list):
+        raise BadRequest("combatants must be an array")
+    if require_nonempty and not body["combatants"]:
+        raise BadRequest("combatants must not be empty")
+
+    ranked = []
+    names = set()
+    for combatant in body["combatants"]:
+        if not isinstance(combatant, dict):
+            raise BadRequest("combatants must be objects")
+        name = combatant.get("name")
+        if type(name) is not str:
+            raise BadRequest("name must be a string")
+        if require_unique_names and name in names:
+            raise BadRequest("combatant names must be unique")
+        names.add(name)
+        dex = require_int(combatant.get("dex"), "dex")
+        roll = require_int(combatant.get("roll"), "roll")
+        ranked.append({"name": name, "dex": dex, "score": roll + dex})
+
+    ranked.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return ranked
+
+
+def public_order(session):
+    return [{"name": item["name"], "score": item["score"]} for item in session["order"]]
+
+
+def public_active(session):
+    active = session["order"][session["turn_index"]]
+    return {"name": active["name"], "score": active["score"]}
+
+
+def public_conditions(session):
+    payload = {}
+    for name, conditions in session["conditions"].items():
+        if conditions or name in session["condition_targets"]:
+            payload[name] = [
+                {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
+                for item in conditions
+            ]
+    return payload
+
+
+def session_payload(session):
+    return {
+        "id": session["id"],
+        "round": session["round"],
+        "turn_index": session["turn_index"],
+        "active": public_active(session),
+        "order": public_order(session),
+    }
+
+
+def create_combat_session(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    session_id = body.get("id")
+
+exec
+/bin/zsh -lc 'cat run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+python3 server.py
+
+codex
+I’ve confirmed the runner already starts `server.py` in the foreground. I’m continuing through the lower half to find all dispatch points and the current reset behavior, since campaign tables need to participate in storage reset without disturbing older APIs.
+exec
+/bin/zsh -lc "sed -n '920,1220p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+exec
+/bin/zsh -lc "sed -n '520,920p' server.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+ succeeded in 0ms:
+    session_id = body.get("id")
+    if type(session_id) is not str:
+        raise BadRequest("id must be a string")
+
+    order = rank_combatants(body, require_nonempty=True, require_unique_names=True)
+    session = {
+        "id": session_id,
+        "round": 1,
+        "turn_index": 0,
+        "order": order,
+        "conditions": {item["name"]: [] for item in order},
+        "condition_targets": set(),
+    }
+
+    with COMBAT_LOCK:
+        with db_connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if existing is not None:
+                raise BadRequest("session id must be unique")
+            save_combat_session(conn, session)
+            return session_payload(session)
+
+
+def get_combat_session(session_id, conn=None):
+    if conn is None:
+        with db_connect() as inner_conn:
+            return get_combat_session(session_id, inner_conn)
+    row = conn.execute(
+        "SELECT payload_json FROM combat_sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    if row is None:
+        raise NotFound("session not found")
+    return decode_session(row["payload_json"])
+
+
+def add_condition(session_id, body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    target = body.get("target")
+    condition = body.get("condition")
+    duration = require_int(body.get("duration_rounds"), "duration_rounds")
+    if type(target) is not str:
+        raise BadRequest("target must be a string")
+    if type(condition) is not str:
+        raise BadRequest("condition must be a string")
+    if duration <= 0:
+        raise BadRequest("duration_rounds must be positive")
+
+    with COMBAT_LOCK:
+        with db_connect() as conn:
+            session = get_combat_session(session_id, conn)
+            if target not in session["conditions"]:
+                raise BadRequest("target must name a combatant")
+            session["condition_targets"].add(target)
+            session["conditions"][target].append(
+                {"condition": condition, "remaining_rounds": duration}
+            )
+            save_combat_session(conn, session)
+            return {
+                "target": target,
+                "conditions": [
+                    {"condition": item["condition"], "remaining_rounds": item["remaining_rounds"]}
+                    for item in session["conditions"][target]
+                ],
+            }
+
+
+def advance_combat(session_id):
+    with COMBAT_LOCK:
+        with db_connect() as conn:
+            session = get_combat_session(session_id, conn)
+            session["turn_index"] += 1
+            if session["turn_index"] >= len(session["order"]):
+                session["turn_index"] = 0
+                session["round"] += 1
+
+            active_name = session["order"][session["turn_index"]]["name"]
+            remaining = []
+            for item in session["conditions"][active_name]:
+                next_rounds = item["remaining_rounds"] - 1
+                if next_rounds > 0:
+                    remaining.append(
+                        {"condition": item["condition"], "remaining_rounds": next_rounds}
+                    )
+            session["conditions"][active_name] = remaining
+            save_combat_session(conn, session)
+
+            return {
+                "id": session["id"],
+                "round": session["round"],
+                "turn_index": session["turn_index"],
+                "active": public_active(session),
+                "conditions": public_conditions(session),
+            }
+
+
+def public_monster(row, include_tags):
+    payload = {
+        "slug": row["slug"],
+        "name": row["name"],
+        "cr": row["cr"],
+        "armor_class": row["armor_class"],
+        "hit_points": row["hit_points"],
+    }
+    if include_tags:
+        payload["tags"] = json.loads(row["tags_json"])
+    return payload
+
+
+def validate_monster_body(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    tags = body.get("tags")
+    if not isinstance(tags, list):
+        raise BadRequest("tags must be an array")
+    clean_tags = []
+    for tag in tags:
+        clean_tags.append(require_string(tag, "tag"))
+    return {
+        "slug": require_slug(body.get("slug")),
+        "name": require_string(body.get("name"), "name"),
+        "cr": require_string(body.get("cr"), "cr"),
+        "armor_class": require_int(body.get("armor_class"), "armor_class"),
+        "hit_points": require_int(body.get("hit_points"), "hit_points"),
+        "tags": clean_tags,
+    }
+
+
+def create_monster(body):
+    monster = validate_monster_body(body)
+    with COMPENDIUM_LOCK:
+        with db_connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM compendium_monsters WHERE slug = ?", (monster["slug"],)
+            ).fetchone()
+            if existing is not None:
+                raise Conflict("monster slug already exists")
+            conn.execute(
+                """
+                INSERT INTO compendium_monsters(
+                    slug, name, cr, armor_class, hit_points, tags_json
+                )
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    monster["slug"],
+                    monster["name"],
+                    monster["cr"],
+                    monster["armor_class"],
+                    monster["hit_points"],
+                    json.dumps(monster["tags"], separators=(",", ":")),
+                ),
+            )
+    return {
+        "slug": monster["slug"],
+        "name": monster["name"],
+        "cr": monster["cr"],
+        "armor_class": monster["armor_class"],
+        "hit_points": monster["hit_points"],
+    }
+
+
+def read_monster(slug):
+    require_slug(slug)
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT slug, name, cr, armor_class, hit_points, tags_json
+            FROM compendium_monsters
+            WHERE slug = ?
+            """,
+            (slug,),
+        ).fetchone()
+    if row is None:
+        raise NotFound("monster not found")
+    return public_monster(row, include_tags=True)
+
+
+def validate_item_body(body):
+    if not isinstance(body, dict):
+        raise BadRequest("body must be an object")
+    return {
+        "slug": require_slug(body.get("slug")),
+        "name": require_string(body.get("name"), "name"),
+        "type": require_string(body.get("type"), "type"),
+        "rarity": require_string(body.get("rarity"), "rarity"),
+        "cost_gp": require_int(body.get("cost_gp"), "cost_gp"),
+    }
+
+
+def create_item(body):
+    item = validate_item_body(body)
+    with COMPENDIUM_LOCK:
+        with db_connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM compendium_items WHERE slug = ?", (item["slug"],)
+            ).fetchone()
+            if existing is not None:
+                raise Conflict("item slug already exists")
+            conn.execute(
+                """
+                INSERT INTO compendium_items(slug, name, type, rarity, cost_gp)
+                VALUES(?, ?, ?, ?, ?)
+                """,
+                (
+                    item["slug"],
+                    item["name"],
+                    item["type"],
+                    item["rarity"],
+                    item["cost_gp"],
+                ),
+            )
+    return item
+
+
+def read_item(slug):
+    require_slug(slug)
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT slug, name, type, rarity, cost_gp
+            FROM compendium_items
+            WHERE slug = ?
+            """,
+            (slug,),
+        ).fetchone()
+    if row is None:
+        raise NotFound("item not found")
+    return {
+        "slug": row["slug"],
+        "name": row["name"],
+        "type": row["type"],
+        "rarity": row["rarity"],
+        "cost_gp": row["cost_gp"],
+    }
+
+
+class Handler(BaseHTTPRequestHandler):
+    routes = {
+        "/v1/dice/stats": dice_stats,
+        "/v1/checks/ability": ability_check,
+        "/v1/characters/ability-modifier": ability_modifier,
+        "/v1/characters/proficiency": proficiency,
+        "/v1/characters/derived-stats": derived_stats,
+        "/v1/encounters/adjusted-xp": adjusted_xp,
+        "/v1/initiative/order": initiative_order,
+        "/v1/combat/sessions": create_combat_session,
+        "/v1/auth/register": register_user,
+        "/v1/auth/login": login_user,
+        "/v1/compendium/monsters": create_monster,
+        "/v1/compendium/items": create_item,
+    }
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        try:
+            if path == "/health":
+                self.send_json(200, {"ok": True})
+            elif path == "/v1/storage/status":
+                self.send_json(200, storage_status())
+            else:
+                self.handle_compendium_get(path)
+        except BadRequest as exc:
+            self.send_json(400, {"error": str(exc)})
+        except NotFound as exc:
+            self.send_json(404, {"error": str(exc)})
+
+    def handle_compendium_get(self, path):
+        monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+        if monster_match:
+            self.send_json(200, read_monster(unquote(monster_match.group(1))))
+            return
+
+        item_match = re.fullmatch(r"/v1/compendium/items/([^/]+)", path)
+        if item_match:
+            self.send_json(200, read_item(unquote(item_match.group(1))))
+            return
+
+        self.send_json(404, {"error": "not found"})
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        if path == "/v1/storage/reset":
+            self.send_json(200, reset_storage())
+            return
+
+        route = self.routes.get(path)
+        if route is None:
+            self.handle_combat_route(path)
+            return
+
+        try:
+            body = self.read_json()
+            payload = route(body)
+        except BadRequest as exc:
+            self.send_json(400, {"error": str(exc)})
+            return
+        except NotFound as exc:
+            self.send_json(404, {"error": str(exc)})
+            return
+        except Unauthorized as exc:
+            self.send_json(401, {"error": str(exc)})
+            return
+        except Conflict as exc:
+            self.send_json(409, {"error": str(exc)})
+            return
+        created_routes = {
+            "/v1/auth/register",
+            "/v1/compendium/monsters",
+            "/v1/compendium/items",
+        }
+        status = 201 if path in created_routes else 200
+        self.send_json(status, payload)
+
+    def handle_combat_route(self, path):
+        match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+        if not match:
+            self.send_json(404, {"error": "not found"})
+            return
+
+        session_id = unquote(match.group(1))
+        action = match.group(2)
+        try:
+            if action == "conditions":
+                payload = add_condition(session_id, self.read_json())
+            else:
+                payload = advance_combat(session_id)
+        except BadRequest as exc:
+            self.send_json(400, {"error": str(exc)})
+            return
+        except NotFound as exc:
+            self.send_json(404, {"error": str(exc)})
+            return
+        self.send_json(200, payload)
+
+    def read_json(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise BadRequest("invalid content length") from exc
+
+        raw = self.rfile.read(length)
+        try:
+            return json.loads(raw.decode("utf-8") if raw else "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise BadRequest("invalid json") from exc
+
+    def send_json(self, status, payload):
+        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, format, *args):
+        return
+
+
+def main():
+    initialize_storage()
+    port = int(os.environ.get("PORT", "8000"))
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
+
+exec
+/bin/zsh -lc 'rg -n "def do_|send_json|/v1|reset_storage|initialize_storage|SCHEMA_VERSION" server.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+54:SCHEMA_VERSION = 1
+64:def initialize_storage():
+121:            (str(SCHEMA_VERSION),),
+125:def reset_storage():
+133:        initialize_storage()
+134:    return {"ok": True, "schema_version": SCHEMA_VERSION}
+143:            return row is not None and row["value"] == str(SCHEMA_VERSION)
+151:        "schema_version": SCHEMA_VERSION,
+761:        "/v1/dice/stats": dice_stats,
+762:        "/v1/checks/ability": ability_check,
+763:        "/v1/characters/ability-modifier": ability_modifier,
+764:        "/v1/characters/proficiency": proficiency,
+765:        "/v1/characters/derived-stats": derived_stats,
+766:        "/v1/encounters/adjusted-xp": adjusted_xp,
+767:        "/v1/initiative/order": initiative_order,
+768:        "/v1/combat/sessions": create_combat_session,
+769:        "/v1/auth/register": register_user,
+770:        "/v1/auth/login": login_user,
+771:        "/v1/compendium/monsters": create_monster,
+772:        "/v1/compendium/items": create_item,
+775:    def do_GET(self):
+779:                self.send_json(200, {"ok": True})
+780:            elif path == "/v1/storage/status":
+781:                self.send_json(200, storage_status())
+785:            self.send_json(400, {"error": str(exc)})
+787:            self.send_json(404, {"error": str(exc)})
+790:        monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+792:            self.send_json(200, read_monster(unquote(monster_match.group(1))))
+795:        item_match = re.fullmatch(r"/v1/compendium/items/([^/]+)", path)
+797:            self.send_json(200, read_item(unquote(item_match.group(1))))
+800:        self.send_json(404, {"error": "not found"})
+802:    def do_POST(self):
+804:        if path == "/v1/storage/reset":
+805:            self.send_json(200, reset_storage())
+817:            self.send_json(400, {"error": str(exc)})
+820:            self.send_json(404, {"error": str(exc)})
+823:            self.send_json(401, {"error": str(exc)})
+826:            self.send_json(409, {"error": str(exc)})
+829:            "/v1/auth/register",
+830:            "/v1/compendium/monsters",
+831:            "/v1/compendium/items",
+834:        self.send_json(status, payload)
+837:        match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+839:            self.send_json(404, {"error": "not found"})
+850:            self.send_json(400, {"error": str(exc)})
+853:            self.send_json(404, {"error": str(exc)})
+855:        self.send_json(200, payload)
+869:    def send_json(self, status, payload):
+882:    initialize_storage()
+
+codex
+The existing API returns `201` only for selected create endpoints and `200` for others, with JSON errors mapped through local exceptions. I’m adding campaign helpers in that same style, with a small lock and separate SQLite tables for campaigns, characters, and event logs.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2be93ba40048a7bac7f2bfc514e62b830112b9c4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2be93ba40048a7bac7f2bfc514e62b830112b9c4
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+
+codex
+The table setup and reset path are now wired. Next I’m adding endpoint functions and dispatch rules, keeping validation strict enough to produce deterministic `400`, `404`, and `409` responses.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..68707fca2dd146056adc79465855ffba0684d066
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..68707fca2dd146056adc79465855ffba0684d066
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+
+codex
+The campaign operations are in place. I’m patching GET and POST routing now so nested campaign URLs are handled alongside the existing compendium and combat routes.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+codex
+Routing is patched. I’m running a compile check and direct function-level smoke tests now, without starting the HTTP server, so `run.sh` remains ready for the evaluator to launch.
+exec
+/bin/zsh -lc 'python3 -m py_compile server.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+exec
+/bin/zsh -lc 'git diff -- server.py run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+codex
+The syntax check passed. The diff command produced no tracked diff, so I’m checking repository state and using a temporary SQLite path for functional smoke tests to avoid changing the workspace database.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import os, tempfile
+import server
+
+fd, path = tempfile.mkstemp(suffix='.db')
+os.close(fd)
+os.unlink(path)
+server.DB_PATH = path
+try:
+    server.initialize_storage()
+    print(server.create_campaign({'id':'camp-1','name':'Lost Mine','dm':'dm'}))
+    print(server.add_campaign_character('camp-1', {'id':'char-1','name':'Nyx','level':3,'class':'rogue'}))
+    print(server.add_campaign_event('camp-1', {'id':'evt-1','kind':'note','summary':'Nyx scouts the goblin trail.'}))
+    print(server.read_campaign_state('camp-1'))
+finally:
+    for suffix in ('', '-wal', '-shm'):
+        try:
+            os.unlink(path + suffix)
+        except FileNotFoundError:
+            pass
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+{'id': 'camp-1', 'name': 'Lost Mine', 'dm': 'dm'}
+{'id': 'char-1', 'name': 'Nyx', 'level': 3, 'class': 'rogue'}
+{'id': 'evt-1', 'kind': 'note'}
+{'id': 'camp-1', 'name': 'Lost Mine', 'dm': 'dm', 'characters': [{'id': 'char-1', 'name': 'Nyx', 'level': 3, 'class': 'rogue'}], 'log_count': 1}
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+codex
+The function-level smoke test produced the exact campaign, character, event, and state payloads from the stage spec using a temporary database. I’m doing one final read around the edited sections for line references and then I’ll wrap up.
+exec
+/bin/zsh -lc "nl -ba server.py | sed -n '920,1010p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+exec
+/bin/zsh -lc "nl -ba server.py | sed -n '35,155p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+exec
+/bin/zsh -lc "nl -ba server.py | sed -n '735,920p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+   920	            for row in characters
+   921	        ],
+   922	        "log_count": log_count,
+   923	    }
+   924	
+   925	
+   926	class Handler(BaseHTTPRequestHandler):
+   927	    routes = {
+   928	        "/v1/dice/stats": dice_stats,
+   929	        "/v1/checks/ability": ability_check,
+   930	        "/v1/characters/ability-modifier": ability_modifier,
+   931	        "/v1/characters/proficiency": proficiency,
+   932	        "/v1/characters/derived-stats": derived_stats,
+   933	        "/v1/encounters/adjusted-xp": adjusted_xp,
+   934	        "/v1/initiative/order": initiative_order,
+   935	        "/v1/combat/sessions": create_combat_session,
+   936	        "/v1/auth/register": register_user,
+   937	        "/v1/auth/login": login_user,
+   938	        "/v1/compendium/monsters": create_monster,
+   939	        "/v1/compendium/items": create_item,
+   940	        "/v1/campaigns": create_campaign,
+   941	    }
+   942	
+   943	    def do_GET(self):
+   944	        path = urlparse(self.path).path
+   945	        try:
+   946	            if path == "/health":
+   947	                self.send_json(200, {"ok": True})
+   948	            elif path == "/v1/storage/status":
+   949	                self.send_json(200, storage_status())
+   950	            else:
+   951	                self.handle_resource_get(path)
+   952	        except BadRequest as exc:
+   953	            self.send_json(400, {"error": str(exc)})
+   954	        except NotFound as exc:
+   955	            self.send_json(404, {"error": str(exc)})
+   956	
+   957	    def handle_resource_get(self, path):
+   958	        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
+   959	        if campaign_match:
+   960	            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
+   961	            return
+   962	
+   963	        monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+   964	        if monster_match:
+   965	            self.send_json(200, read_monster(unquote(monster_match.group(1))))
+   966	            return
+   967	
+   968	        item_match = re.fullmatch(r"/v1/compendium/items/([^/]+)", path)
+   969	        if item_match:
+   970	            self.send_json(200, read_item(unquote(item_match.group(1))))
+   971	            return
+   972	
+   973	        self.send_json(404, {"error": "not found"})
+   974	
+   975	    def do_POST(self):
+   976	        path = urlparse(self.path).path
+   977	        if path == "/v1/storage/reset":
+   978	            self.send_json(200, reset_storage())
+   979	            return
+   980	
+   981	        route = self.routes.get(path)
+   982	        if route is None:
+   983	            self.handle_dynamic_post(path)
+   984	            return
+   985	
+   986	        try:
+   987	            body = self.read_json()
+   988	            payload = route(body)
+   989	        except BadRequest as exc:
+   990	            self.send_json(400, {"error": str(exc)})
+   991	            return
+   992	        except NotFound as exc:
+   993	            self.send_json(404, {"error": str(exc)})
+   994	            return
+   995	        except Unauthorized as exc:
+   996	            self.send_json(401, {"error": str(exc)})
+   997	            return
+   998	        except Conflict as exc:
+   999	            self.send_json(409, {"error": str(exc)})
+  1000	            return
+  1001	        created_routes = {
+  1002	            "/v1/auth/register",
+  1003	            "/v1/compendium/monsters",
+  1004	            "/v1/compendium/items",
+  1005	            "/v1/campaigns",
+  1006	        }
+  1007	        status = 201 if path in created_routes else 200
+  1008	        self.send_json(status, payload)
+  1009	
+  1010	    def handle_dynamic_post(self, path):
+
+ succeeded in 0ms:
+   735	
+   736	def validate_item_body(body):
+   737	    if not isinstance(body, dict):
+   738	        raise BadRequest("body must be an object")
+   739	    return {
+   740	        "slug": require_slug(body.get("slug")),
+   741	        "name": require_string(body.get("name"), "name"),
+   742	        "type": require_string(body.get("type"), "type"),
+   743	        "rarity": require_string(body.get("rarity"), "rarity"),
+   744	        "cost_gp": require_int(body.get("cost_gp"), "cost_gp"),
+   745	    }
+   746	
+   747	
+   748	def create_item(body):
+   749	    item = validate_item_body(body)
+   750	    with COMPENDIUM_LOCK:
+   751	        with db_connect() as conn:
+   752	            existing = conn.execute(
+   753	                "SELECT 1 FROM compendium_items WHERE slug = ?", (item["slug"],)
+   754	            ).fetchone()
+   755	            if existing is not None:
+   756	                raise Conflict("item slug already exists")
+   757	            conn.execute(
+   758	                """
+   759	                INSERT INTO compendium_items(slug, name, type, rarity, cost_gp)
+   760	                VALUES(?, ?, ?, ?, ?)
+   761	                """,
+   762	                (
+   763	                    item["slug"],
+   764	                    item["name"],
+   765	                    item["type"],
+   766	                    item["rarity"],
+   767	                    item["cost_gp"],
+   768	                ),
+   769	            )
+   770	    return item
+   771	
+   772	
+   773	def read_item(slug):
+   774	    require_slug(slug)
+   775	    with db_connect() as conn:
+   776	        row = conn.execute(
+   777	            """
+   778	            SELECT slug, name, type, rarity, cost_gp
+   779	            FROM compendium_items
+   780	            WHERE slug = ?
+   781	            """,
+   782	            (slug,),
+   783	        ).fetchone()
+   784	    if row is None:
+   785	        raise NotFound("item not found")
+   786	    return {
+   787	        "slug": row["slug"],
+   788	        "name": row["name"],
+   789	        "type": row["type"],
+   790	        "rarity": row["rarity"],
+   791	        "cost_gp": row["cost_gp"],
+   792	    }
+   793	
+   794	
+   795	def campaign_exists(conn, campaign_id):
+   796	    return (
+   797	        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+   798	        is not None
+   799	    )
+   800	
+   801	
+   802	def create_campaign(body):
+   803	    if not isinstance(body, dict):
+   804	        raise BadRequest("body must be an object")
+   805	    campaign = {
+   806	        "id": require_string(body.get("id"), "id"),
+   807	        "name": require_string(body.get("name"), "name"),
+   808	        "dm": require_string(body.get("dm"), "dm"),
+   809	    }
+   810	
+   811	    with CAMPAIGN_LOCK:
+   812	        with db_connect() as conn:
+   813	            existing = conn.execute(
+   814	                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
+   815	            ).fetchone()
+   816	            if existing is not None:
+   817	                raise Conflict("campaign id already exists")
+   818	            conn.execute(
+   819	                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
+   820	                (campaign["id"], campaign["name"], campaign["dm"]),
+   821	            )
+   822	    return campaign
+   823	
+   824	
+   825	def add_campaign_character(campaign_id, body):
+   826	    if not isinstance(body, dict):
+   827	        raise BadRequest("body must be an object")
+   828	    character = {
+   829	        "id": require_string(body.get("id"), "id"),
+   830	        "name": require_string(body.get("name"), "name"),
+   831	        "level": require_int(body.get("level"), "level"),
+   832	        "class": require_string(body.get("class"), "class"),
+   833	    }
+   834	
+   835	    with CAMPAIGN_LOCK:
+   836	        with db_connect() as conn:
+   837	            if not campaign_exists(conn, campaign_id):
+   838	                raise NotFound("campaign not found")
+   839	            existing = conn.execute(
+   840	                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
+   841	            ).fetchone()
+   842	            if existing is not None:
+   843	                raise Conflict("character id already exists")
+   844	            conn.execute(
+   845	                """
+   846	                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
+   847	                VALUES(?, ?, ?, ?, ?)
+   848	                """,
+   849	                (
+   850	                    character["id"],
+   851	                    campaign_id,
+   852	                    character["name"],
+   853	                    character["level"],
+   854	                    character["class"],
+   855	                ),
+   856	            )
+   857	    return character
+   858	
+   859	
+   860	def add_campaign_event(campaign_id, body):
+   861	    if not isinstance(body, dict):
+   862	        raise BadRequest("body must be an object")
+   863	    event = {
+   864	        "id": require_string(body.get("id"), "id"),
+   865	        "kind": require_string(body.get("kind"), "kind"),
+   866	        "summary": require_string(body.get("summary"), "summary"),
+   867	    }
+   868	
+   869	    with CAMPAIGN_LOCK:
+   870	        with db_connect() as conn:
+   871	            if not campaign_exists(conn, campaign_id):
+   872	                raise NotFound("campaign not found")
+   873	            existing = conn.execute(
+   874	                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
+   875	            ).fetchone()
+   876	            if existing is not None:
+   877	                raise Conflict("event id already exists")
+   878	            conn.execute(
+   879	                """
+   880	                INSERT INTO campaign_events(id, campaign_id, kind, summary)
+   881	                VALUES(?, ?, ?, ?)
+   882	                """,
+   883	                (event["id"], campaign_id, event["kind"], event["summary"]),
+   884	            )
+   885	    return {"id": event["id"], "kind": event["kind"]}
+   886	
+   887	
+   888	def read_campaign_state(campaign_id):
+   889	    with db_connect() as conn:
+   890	        campaign = conn.execute(
+   891	            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
+   892	        ).fetchone()
+   893	        if campaign is None:
+   894	            raise NotFound("campaign not found")
+   895	        characters = conn.execute(
+   896	            """
+   897	            SELECT id, name, level, class
+   898	            FROM campaign_characters
+   899	            WHERE campaign_id = ?
+   900	            ORDER BY rowid
+   901	            """,
+   902	            (campaign_id,),
+   903	        ).fetchall()
+   904	        log_count = conn.execute(
+   905	            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
+   906	            (campaign_id,),
+   907	        ).fetchone()["count"]
+   908	
+   909	    return {
+   910	        "id": campaign["id"],
+   911	        "name": campaign["name"],
+   912	        "dm": campaign["dm"],
+   913	        "characters": [
+   914	            {
+   915	                "id": row["id"],
+   916	                "name": row["name"],
+   917	                "level": row["level"],
+   918	                "class": row["class"],
+   919	            }
+   920	            for row in characters
+
+ succeeded in 0ms:
+    35	
+    36	class NotFound(ValueError):
+    37	    pass
+    38	
+    39	
+    40	class Unauthorized(ValueError):
+    41	    pass
+    42	
+    43	
+    44	class Conflict(ValueError):
+    45	    pass
+    46	
+    47	
+    48	COMBAT_LOCK = threading.Lock()
+    49	USERS_LOCK = threading.Lock()
+    50	COMPENDIUM_LOCK = threading.Lock()
+    51	CAMPAIGN_LOCK = threading.Lock()
+    52	USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+    53	SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+    54	PASSWORD_ITERATIONS = 200_000
+    55	SCHEMA_VERSION = 1
+    56	DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game.db")
+    57	
+    58	
+    59	def db_connect():
+    60	    conn = sqlite3.connect(DB_PATH, timeout=5)
+    61	    conn.row_factory = sqlite3.Row
+    62	    return conn
+    63	
+    64	
+    65	def initialize_storage():
+    66	    with db_connect() as conn:
+    67	        conn.execute("PRAGMA journal_mode=WAL")
+    68	        conn.execute(
+    69	            """
+    70	            CREATE TABLE IF NOT EXISTS metadata (
+    71	                key TEXT PRIMARY KEY,
+    72	                value TEXT NOT NULL
+    73	            )
+    74	            """
+    75	        )
+    76	        conn.execute(
+    77	            """
+    78	            CREATE TABLE IF NOT EXISTS users (
+    79	                username TEXT PRIMARY KEY,
+    80	                role TEXT NOT NULL,
+    81	                password_json TEXT NOT NULL
+    82	            )
+    83	            """
+    84	        )
+    85	        conn.execute(
+    86	            """
+    87	            CREATE TABLE IF NOT EXISTS combat_sessions (
+    88	                id TEXT PRIMARY KEY,
+    89	                payload_json TEXT NOT NULL
+    90	            )
+    91	            """
+    92	        )
+    93	        conn.execute(
+    94	            """
+    95	            CREATE TABLE IF NOT EXISTS compendium_monsters (
+    96	                slug TEXT PRIMARY KEY,
+    97	                name TEXT NOT NULL,
+    98	                cr TEXT NOT NULL,
+    99	                armor_class INTEGER NOT NULL,
+   100	                hit_points INTEGER NOT NULL,
+   101	                tags_json TEXT NOT NULL
+   102	            )
+   103	            """
+   104	        )
+   105	        conn.execute(
+   106	            """
+   107	            CREATE TABLE IF NOT EXISTS compendium_items (
+   108	                slug TEXT PRIMARY KEY,
+   109	                name TEXT NOT NULL,
+   110	                type TEXT NOT NULL,
+   111	                rarity TEXT NOT NULL,
+   112	                cost_gp INTEGER NOT NULL
+   113	            )
+   114	            """
+   115	        )
+   116	        conn.execute(
+   117	            """
+   118	            CREATE TABLE IF NOT EXISTS campaigns (
+   119	                id TEXT PRIMARY KEY,
+   120	                name TEXT NOT NULL,
+   121	                dm TEXT NOT NULL
+   122	            )
+   123	            """
+   124	        )
+   125	        conn.execute(
+   126	            """
+   127	            CREATE TABLE IF NOT EXISTS campaign_characters (
+   128	                id TEXT PRIMARY KEY,
+   129	                campaign_id TEXT NOT NULL,
+   130	                name TEXT NOT NULL,
+   131	                level INTEGER NOT NULL,
+   132	                class TEXT NOT NULL,
+   133	                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+   134	            )
+   135	            """
+   136	        )
+   137	        conn.execute(
+   138	            """
+   139	            CREATE TABLE IF NOT EXISTS campaign_events (
+   140	                id TEXT PRIMARY KEY,
+   141	                campaign_id TEXT NOT NULL,
+   142	                kind TEXT NOT NULL,
+   143	                summary TEXT NOT NULL,
+   144	                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+   145	            )
+   146	            """
+   147	        )
+   148	        conn.execute(
+   149	            """
+   150	            INSERT INTO metadata(key, value)
+   151	            VALUES('schema_version', ?)
+   152	            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+   153	            """,
+   154	            (str(SCHEMA_VERSION),),
+   155	        )
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+exec
+/bin/zsh -lc "nl -ba server.py | sed -n '1010,1075p'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib
+ succeeded in 0ms:
+  1010	    def handle_dynamic_post(self, path):
+  1011	        campaign_match = re.fullmatch(
+  1012	            r"/v1/campaigns/([^/]+)/(characters|events)", path
+  1013	        )
+  1014	        if campaign_match:
+  1015	            campaign_id = unquote(campaign_match.group(1))
+  1016	            action = campaign_match.group(2)
+  1017	            try:
+  1018	                if action == "characters":
+  1019	                    payload = add_campaign_character(campaign_id, self.read_json())
+  1020	                else:
+  1021	                    payload = add_campaign_event(campaign_id, self.read_json())
+  1022	            except BadRequest as exc:
+  1023	                self.send_json(400, {"error": str(exc)})
+  1024	                return
+  1025	            except NotFound as exc:
+  1026	                self.send_json(404, {"error": str(exc)})
+  1027	                return
+  1028	            except Conflict as exc:
+  1029	                self.send_json(409, {"error": str(exc)})
+  1030	                return
+  1031	            self.send_json(201, payload)
+  1032	            return
+  1033	
+  1034	        match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+  1035	        if not match:
+  1036	            self.send_json(404, {"error": "not found"})
+  1037	            return
+  1038	
+  1039	        session_id = unquote(match.group(1))
+  1040	        action = match.group(2)
+  1041	        try:
+  1042	            if action == "conditions":
+  1043	                payload = add_condition(session_id, self.read_json())
+  1044	            else:
+  1045	                payload = advance_combat(session_id)
+  1046	        except BadRequest as exc:
+  1047	            self.send_json(400, {"error": str(exc)})
+  1048	            return
+  1049	        except NotFound as exc:
+  1050	            self.send_json(404, {"error": str(exc)})
+  1051	            return
+  1052	        self.send_json(200, payload)
+  1053	
+  1054	    def read_json(self):
+  1055	        try:
+  1056	            length = int(self.headers.get("Content-Length", "0"))
+  1057	        except ValueError as exc:
+  1058	            raise BadRequest("invalid content length") from exc
+  1059	
+  1060	        raw = self.rfile.read(length)
+  1061	        try:
+  1062	            return json.loads(raw.decode("utf-8") if raw else "{}")
+  1063	        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+  1064	            raise BadRequest("invalid json") from exc
+  1065	
+  1066	    def send_json(self, status, payload):
+  1067	        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+  1068	        self.send_response(status)
+  1069	        self.send_header("Content-Type", "application/json")
+  1070	        self.send_header("Content-Length", str(len(data)))
+  1071	        self.end_headers()
+  1072	        self.wfile.write(data)
+  1073	
+  1074	    def log_message(self, format, *args):
+  1075	        return
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+codex
+Implemented campaign state APIs in [server.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py:116).
+
+Added:
+- SQLite tables for campaigns, campaign characters, and campaign events.
+- `POST /v1/campaigns`
+- `POST /v1/campaigns/{id}/characters`
+- `POST /v1/campaigns/{id}/events`
+- `GET /v1/campaigns/{id}/state`
+- Reset cleanup for the new tables.
+
+Verification:
+- `python3 -m py_compile server.py`
+- Function-level smoke test against a temporary SQLite DB matched the stage payloads.
+- Did not start the HTTP server. `./run.sh` is unchanged and ready.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+index 5f6ce6b59eede25f00c1021cb38cce44f35c981b..2ad318adac491fc12c7788c9f47abf3f47ab2658
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T004038Z_codex_gpt-5.5_python-stdlib/server.py
+@@ -48,6 +48,7 @@
+ COMBAT_LOCK = threading.Lock()
+ USERS_LOCK = threading.Lock()
+ COMPENDIUM_LOCK = threading.Lock()
++CAMPAIGN_LOCK = threading.Lock()
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+ PASSWORD_ITERATIONS = 200_000
+@@ -114,6 +115,38 @@
+         )
+         conn.execute(
+             """
++            CREATE TABLE IF NOT EXISTS campaigns (
++                id TEXT PRIMARY KEY,
++                name TEXT NOT NULL,
++                dm TEXT NOT NULL
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_characters (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                name TEXT NOT NULL,
++                level INTEGER NOT NULL,
++                class TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
++            CREATE TABLE IF NOT EXISTS campaign_events (
++                id TEXT PRIMARY KEY,
++                campaign_id TEXT NOT NULL,
++                kind TEXT NOT NULL,
++                summary TEXT NOT NULL,
++                FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
++            )
++            """
++        )
++        conn.execute(
++            """
+             INSERT INTO metadata(key, value)
+             VALUES('schema_version', ?)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value
+@@ -123,8 +156,11 @@
+ 
+ 
+ def reset_storage():
+-    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK:
++    with USERS_LOCK, COMBAT_LOCK, COMPENDIUM_LOCK, CAMPAIGN_LOCK:
+         with db_connect() as conn:
++            conn.execute("DROP TABLE IF EXISTS campaign_events")
++            conn.execute("DROP TABLE IF EXISTS campaign_characters")
++            conn.execute("DROP TABLE IF EXISTS campaigns")
+             conn.execute("DROP TABLE IF EXISTS compendium_items")
+             conn.execute("DROP TABLE IF EXISTS compendium_monsters")
+             conn.execute("DROP TABLE IF EXISTS combat_sessions")
+@@ -756,6 +792,137 @@
+     }
+ 
+ 
++def campaign_exists(conn, campaign_id):
++    return (
++        conn.execute("SELECT 1 FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
++        is not None
++    )
++
++
++def create_campaign(body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    campaign = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "dm": require_string(body.get("dm"), "dm"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            existing = conn.execute(
++                "SELECT 1 FROM campaigns WHERE id = ?", (campaign["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("campaign id already exists")
++            conn.execute(
++                "INSERT INTO campaigns(id, name, dm) VALUES(?, ?, ?)",
++                (campaign["id"], campaign["name"], campaign["dm"]),
++            )
++    return campaign
++
++
++def add_campaign_character(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    character = {
++        "id": require_string(body.get("id"), "id"),
++        "name": require_string(body.get("name"), "name"),
++        "level": require_int(body.get("level"), "level"),
++        "class": require_string(body.get("class"), "class"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_characters WHERE id = ?", (character["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("character id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_characters(id, campaign_id, name, level, class)
++                VALUES(?, ?, ?, ?, ?)
++                """,
++                (
++                    character["id"],
++                    campaign_id,
++                    character["name"],
++                    character["level"],
++                    character["class"],
++                ),
++            )
++    return character
++
++
++def add_campaign_event(campaign_id, body):
++    if not isinstance(body, dict):
++        raise BadRequest("body must be an object")
++    event = {
++        "id": require_string(body.get("id"), "id"),
++        "kind": require_string(body.get("kind"), "kind"),
++        "summary": require_string(body.get("summary"), "summary"),
++    }
++
++    with CAMPAIGN_LOCK:
++        with db_connect() as conn:
++            if not campaign_exists(conn, campaign_id):
++                raise NotFound("campaign not found")
++            existing = conn.execute(
++                "SELECT 1 FROM campaign_events WHERE id = ?", (event["id"],)
++            ).fetchone()
++            if existing is not None:
++                raise Conflict("event id already exists")
++            conn.execute(
++                """
++                INSERT INTO campaign_events(id, campaign_id, kind, summary)
++                VALUES(?, ?, ?, ?)
++                """,
++                (event["id"], campaign_id, event["kind"], event["summary"]),
++            )
++    return {"id": event["id"], "kind": event["kind"]}
++
++
++def read_campaign_state(campaign_id):
++    with db_connect() as conn:
++        campaign = conn.execute(
++            "SELECT id, name, dm FROM campaigns WHERE id = ?", (campaign_id,)
++        ).fetchone()
++        if campaign is None:
++            raise NotFound("campaign not found")
++        characters = conn.execute(
++            """
++            SELECT id, name, level, class
++            FROM campaign_characters
++            WHERE campaign_id = ?
++            ORDER BY rowid
++            """,
++            (campaign_id,),
++        ).fetchall()
++        log_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM campaign_events WHERE campaign_id = ?",
++            (campaign_id,),
++        ).fetchone()["count"]
++
++    return {
++        "id": campaign["id"],
++        "name": campaign["name"],
++        "dm": campaign["dm"],
++        "characters": [
++            {
++                "id": row["id"],
++                "name": row["name"],
++                "level": row["level"],
++                "class": row["class"],
++            }
++            for row in characters
++        ],
++        "log_count": log_count,
++    }
++
++
+ class Handler(BaseHTTPRequestHandler):
+     routes = {
+         "/v1/dice/stats": dice_stats,
+@@ -770,6 +937,7 @@
+         "/v1/auth/login": login_user,
+         "/v1/compendium/monsters": create_monster,
+         "/v1/compendium/items": create_item,
++        "/v1/campaigns": create_campaign,
+     }
+ 
+     def do_GET(self):
+@@ -780,13 +948,18 @@
+             elif path == "/v1/storage/status":
+                 self.send_json(200, storage_status())
+             else:
+-                self.handle_compendium_get(path)
++                self.handle_resource_get(path)
+         except BadRequest as exc:
+             self.send_json(400, {"error": str(exc)})
+         except NotFound as exc:
+             self.send_json(404, {"error": str(exc)})
+ 
+-    def handle_compendium_get(self, path):
++    def handle_resource_get(self, path):
++        campaign_match = re.fullmatch(r"/v1/campaigns/([^/]+)/state", path)
++        if campaign_match:
++            self.send_json(200, read_campaign_state(unquote(campaign_match.group(1))))
++            return
++
+         monster_match = re.fullmatch(r"/v1/compendium/monsters/([^/]+)", path)
+         if monster_match:
+             self.send_json(200, read_monster(unquote(monster_match.group(1))))
+@@ -807,7 +980,7 @@
+ 
+         route = self.routes.get(path)
+         if route is None:
+-            self.handle_combat_route(path)
++            self.handle_dynamic_post(path)
+             return
+ 
+         try:
+@@ -829,11 +1002,35 @@
+             "/v1/auth/register",
+             "/v1/compendium/monsters",
+             "/v1/compendium/items",
++            "/v1/campaigns",
+         }
+         status = 201 if path in created_routes else 200
+         self.send_json(status, payload)
+ 
+-    def handle_combat_route(self, path):
++    def handle_dynamic_post(self, path):
++        campaign_match = re.fullmatch(
++            r"/v1/campaigns/([^/]+)/(characters|events)", path
++        )
++        if campaign_match:
++            campaign_id = unquote(campaign_match.group(1))
++            action = campaign_match.group(2)
++            try:
++                if action == "characters":
++                    payload = add_campaign_character(campaign_id, self.read_json())
++                else:
++                    payload = add_campaign_event(campaign_id, self.read_json())
++            except BadRequest as exc:
++                self.send_json(400, {"error": str(exc)})
++                return
++            except NotFound as exc:
++                self.send_json(404, {"error": str(exc)})
++                return
++            except Conflict as exc:
++                self.send_json(409, {"error": str(exc)})
++                return
++            self.send_json(201, payload)
++            return
++
+         match = re.fullmatch(r"/v1/combat/sessions/([^/]+)/(conditions|advance)", path)
+         if not match:
+             self.send_json(404, {"error": "not found"})
+
+tokens used
+32,289

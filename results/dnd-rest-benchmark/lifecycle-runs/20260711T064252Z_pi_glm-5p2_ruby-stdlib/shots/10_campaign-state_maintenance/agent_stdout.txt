@@ -1,0 +1,27 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I added the **Campaign State APIs** (Stage 6) to the Ruby stdlib server while preserving all prior endpoints. Here's what I implemented:
+
+**Schema** (3 new SQLite tables):
+- `campaigns` (id, name, dm) — primary key on `id`
+- `campaign_characters` (id, campaign_id, name, level, class) — composite PK `(campaign_id, id)` for per-campaign uniqueness
+- `campaign_events` (id, campaign_id, kind, summary) — composite PK `(campaign_id, id)`
+
+**Endpoints added:**
+| Route | Behavior |
+|---|---|
+| `POST /v1/campaigns` | 201 echo `{id,name,dm}` · 400 malformed · 409 dup id |
+| `POST /v1/campaigns/{id}/characters` | 201 echo all 4 fields · 400 malformed · 404 unknown campaign · 409 dup char id |
+| `POST /v1/campaigns/{id}/events` | 201 `{id,kind}` (summary omitted per spec) · 400/404/409 |
+| `GET /v1/campaigns/{id}/state` | 200 with `characters[]` (insertion order) + `log_count` · 404 unknown |
+
+**Preservation:**
+- All DB access stays serialized through `DB_MUTEX` (consistent with existing pattern)
+- `storage_reset` now also clears the 3 campaign tables
+- `init_db` recreates the schema (including new tables) at boot
+- Used `klass` as the Ruby variable name for the `"class"` JSON key (since `class` is reserved)
+- Characters/events keyed per-campaign so the same id can exist in different campaigns, with 409 only for true duplicates within a campaign
+
+All verified end-to-end: campaign lifecycle, duplicate/malformed/missing-record edge cases, storage reset clearing the new data, and a smoke test of prior stages (dice, combat, auth, compendium, storage status) — all green. `./run.sh` starts the server in the foreground on `127.0.0.1:$PORT`. 🎯

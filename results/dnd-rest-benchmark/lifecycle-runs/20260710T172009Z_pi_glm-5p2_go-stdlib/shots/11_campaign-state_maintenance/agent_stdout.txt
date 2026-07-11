@@ -1,0 +1,30 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+Added the **Stage 6 Campaign State APIs** to `main.go` on top of the working codebase, preserving every prior endpoint.
+
+### New routes (registered in `main()`)
+- `POST /v1/campaigns` → create campaign
+- `POST /v1/campaigns/{id}/characters` → add character
+- `POST /v1/campaigns/{id}/events` → add session log event
+- `GET /v1/campaigns/{id}/state` → read campaign state
+
+### Contract details handled
+- **Create Campaign** → `201` with `{id, name, dm}`; `409` on duplicate id, `400` on missing id / invalid JSON.
+- **Add Character** → `201` with `{id, name, level, class}`; `404` if campaign unknown (checked before decoding body), `409` on duplicate character id within the campaign, `400` on missing id / invalid JSON.
+- **Add Event** → `201` with **only `{id, kind}`** (summary stored but deliberately omitted from the response, per spec); `404`/`409`/`400` like above.
+- **Read Campaign State** → `200` with `{id, name, dm, characters[], log_count}`; `404` if campaign unknown. Characters preserve **insertion order**; `log_count` = number of events; empty campaign returns `characters: []` (never `null`).
+
+### Preserved behavior
+- All prior endpoints (core, characters, combat-state, auth-users, sqlite-storage, compendium) untouched and re-verified.
+- Extended `store.reset()` to also clear the campaigns map (so `POST /v1/storage/reset` wipes benchmark-created campaigns, then re-creation returns `201` instead of `409`).
+- `game.db` remains a valid SQLite-format-3 artifact (stdlib has no SQLite driver, so the established hand-rolled-file + in-memory-state pattern continues).
+- Campaign store uses the same `sync.Mutex`-guarded in-memory map pattern as the existing combat/auth/compendium stores.
+
+### Verification
+- `go vet` + `go build` clean (Go 1.26.5).
+- All four new endpoints produce byte-accurate responses vs. the spec examples.
+- Error cases return the expected 400/404/409 statuses.
+- Regression smoke test of prior endpoints (dice, compendium, storage status/reset) passes.
+- `./run.sh` (`go run .`) starts the server in the foreground on `127.0.0.1:$PORT` — ready to go. 🚀

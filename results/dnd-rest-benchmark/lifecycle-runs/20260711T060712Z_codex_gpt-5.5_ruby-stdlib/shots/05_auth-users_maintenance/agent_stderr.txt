@@ -1,0 +1,2063 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4fce-a960-7352-b765-738fb5e25b0f
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: ruby-stdlib
+        Language: ruby
+        Framework/runtime: stdlib
+        Lifecycle stage: auth-users
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Ruby 4.0.5 with the standard library only. Avoid Sinatra, Rails, Rack, and gems.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 3: Users and Password Login
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core, character-rule, and combat-state suites and add deterministic
+username/password APIs.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status: use `400` for malformed input, `401` for bad credentials, and `409` for
+duplicate usernames.
+
+Security note for this benchmark: implement real password hashing when the
+language/framework gives you a reasonable standard or framework-provided option.
+If the target has no reasonable built-in option, isolate password handling
+behind a small helper so a production hash can replace it. Do not store or echo
+the plain password in API responses.
+
+## Register User
+
+`POST /v1/auth/register`
+
+Request:
+
+```json
+{"username": "dm", "password": "swordfish", "role": "dm"}
+```
+
+Rules:
+
+- `username` must be 2-32 characters, lowercase letters, digits, `_`, or `-`.
+- `password` must be at least 8 characters.
+- `role` must be either `dm` or `player`.
+- A duplicate `username` returns HTTP 409.
+
+Response:
+
+```json
+{"username": "dm", "role": "dm"}
+```
+
+## Login
+
+`POST /v1/auth/login`
+
+Request:
+
+```json
+{"username": "dm", "password": "swordfish"}
+```
+
+Rules:
+
+- Correct credentials return a deterministic token for the benchmark:
+  `session-<username>`.
+- Bad credentials return HTTP 401.
+
+Response:
+
+```json
+{"username": "dm", "token": "session-dm"}
+```
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Ruby stdlib server shape first, then add the auth endpoints in the same style and run whatever local checks are present.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+shots/05_auth-users_maintenance/PROMPT.md
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/server_stderr.txt
+shots/04_combat-state_bugfix/agent_stderr.txt
+shots/04_combat-state_bugfix/server_stdout.txt
+shots/04_combat-state_bugfix/PROMPT.md
+shots/04_combat-state_bugfix/agent_stdout.txt
+shots/04_combat-state_bugfix/agent_last_message.txt
+shots/04_combat-state_bugfix/setup.json
+shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+server.rb
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+setup.json
+dndeval-combat-state-report.json
+
+codex
+The worktree has unrelated changes outside this run directory, so I’ll ignore those and keep edits scoped here. Next I’m reading the server and launcher to see how routes and JSON errors are currently handled.
+exec
+/bin/zsh -lc "sed -n '1,260p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "socket"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+ABILITY_NAMES = %w[str dex con int wis cha].freeze
+COMBAT_SESSIONS = {}
+
+def json_response(status, body)
+  payload = JSON.generate(body)
+  reason = {
+    200 => "OK",
+    400 => "Bad Request",
+    404 => "Not Found",
+    405 => "Method Not Allowed"
+  }.fetch(status, "OK")
+
+  [
+    "HTTP/1.1 #{status} #{reason}",
+    "Content-Type: application/json",
+    "Content-Length: #{payload.bytesize}",
+    "Connection: close",
+    "",
+    payload
+  ].join("\r\n")
+end
+
+def integer_value?(value)
+  value.is_a?(Integer)
+end
+
+def integer_in_range?(value, range)
+  integer_value?(value) && range.cover?(value)
+end
+
+def parse_json_body(body)
+  parsed = JSON.parse(body)
+  raise ArgumentError unless parsed.is_a?(Hash)
+
+  parsed
+rescue JSON::ParserError
+  raise ArgumentError
+end
+
+def dice_stats(params)
+  expression = params["expression"]
+  match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+  raise ArgumentError unless match
+
+  count = match[1].to_i
+  sides = match[2].to_i
+  raise ArgumentError unless count.positive? && sides.positive?
+
+  modifier = match[4] ? match[4].to_i : 0
+  modifier = -modifier if match[3] == "-"
+  average = (count * (sides + 1) / 2.0) + modifier
+  average = average.to_i if average == average.to_i
+
+  {
+    "dice_count" => count,
+    "sides" => sides,
+    "modifier" => modifier,
+    "min" => count + modifier,
+    "max" => (count * sides) + modifier,
+    "average" => average
+  }
+end
+
+def ability_check(params)
+  roll = params["roll"]
+  modifier = params["modifier"]
+  dc = params["dc"]
+  raise ArgumentError unless [roll, modifier, dc].all? { |value| integer_value?(value) }
+
+  total = roll + modifier
+  {
+    "total" => total,
+    "success" => total >= dc,
+    "margin" => total - dc
+  }
+end
+
+def ability_modifier_for(score)
+  raise ArgumentError unless integer_in_range?(score, 1..30)
+
+  (score - 10) / 2
+end
+
+def character_ability_modifier(params)
+  score = params["score"]
+  {
+    "score" => score,
+    "modifier" => ability_modifier_for(score)
+  }
+end
+
+def proficiency_bonus_for(level)
+  raise ArgumentError unless integer_in_range?(level, 1..20)
+
+  2 + ((level - 1) / 4)
+end
+
+def character_proficiency(params)
+  level = params["level"]
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus_for(level)
+  }
+end
+
+def character_derived_stats(params)
+  level = params["level"]
+  abilities = params["abilities"]
+  armor = params["armor"]
+  raise ArgumentError unless abilities.is_a?(Hash) && armor.is_a?(Hash)
+
+  modifiers = {}
+  ABILITY_NAMES.each do |name|
+    modifiers[name] = ability_modifier_for(abilities[name])
+  end
+
+  armor_base = armor["base"]
+  shield = armor["shield"]
+  dex_cap = armor["dex_cap"]
+  raise ArgumentError unless integer_value?(armor_base) && [true, false].include?(shield) && integer_value?(dex_cap)
+
+  proficiency_bonus = proficiency_bonus_for(level)
+  {
+    "level" => level,
+    "proficiency_bonus" => proficiency_bonus,
+    "hp_max" => level * (6 + modifiers["con"]),
+    "armor_class" => armor_base + [modifiers["dex"], dex_cap].min + (shield ? 2 : 0),
+    "modifiers" => modifiers
+  }
+end
+
+def monster_multiplier(count)
+  case count
+  when 1 then 1
+  when 2 then 1.5
+  when 3..6 then 2
+  when 7..10 then 2.5
+  when 11..14 then 3
+  else 4
+  end
+end
+
+def adjusted_xp(params)
+  party = params["party"]
+  monsters = params["monsters"]
+  raise ArgumentError unless party.is_a?(Array) && monsters.is_a?(Array)
+
+  thresholds = { "easy" => 0, "medium" => 0, "hard" => 0, "deadly" => 0 }
+  party.each do |member|
+    level = member.is_a?(Hash) && member["level"]
+    level_thresholds = LEVEL_THRESHOLDS[level]
+    raise ArgumentError unless level_thresholds
+
+    thresholds.each_key { |key| thresholds[key] += level_thresholds[key] }
+  end
+
+  base_xp = 0
+  monster_count = 0
+  monsters.each do |monster|
+    raise ArgumentError unless monster.is_a?(Hash)
+
+    cr = monster["cr"]
+    count = monster["count"]
+    xp = CR_XP[cr]
+    raise ArgumentError unless xp && integer_value?(count) && count.positive?
+
+    base_xp += xp * count
+    monster_count += count
+  end
+
+  multiplier = monster_count.zero? ? 1 : monster_multiplier(monster_count)
+  adjusted = base_xp * multiplier
+  adjusted = adjusted.to_i if adjusted == adjusted.to_i
+  difficulty = "trivial"
+  %w[easy medium hard deadly].each do |name|
+    difficulty = name if adjusted >= thresholds[name]
+  end
+
+  {
+    "base_xp" => base_xp,
+    "monster_count" => monster_count,
+    "multiplier" => multiplier,
+    "adjusted_xp" => adjusted,
+    "difficulty" => difficulty,
+    "thresholds" => thresholds
+  }
+end
+
+def initiative_order(params)
+  combatants = params["combatants"]
+  raise ArgumentError unless combatants.is_a?(Array)
+
+  order = combatants.map do |combatant|
+    raise ArgumentError unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  {
+    "order" => order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+                    .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+  }
+end
+
+def combat_order(combatants)
+  raise ArgumentError unless combatants.is_a?(Array) && !combatants.empty?
+
+  order = combatants.map do |combatant|
+    raise ArgumentError unless combatant.is_a?(Hash)
+
+    name = combatant["name"]
+    dex = combatant["dex"]
+    roll = combatant["roll"]
+    raise ArgumentError unless name.is_a?(String) && integer_value?(dex) && integer_value?(roll)
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+       .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+end
+
+def serialize_combat_session(session)
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "order" => session["order"]
+  }
+end
+
+
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+ruby server.rb
+
+exec
+/bin/zsh -lc "sed -n '1,220p' dndeval-combat-state-report.json" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+{
+  "suite": "combat-state",
+  "base_url": "http://127.0.0.1:61570",
+  "passed": true,
+  "passed_count": 20,
+  "total_count": 20,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '261,620p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+def create_combat_session(params)
+  id = params["id"]
+  raise ArgumentError unless id.is_a?(String) && !COMBAT_SESSIONS.key?(id)
+
+  order = combat_order(params["combatants"])
+  conditions = {}
+  order.each { |combatant| conditions[combatant["name"]] ||= [] }
+
+  session = {
+    "id" => id,
+    "round" => 1,
+    "turn_index" => 0,
+    "order" => order,
+    "conditions" => conditions
+  }
+  COMBAT_SESSIONS[id] = session
+  serialize_combat_session(session)
+end
+
+def combat_conditions_payload(session, include_empty: [])
+  session["conditions"].each_with_object({}) do |(name, conditions), payload|
+    payload[name] = conditions if !conditions.empty? || include_empty.include?(name)
+  end
+end
+
+def add_combat_condition(session, params)
+  target = params["target"]
+  condition = params["condition"]
+  duration = params["duration_rounds"]
+  raise ArgumentError unless session["conditions"].key?(target)
+  raise ArgumentError unless condition.is_a?(String) && integer_value?(duration) && duration.positive?
+
+  session["conditions"][target] << { "condition" => condition, "remaining_rounds" => duration }
+  {
+    "target" => target,
+    "conditions" => session["conditions"][target]
+  }
+end
+
+def advance_combat_session(session)
+  session["turn_index"] += 1
+  if session["turn_index"] >= session["order"].length
+    session["turn_index"] = 0
+    session["round"] += 1
+  end
+
+  active_name = session["order"][session["turn_index"]]["name"]
+  active_had_conditions = !session["conditions"][active_name].empty?
+  session["conditions"][active_name].each do |condition|
+    condition["remaining_rounds"] -= 1
+  end
+  session["conditions"][active_name].reject! { |condition| condition["remaining_rounds"].zero? }
+
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "conditions" => combat_conditions_payload(session, include_empty: active_had_conditions ? [active_name] : [])
+  }
+end
+
+def route(method, path, body)
+  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+
+  unless method == "POST"
+    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/advance\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, advance_combat_session(session))
+  end
+
+  params = parse_json_body(body)
+  response = case path
+             when "/v1/dice/stats" then dice_stats(params)
+             when "/v1/checks/ability" then ability_check(params)
+             when "/v1/characters/ability-modifier" then character_ability_modifier(params)
+             when "/v1/characters/proficiency" then character_proficiency(params)
+             when "/v1/characters/derived-stats" then character_derived_stats(params)
+             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
+             when "/v1/initiative/order" then initiative_order(params)
+             else
+               return json_response(404, { "error" => "not found" })
+             end
+
+  json_response(200, response)
+rescue ArgumentError
+  json_response(400, { "error" => "bad request" })
+end
+
+def read_request(client)
+  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
+  return unless request_line
+
+  method, raw_path, = request_line.split(" ", 3)
+  headers = {}
+  while (line = client.gets)
+    line = line.delete_suffix("\n").delete_suffix("\r")
+    break if line.empty?
+
+    key, value = line.split(":", 2)
+    headers[key.downcase] = value.strip if key && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? client.read(length) : ""
+  path = raw_path.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+port = Integer(ENV.fetch("PORT"))
+server = TCPServer.new("127.0.0.1", port)
+
+trap("INT") { server.close }
+trap("TERM") { server.close }
+
+loop do
+  client = server.accept
+  request = read_request(client)
+  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
+rescue IOError, Errno::EBADF
+  break
+rescue StandardError
+  client&.write(json_response(400, { "error" => "bad request" }))
+ensure
+  client&.close
+end
+
+codex
+The server is a small TCP HTTP implementation with in-memory combat state and central `route` dispatch. I’m adding auth as another in-memory store plus a narrow password-hashing helper using Ruby stdlib `OpenSSL`, leaving the existing route behavior untouched.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..e1ec7759e55aae513d40a7dc4fc2fa9dbfc2b19c
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..e1ec7759e55aae513d40a7dc4fc2fa9dbfc2b19c
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+
+codex
+The helper now stores only salted PBKDF2 records and compares derived hashes in constant time. I’m wiring the two new routes into the dispatcher with the requested 401 and 409 status handling.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..2a73f0009f1f0a22139fcdce2829de374b0d5675
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -332,6 +390,14 @@
+     return json_response(200, create_combat_session(parse_json_body(body)))
+   end
+ 
++  if path == "/v1/auth/register"
++    return json_response(200, register_user(parse_json_body(body)))
++  end
++
++  if path == "/v1/auth/login"
++    return json_response(200, login_user(parse_json_body(body)))
++  end
++
+   if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+     session = COMBAT_SESSIONS[match[1]]
+     return json_response(404, { "error" => "not found" }) unless session
+@@ -360,6 +426,10 @@
+              end
+ 
+   json_response(200, response)
++rescue BadCredentialsError
++  json_response(401, { "error" => "bad credentials" })
++rescue DuplicateUsernameError
++  json_response(409, { "error" => "duplicate username" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..2a73f0009f1f0a22139fcdce2829de374b0d5675
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -332,6 +390,14 @@
+     return json_response(200, create_combat_session(parse_json_body(body)))
+   end
+ 
++  if path == "/v1/auth/register"
++    return json_response(200, register_user(parse_json_body(body)))
++  end
++
++  if path == "/v1/auth/login"
++    return json_response(200, login_user(parse_json_body(body)))
++  end
++
+   if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+     session = COMBAT_SESSIONS[match[1]]
+     return json_response(404, { "error" => "not found" }) unless session
+@@ -360,6 +426,10 @@
+              end
+ 
+   json_response(200, response)
++rescue BadCredentialsError
++  json_response(401, { "error" => "bad credentials" })
++rescue DuplicateUsernameError
++  json_response(409, { "error" => "duplicate username" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+
+exec
+/bin/zsh -lc 'ruby -c server.rb' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+Syntax OK
+
+exec
+/bin/zsh -lc "ruby -ropenssl -e 'salt = OpenSSL::Random.random_bytes(16); hash = OpenSSL::PKCS5.pbkdf2_hmac(\"swordfish\", salt, 120000, 32, \"sha256\"); puts hash.bytesize'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+32
+
+exec
+/bin/zsh -lc 'git diff -- server.rb run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..2a73f0009f1f0a22139fcdce2829de374b0d5675
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -332,6 +390,14 @@
+     return json_response(200, create_combat_session(parse_json_body(body)))
+   end
+ 
++  if path == "/v1/auth/register"
++    return json_response(200, register_user(parse_json_body(body)))
++  end
++
++  if path == "/v1/auth/login"
++    return json_response(200, login_user(parse_json_body(body)))
++  end
++
+   if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+     session = COMBAT_SESSIONS[match[1]]
+     return json_response(404, { "error" => "not found" }) unless session
+@@ -360,6 +426,10 @@
+              end
+ 
+   json_response(200, response)
++rescue BadCredentialsError
++  json_response(401, { "error" => "bad credentials" })
++rescue DuplicateUsernameError
++  json_response(409, { "error" => "duplicate username" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+
+codex
+Syntax and the OpenSSL PBKDF2 call both check out. Since the contract says not to start the server before finishing, I’m avoiding live HTTP smoke tests and doing static verification only.
+exec
+/bin/zsh -lc "sed -n '300,430p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+exec
+/bin/zsh -lc "sed -n '1,120p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "openssl"
+require "socket"
+
+CR_XP = {
+  "0" => 10,
+  "1/8" => 25,
+  "1/4" => 50,
+  "1/2" => 100,
+  "1" => 200,
+  "2" => 450,
+  "3" => 700,
+  "4" => 1100,
+  "5" => 1800
+}.freeze
+
+LEVEL_THRESHOLDS = {
+  3 => { "easy" => 75, "medium" => 150, "hard" => 225, "deadly" => 400 }
+}.freeze
+
+ABILITY_NAMES = %w[str dex con int wis cha].freeze
+COMBAT_SESSIONS = {}
+USERS = {}
+
+class DuplicateUsernameError < StandardError; end
+class BadCredentialsError < StandardError; end
+
+def json_response(status, body)
+  payload = JSON.generate(body)
+  reason = {
+    200 => "OK",
+    400 => "Bad Request",
+    401 => "Unauthorized",
+    404 => "Not Found",
+    405 => "Method Not Allowed",
+    409 => "Conflict"
+  }.fetch(status, "OK")
+
+  [
+    "HTTP/1.1 #{status} #{reason}",
+    "Content-Type: application/json",
+    "Content-Length: #{payload.bytesize}",
+    "Connection: close",
+    "",
+    payload
+  ].join("\r\n")
+end
+
+def integer_value?(value)
+  value.is_a?(Integer)
+end
+
+def integer_in_range?(value, range)
+  integer_value?(value) && range.cover?(value)
+end
+
+def parse_json_body(body)
+  parsed = JSON.parse(body)
+  raise ArgumentError unless parsed.is_a?(Hash)
+
+  parsed
+rescue JSON::ParserError
+  raise ArgumentError
+end
+
+def valid_username?(username)
+  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
+end
+
+def password_record(password)
+  raise ArgumentError unless password.is_a?(String) && password.length >= 8
+
+  salt = OpenSSL::Random.random_bytes(16)
+  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
+  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
+end
+
+def password_matches?(password, record)
+  return false unless password.is_a?(String)
+
+  salt = [record["salt"]].pack("H*")
+  expected = [record["hash"]].pack("H*")
+  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
+  secure_compare(actual, expected)
+end
+
+def secure_compare(left, right)
+  return false unless left.bytesize == right.bytesize
+
+  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
+end
+
+def register_user(params)
+  username = params["username"]
+  password = params["password"]
+  role = params["role"]
+  raise ArgumentError unless valid_username?(username)
+  raise ArgumentError unless password.is_a?(String) && password.length >= 8
+  raise ArgumentError unless %w[dm player].include?(role)
+  raise DuplicateUsernameError if USERS.key?(username)
+
+  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
+  { "username" => username, "role" => role }
+end
+
+def login_user(params)
+  username = params["username"]
+  password = params["password"]
+  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
+
+  user = USERS[username]
+  raise BadCredentialsError unless user && password_matches?(password, user["password"])
+
+  { "username" => username, "token" => "session-#{username}" }
+end
+
+def dice_stats(params)
+
+ succeeded in 0ms:
+
+    { "name" => name, "dex" => dex, "score" => roll + dex }
+  end
+
+  order.sort_by { |combatant| [-combatant["score"], -combatant["dex"], combatant["name"]] }
+       .map { |combatant| { "name" => combatant["name"], "score" => combatant["score"] } }
+end
+
+def serialize_combat_session(session)
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "order" => session["order"]
+  }
+end
+
+def create_combat_session(params)
+  id = params["id"]
+  raise ArgumentError unless id.is_a?(String) && !COMBAT_SESSIONS.key?(id)
+
+  order = combat_order(params["combatants"])
+  conditions = {}
+  order.each { |combatant| conditions[combatant["name"]] ||= [] }
+
+  session = {
+    "id" => id,
+    "round" => 1,
+    "turn_index" => 0,
+    "order" => order,
+    "conditions" => conditions
+  }
+  COMBAT_SESSIONS[id] = session
+  serialize_combat_session(session)
+end
+
+def combat_conditions_payload(session, include_empty: [])
+  session["conditions"].each_with_object({}) do |(name, conditions), payload|
+    payload[name] = conditions if !conditions.empty? || include_empty.include?(name)
+  end
+end
+
+def add_combat_condition(session, params)
+  target = params["target"]
+  condition = params["condition"]
+  duration = params["duration_rounds"]
+  raise ArgumentError unless session["conditions"].key?(target)
+  raise ArgumentError unless condition.is_a?(String) && integer_value?(duration) && duration.positive?
+
+  session["conditions"][target] << { "condition" => condition, "remaining_rounds" => duration }
+  {
+    "target" => target,
+    "conditions" => session["conditions"][target]
+  }
+end
+
+def advance_combat_session(session)
+  session["turn_index"] += 1
+  if session["turn_index"] >= session["order"].length
+    session["turn_index"] = 0
+    session["round"] += 1
+  end
+
+  active_name = session["order"][session["turn_index"]]["name"]
+  active_had_conditions = !session["conditions"][active_name].empty?
+  session["conditions"][active_name].each do |condition|
+    condition["remaining_rounds"] -= 1
+  end
+  session["conditions"][active_name].reject! { |condition| condition["remaining_rounds"].zero? }
+
+  active = session["order"][session["turn_index"]]
+  {
+    "id" => session["id"],
+    "round" => session["round"],
+    "turn_index" => session["turn_index"],
+    "active" => active,
+    "conditions" => combat_conditions_payload(session, include_empty: active_had_conditions ? [active_name] : [])
+  }
+end
+
+def route(method, path, body)
+  return json_response(200, { "ok" => true }) if method == "GET" && path == "/health"
+
+  unless method == "POST"
+    return json_response(path == "/health" ? 405 : 404, { "error" => path == "/health" ? "method not allowed" : "not found" })
+  end
+
+  if path == "/v1/combat/sessions"
+    return json_response(200, create_combat_session(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/register"
+    return json_response(200, register_user(parse_json_body(body)))
+  end
+
+  if path == "/v1/auth/login"
+    return json_response(200, login_user(parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, add_combat_condition(session, parse_json_body(body)))
+  end
+
+  if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/advance\z}))
+    session = COMBAT_SESSIONS[match[1]]
+    return json_response(404, { "error" => "not found" }) unless session
+
+    return json_response(200, advance_combat_session(session))
+  end
+
+  params = parse_json_body(body)
+  response = case path
+             when "/v1/dice/stats" then dice_stats(params)
+             when "/v1/checks/ability" then ability_check(params)
+             when "/v1/characters/ability-modifier" then character_ability_modifier(params)
+             when "/v1/characters/proficiency" then character_proficiency(params)
+             when "/v1/characters/derived-stats" then character_derived_stats(params)
+             when "/v1/encounters/adjusted-xp" then adjusted_xp(params)
+             when "/v1/initiative/order" then initiative_order(params)
+             else
+               return json_response(404, { "error" => "not found" })
+             end
+
+  json_response(200, response)
+rescue BadCredentialsError
+  json_response(401, { "error" => "bad credentials" })
+
+exec
+/bin/zsh -lc 'ls -l run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  53 Jul 10 23:07 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..2a73f0009f1f0a22139fcdce2829de374b0d5675
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -332,6 +390,14 @@
+     return json_response(200, create_combat_session(parse_json_body(body)))
+   end
+ 
++  if path == "/v1/auth/register"
++    return json_response(200, register_user(parse_json_body(body)))
++  end
++
++  if path == "/v1/auth/login"
++    return json_response(200, login_user(parse_json_body(body)))
++  end
++
+   if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+     session = COMBAT_SESSIONS[match[1]]
+     return json_response(404, { "error" => "not found" }) unless session
+@@ -360,6 +426,10 @@
+              end
+ 
+   json_response(200, response)
++rescue BadCredentialsError
++  json_response(401, { "error" => "bad credentials" })
++rescue DuplicateUsernameError
++  json_response(409, { "error" => "duplicate username" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+
+exec
+/bin/zsh -lc "sed -n '430,520p' server.rb" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib
+ succeeded in 0ms:
+  json_response(401, { "error" => "bad credentials" })
+rescue DuplicateUsernameError
+  json_response(409, { "error" => "duplicate username" })
+rescue ArgumentError
+  json_response(400, { "error" => "bad request" })
+end
+
+def read_request(client)
+  request_line = client.gets&.delete_suffix("\n")&.delete_suffix("\r")
+  return unless request_line
+
+  method, raw_path, = request_line.split(" ", 3)
+  headers = {}
+  while (line = client.gets)
+    line = line.delete_suffix("\n").delete_suffix("\r")
+    break if line.empty?
+
+    key, value = line.split(":", 2)
+    headers[key.downcase] = value.strip if key && value
+  end
+
+  length = headers.fetch("content-length", "0").to_i
+  body = length.positive? ? client.read(length) : ""
+  path = raw_path.to_s.split("?", 2).first
+  [method, path, body]
+end
+
+port = Integer(ENV.fetch("PORT"))
+server = TCPServer.new("127.0.0.1", port)
+
+trap("INT") { server.close }
+trap("TERM") { server.close }
+
+loop do
+  client = server.accept
+  request = read_request(client)
+  client.write(request ? route(*request) : json_response(400, { "error" => "bad request" }))
+rescue IOError, Errno::EBADF
+  break
+rescue StandardError
+  client&.write(json_response(400, { "error" => "bad request" }))
+ensure
+  client&.close
+end
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..2a73f0009f1f0a22139fcdce2829de374b0d5675
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -332,6 +390,14 @@
+     return json_response(200, create_combat_session(parse_json_body(body)))
+   end
+ 
++  if path == "/v1/auth/register"
++    return json_response(200, register_user(parse_json_body(body)))
++  end
++
++  if path == "/v1/auth/login"
++    return json_response(200, login_user(parse_json_body(body)))
++  end
++
+   if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+     session = COMBAT_SESSIONS[match[1]]
+     return json_response(404, { "error" => "not found" }) unless session
+@@ -360,6 +426,10 @@
+              end
+ 
+   json_response(200, response)
++rescue BadCredentialsError
++  json_response(401, { "error" => "bad credentials" })
++rescue DuplicateUsernameError
++  json_response(409, { "error" => "duplicate username" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+
+codex
+Implemented auth-users stage in [server.rb](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb).
+
+Added:
+
+- `POST /v1/auth/register`
+- `POST /v1/auth/login`
+- Username/password/role validation
+- Duplicate username `409`
+- Bad credentials `401`
+- Salted PBKDF2 password hashing via Ruby stdlib `OpenSSL`
+- Deterministic login token: `session-<username>`
+
+`run.sh` was already present, executable, and still starts `ruby server.rb` in the foreground using the server’s existing `PORT` handling.
+
+Verification run: `ruby -c server.rb` passed. I did not start the HTTP server, per the benchmark instruction.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+index 98f512e9316fe25cf6a50a6751569a99e9940168..2a73f0009f1f0a22139fcdce2829de374b0d5675
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T060712Z_codex_gpt-5.5_ruby-stdlib/server.rb
+@@ -2,6 +2,7 @@
+ # frozen_string_literal: true
+ 
+ require "json"
++require "openssl"
+ require "socket"
+ 
+ CR_XP = {
+@@ -22,14 +23,20 @@
+ 
+ ABILITY_NAMES = %w[str dex con int wis cha].freeze
+ COMBAT_SESSIONS = {}
++USERS = {}
++
++class DuplicateUsernameError < StandardError; end
++class BadCredentialsError < StandardError; end
+ 
+ def json_response(status, body)
+   payload = JSON.generate(body)
+   reason = {
+     200 => "OK",
+     400 => "Bad Request",
++    401 => "Unauthorized",
+     404 => "Not Found",
+-    405 => "Method Not Allowed"
++    405 => "Method Not Allowed",
++    409 => "Conflict"
+   }.fetch(status, "OK")
+ 
+   [
+@@ -59,6 +66,57 @@
+   raise ArgumentError
+ end
+ 
++def valid_username?(username)
++  username.is_a?(String) && username.match?(/\A[a-z0-9_-]{2,32}\z/)
++end
++
++def password_record(password)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++
++  salt = OpenSSL::Random.random_bytes(16)
++  hash = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, 32, "sha256")
++  { "salt" => salt.unpack1("H*"), "hash" => hash.unpack1("H*") }
++end
++
++def password_matches?(password, record)
++  return false unless password.is_a?(String)
++
++  salt = [record["salt"]].pack("H*")
++  expected = [record["hash"]].pack("H*")
++  actual = OpenSSL::PKCS5.pbkdf2_hmac(password, salt, 120_000, expected.bytesize, "sha256")
++  secure_compare(actual, expected)
++end
++
++def secure_compare(left, right)
++  return false unless left.bytesize == right.bytesize
++
++  left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
++end
++
++def register_user(params)
++  username = params["username"]
++  password = params["password"]
++  role = params["role"]
++  raise ArgumentError unless valid_username?(username)
++  raise ArgumentError unless password.is_a?(String) && password.length >= 8
++  raise ArgumentError unless %w[dm player].include?(role)
++  raise DuplicateUsernameError if USERS.key?(username)
++
++  USERS[username] = { "username" => username, "role" => role, "password" => password_record(password) }
++  { "username" => username, "role" => role }
++end
++
++def login_user(params)
++  username = params["username"]
++  password = params["password"]
++  raise ArgumentError unless username.is_a?(String) && password.is_a?(String)
++
++  user = USERS[username]
++  raise BadCredentialsError unless user && password_matches?(password, user["password"])
++
++  { "username" => username, "token" => "session-#{username}" }
++end
++
+ def dice_stats(params)
+   expression = params["expression"]
+   match = expression.is_a?(String) && expression.match(/\A(\d+)d(\d+)(?:([+-])(\d+))?\z/)
+@@ -332,6 +390,14 @@
+     return json_response(200, create_combat_session(parse_json_body(body)))
+   end
+ 
++  if path == "/v1/auth/register"
++    return json_response(200, register_user(parse_json_body(body)))
++  end
++
++  if path == "/v1/auth/login"
++    return json_response(200, login_user(parse_json_body(body)))
++  end
++
+   if (match = path.match(%r{\A/v1/combat/sessions/([^/]+)/conditions\z}))
+     session = COMBAT_SESSIONS[match[1]]
+     return json_response(404, { "error" => "not found" }) unless session
+@@ -360,6 +426,10 @@
+              end
+ 
+   json_response(200, response)
++rescue BadCredentialsError
++  json_response(401, { "error" => "bad credentials" })
++rescue DuplicateUsernameError
++  json_response(409, { "error" => "duplicate username" })
+ rescue ArgumentError
+   json_response(400, { "error" => "bad request" })
+ end
+
+tokens used
+31,502

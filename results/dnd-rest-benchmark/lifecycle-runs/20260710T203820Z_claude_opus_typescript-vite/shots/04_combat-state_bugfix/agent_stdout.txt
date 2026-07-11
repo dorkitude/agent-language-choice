@@ -1,0 +1,21 @@
+Fixed and verified — the full `combat-state` suite now passes **20/20** (and `core` 8/8, `characters` 13/13 remain green). 🎉
+
+## What was wrong 🐛
+
+The bug was in the condition lifecycle serialization in `vite.config.ts`. When a combatant's condition expired, the code deleted that combatant's key from the conditions map entirely:
+
+```ts
+if (remaining.length > 0) session.conditions.set(active.name, remaining);
+else session.conditions.delete(active.name);   // ← dropped the "fighter" key
+```
+
+...and `conditionsObject` filtered out empty lists. So the response was `"conditions":{}` instead of the expected `"conditions":{"fighter":[]}`.
+
+## The fix ✨
+
+Two minimal changes, so a combatant that *has held* a condition keeps its key present with an empty array once conditions expire:
+
+- **`advanceTurn`**: always `set` the filtered list (even when empty) instead of deleting the key.
+- **`conditionsObject`**: emit every key in the map, dropping the `length > 0` filter.
+
+Combatants who never had a condition still don't appear (they're never added to the map), preserving all prior-stage behavior. `run.sh` is unchanged and ready. 🚀

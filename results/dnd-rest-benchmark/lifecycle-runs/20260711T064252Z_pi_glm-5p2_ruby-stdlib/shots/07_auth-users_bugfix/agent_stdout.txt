@@ -1,0 +1,19 @@
+All green! 🎉
+
+## Summary
+
+**Root cause:** The `POST /v1/auth/register` endpoint returned HTTP `200` on successful user creation, but the evaluator expects **`201 Created`** (standard REST semantics for resource creation). The response body was already correct — only the status code was wrong.
+
+**Fix** (two minimal edits in `server.rb`):
+
+1. Added `201 => "Created"` to the `STATUS_TEXT` map so the reason phrase is correct.
+2. Changed the success return in `register_user` from `[200, ...]` to `[201, ...]`.
+
+**Verification:** Smoke-tested all auth endpoints plus `/health`:
+- ✅ register → `201` with `{"username":"dm","role":"dm"}` (no plain password echoed)
+- ✅ duplicate → `409`
+- ✅ login → `200` with `{"username":"dm","token":"session-dm"}`
+- ✅ bad password → `401`
+- ✅ health → `200`
+
+All 23 previously-passing tests remain intact, and the one failing test (`auth-register-user`) now returns the expected `201`. Password hashing (PBKDF2-HMAC-SHA256 via OpenSSL stdlib) and all prior-stage behavior are untouched. `run.sh` is ready. 🐻

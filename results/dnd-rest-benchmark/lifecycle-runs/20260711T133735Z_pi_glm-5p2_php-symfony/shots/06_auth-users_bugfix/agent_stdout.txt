@@ -1,0 +1,21 @@
+Done! 🎲✨
+
+## Summary
+
+**Root cause:** The `registerUser` handler returned a `JsonResponse` with the default status (200), but the evaluator expects **201 Created** for successful user registration — a resource-creation endpoint.
+
+**Fix:** A single, surgical change in `index.php` — the register success response now passes `201` as the status code:
+
+```php
+// Never echo the plain password in responses. 201 Created for new resource.
+return new JsonResponse(['username' => $username, 'role' => $role], 201);
+```
+
+**Verification (smoke test against a live server):**
+- `POST /v1/auth/register` → **201** ✅ (body: `{"username":"dm","role":"dm"}`)
+- `POST /v1/auth/register` (duplicate) → **409** ✅
+- `POST /v1/auth/login` → **200** ✅ (body: `{"username":"dm","token":"session-dm"}`)
+- `POST /v1/auth/login` (bad pw) → **401** ✅
+- `GET /health` → **200** ✅
+
+No other endpoints were touched, so all 23 previously-passing tests (core, character-rule, combat-state, and the other auth cases) remain intact. `./run.sh` starts the PHP built-in server in the foreground on `127.0.0.1:$PORT` and cleans stale state files on startup. PHP 8.5.8 syntax check passes clean. All good, Chef! 🧑‍🍳

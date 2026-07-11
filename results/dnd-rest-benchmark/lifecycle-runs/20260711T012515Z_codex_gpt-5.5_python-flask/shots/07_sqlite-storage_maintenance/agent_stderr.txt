@@ -1,0 +1,4406 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f4ecf-dfd1-7250-94ba-93aedd1a0e75
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: python-flask
+        Language: python
+        Framework/runtime: flask
+        Lifecycle stage: sqlite-storage
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Flask 3.1.3. Implement the REST API as Flask routes.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 4: SQLite Game Storage
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and move durable game-world and game-state data behind SQLite-backed
+storage.
+
+For this stage, the evaluator checks the API contract. The implementation
+should also create a SQLite database file in the project directory, preferably
+`game.db`, and should initialize schema on server startup.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status.
+
+## Storage Status
+
+`GET /v1/storage/status`
+
+Rules:
+
+- Report the durable storage driver.
+- Report schema version `1`.
+- Report whether the database has been initialized.
+
+Response:
+
+```json
+{"driver": "sqlite", "schema_version": 1, "initialized": true}
+```
+
+## Reset Storage
+
+`POST /v1/storage/reset`
+
+Rules:
+
+- Clear benchmark-created durable data.
+- Recreate the schema.
+- Preserve process health.
+
+Response:
+
+```json
+{"ok": true, "schema_version": 1}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the existing Flask app and tests first, then wire SQLite storage in the smallest way that preserves the current API surface.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 154ms:
+shots/05_auth-users_maintenance/server_stderr.txt
+shots/05_auth-users_maintenance/agent_stderr.txt
+shots/05_auth-users_maintenance/dndeval-auth-users-report.json
+shots/05_auth-users_maintenance/server_stdout.txt
+shots/05_auth-users_maintenance/PROMPT.md
+shots/05_auth-users_maintenance/agent_stdout.txt
+shots/05_auth-users_maintenance/agent_last_message.txt
+shots/05_auth-users_maintenance/setup.json
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/06_auth-users_bugfix/server_stderr.txt
+shots/06_auth-users_bugfix/agent_stderr.txt
+shots/06_auth-users_bugfix/dndeval-auth-users-report.json
+shots/06_auth-users_bugfix/server_stdout.txt
+shots/06_auth-users_bugfix/PROMPT.md
+shots/06_auth-users_bugfix/agent_stdout.txt
+shots/06_auth-users_bugfix/agent_last_message.txt
+shots/06_auth-users_bugfix/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/server_stderr.txt
+shots/04_combat-state_bugfix/agent_stderr.txt
+shots/04_combat-state_bugfix/server_stdout.txt
+shots/04_combat-state_bugfix/PROMPT.md
+shots/04_combat-state_bugfix/agent_stdout.txt
+shots/04_combat-state_bugfix/agent_last_message.txt
+shots/04_combat-state_bugfix/setup.json
+shots/04_combat-state_bugfix/dndeval-combat-state-report.json
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+shots/07_sqlite-storage_maintenance/PROMPT.md
+dndeval-core-report.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+app.py
+dndeval-auth-users-report.json
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+requirements.txt
+setup.json
+dndeval-combat-state-report.json
+
+codex
+The repo is a single Flask app with benchmark artifacts beside it. Git sees neighboring runs as untracked, so I’ll keep edits scoped to this current directory.
+exec
+/bin/zsh -lc "sed -n '1,260p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+import hashlib
+import hmac
+import os
+import re
+
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+COMBAT_SESSIONS = {}
+USERS = {}
+USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+PASSWORD_ITERATIONS = 120_000
+
+
+def json_body():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("expected json object")
+    return data
+
+
+def require_int(data, key):
+    value = data.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{key} must be an integer")
+    return value
+
+
+def ability_modifier_for(score):
+    if score < 1 or score > 30:
+        raise ValueError("score must be between 1 and 30")
+    return (score - 10) // 2
+
+
+def proficiency_bonus_for(level):
+    if level < 1 or level > 20:
+        raise ValueError("level must be between 1 and 20")
+    return 2 + (level - 1) // 4
+
+
+def multiplier_for(monster_count):
+    if monster_count <= 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def difficulty_for(adjusted_xp, thresholds):
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted_xp >= thresholds[name]:
+            difficulty = name
+    return difficulty
+
+
+def initiative_order_for(combatants):
+    if not isinstance(combatants, list):
+        raise ValueError("combatants must be a list")
+
+    enriched = []
+    for combatant in combatants:
+        if not isinstance(combatant, dict):
+            raise ValueError("invalid combatant")
+        name = combatant.get("name")
+        if not isinstance(name, str):
+            raise ValueError("combatant name must be a string")
+        dex = require_int(combatant, "dex")
+        roll = require_int(combatant, "roll")
+        enriched.append({"name": name, "dex": dex, "score": roll + dex})
+
+    enriched.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return enriched
+
+
+def public_order(order):
+    return [{"name": item["name"], "score": item["score"]} for item in order]
+
+
+def combat_session_response(session):
+    active = session["order"][session["turn_index"]]
+    return {
+        "id": session["id"],
+        "round": session["round"],
+        "turn_index": session["turn_index"],
+        "active": {"name": active["name"], "score": active["score"]},
+        "order": public_order(session["order"]),
+    }
+
+
+def get_combat_session(session_id):
+    session = COMBAT_SESSIONS.get(session_id)
+    if session is None:
+        return None, (jsonify(error="unknown combat session"), 404)
+    return session, None
+
+
+def public_conditions(session):
+    result = {}
+    for name, conditions in session["conditions"].items():
+        if conditions or name in session["condition_targets"]:
+            result[name] = [
+                {
+                    "condition": condition["condition"],
+                    "remaining_rounds": condition["remaining_rounds"],
+                }
+                for condition in conditions
+            ]
+    return result
+
+
+def password_hash_for(username, password):
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        f"dnd-rest:{username}".encode("utf-8"),
+        PASSWORD_ITERATIONS,
+    )
+    return digest.hex()
+
+
+def validate_username(username):
+    if not isinstance(username, str) or USERNAME_RE.fullmatch(username) is None:
+        raise ValueError("username must be 2-32 chars: lowercase letters, digits, _, -")
+
+
+def validate_password(password):
+    if not isinstance(password, str) or len(password) < 8:
+        raise ValueError("password must be at least 8 characters")
+
+
+def validate_role(role):
+    if role not in ("dm", "player"):
+        raise ValueError("role must be dm or player")
+
+
+@app.errorhandler(ValueError)
+def bad_request(error):
+    return jsonify(error=str(error)), 400
+
+
+@app.get("/health")
+def health():
+    return jsonify(ok=True)
+
+
+@app.post("/v1/dice/stats")
+def dice_stats():
+    data = json_body()
+    expression = data.get("expression")
+    if not isinstance(expression, str):
+        raise ValueError("invalid dice expression")
+
+    match = DICE_RE.fullmatch(expression)
+    if match is None:
+        raise ValueError("invalid dice expression")
+
+    dice_count = int(match.group(1))
+    sides = int(match.group(2))
+    if dice_count <= 0 or sides <= 0:
+        raise ValueError("invalid dice expression")
+
+    modifier = int(match.group(4) or 0)
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    min_value = dice_count + modifier
+    max_value = dice_count * sides + modifier
+    average = dice_count * (sides + 1) / 2 + modifier
+    if average.is_integer():
+        average = int(average)
+
+    return jsonify(
+        dice_count=dice_count,
+        sides=sides,
+        modifier=modifier,
+        min=min_value,
+        max=max_value,
+        average=average,
+    )
+
+
+@app.post("/v1/checks/ability")
+def ability_check():
+    data = json_body()
+    roll = require_int(data, "roll")
+    modifier = require_int(data, "modifier")
+    dc = require_int(data, "dc")
+    total = roll + modifier
+
+    return jsonify(total=total, success=total >= dc, margin=total - dc)
+
+
+@app.post("/v1/encounters/adjusted-xp")
+def adjusted_xp():
+    data = json_body()
+    party = data.get("party")
+    monsters = data.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        raise ValueError("party and monsters must be lists")
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    for member in party:
+        if not isinstance(member, dict):
+            raise ValueError("invalid party member")
+        level = require_int(member, "level")
+        if level not in LEVEL_THRESHOLDS:
+            raise ValueError("unsupported party level")
+        for name, value in LEVEL_THRESHOLDS[level].items():
+            thresholds[name] += value
+
+    base_xp = 0
+    monster_count = 0
+    for monster in monsters:
+        if not isinstance(monster, dict):
+            raise ValueError("invalid monster")
+        cr = monster.get("cr")
+        count = require_int(monster, "count")
+        if cr not in CR_XP or count < 0:
+            raise ValueError("unsupported monster")
+        base_xp += CR_XP[cr] * count
+        monster_count += count
+
+    multiplier = multiplier_for(monster_count)
+    adjusted = base_xp * multiplier
+    if isinstance(adjusted, float) and adjusted.is_integer():
+        adjusted = int(adjusted)
+
+    return jsonify(
+        base_xp=base_xp,
+        monster_count=monster_count,
+        multiplier=multiplier,
+        adjusted_xp=adjusted,
+        difficulty=difficulty_for(adjusted, thresholds),
+
+exec
+/bin/zsh -lc 'cat requirements.txt' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+Flask==3.1.3
+
+exec
+/bin/zsh -lc "sed -n '1,160p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}"
+python3 app.py
+
+exec
+/bin/zsh -lc 'cat dndeval-core-report.json dndeval-characters-report.json dndeval-combat-state-report.json dndeval-auth-users-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+{
+  "suite": "core",
+  "base_url": "http://127.0.0.1:49668",
+  "passed": true,
+  "passed_count": 8,
+  "total_count": 8,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+{
+  "suite": "characters",
+  "base_url": "http://127.0.0.1:49732",
+  "passed": true,
+  "passed_count": 13,
+  "total_count": 13,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+{
+  "suite": "combat-state",
+  "base_url": "http://127.0.0.1:49892",
+  "passed": true,
+  "passed_count": 20,
+  "total_count": 20,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    }
+  ]
+}
+{
+  "suite": "auth-users",
+  "base_url": "http://127.0.0.1:50057",
+  "passed": true,
+  "passed_count": 24,
+  "total_count": 24,
+  "results": [
+    {
+      "id": "health",
+      "name": "Health endpoint",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 1
+    },
+    {
+      "id": "dice-stats-2d6-plus-3",
+      "name": "Dice stats for 2d6+3",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-1d20-minus-1",
+      "name": "Dice stats for 1d20-1",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "dice-stats-invalid",
+      "name": "Invalid dice expression returns 400",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-failure",
+      "name": "Ability check failure margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-check-success",
+      "name": "Ability check success margin",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "encounter-adjusted-xp",
+      "name": "Encounter adjusted XP and difficulty",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "initiative-order",
+      "name": "Initiative order with deterministic tie-breakers",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-negative",
+      "name": "Ability modifier floors negative halves",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-high",
+      "name": "Ability modifier for high score",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "ability-modifier-invalid",
+      "name": "Ability modifier rejects invalid score",
+      "passed": true,
+      "status": 400,
+      "duration_ms": 0
+    },
+    {
+      "id": "proficiency-level-boundary",
+      "name": "Proficiency bonus at level boundary",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "derived-stats",
+      "name": "Derived character stats",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-create-session",
+      "name": "Create deterministic combat session",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-add-condition",
+      "name": "Add condition to combatant",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-mage",
+      "name": "Advance to next turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-to-fighter-decrements",
+      "name": "Condition decrements at target turn start",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-wrap-round",
+      "name": "Round increments when initiative wraps",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-condition-expires",
+      "name": "Condition expires on second target turn",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "combat-advance-expired-removed",
+      "name": "Expired condition removed when target acts again",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 0
+    },
+    {
+      "id": "auth-register-user",
+      "name": "Register deterministic user",
+      "passed": true,
+      "status": 201,
+      "duration_ms": 15
+    },
+    {
+      "id": "auth-register-duplicate",
+      "name": "Duplicate username returns conflict",
+      "passed": true,
+      "status": 409,
+      "duration_ms": 0
+    },
+    {
+      "id": "auth-login-user",
+      "name": "Login returns deterministic session token",
+      "passed": true,
+      "status": 200,
+      "duration_ms": 15
+    },
+    {
+      "id": "auth-login-bad-password",
+      "name": "Bad login returns unauthorized",
+      "passed": true,
+      "status": 401,
+      "duration_ms": 15
+    }
+  ]
+}
+
+codex
+I’ve confirmed prior stages are currently in memory dictionaries for combat sessions and users. Next I’m reading the rest of the route code so I can replace only the durable state paths with SQLite-backed helpers.
+exec
+/bin/zsh -lc "sed -n '1,220p' shots/07_sqlite-storage_maintenance/PROMPT.md" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+exec
+/bin/zsh -lc "sed -n '261,620p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: python-flask
+        Language: python
+        Framework/runtime: flask
+        Lifecycle stage: sqlite-storage
+        Shot kind: maintenance
+
+        You are a fresh maintenance agent inheriting this existing codebase. Add the requested feature stage while preserving all existing API behavior.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Python 3.14.6 and Flask 3.1.3. Implement the REST API as Flask routes.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 4: SQLite Game Storage
+
+You are inheriting an existing D&D REST API codebase. Preserve every previous
+endpoint and move durable game-world and game-state data behind SQLite-backed
+storage.
+
+For this stage, the evaluator checks the API contract. The implementation
+should also create a SQLite database file in the project directory, preferably
+`game.db`, and should initialize schema on server startup.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status.
+
+## Storage Status
+
+`GET /v1/storage/status`
+
+Rules:
+
+- Report the durable storage driver.
+- Report schema version `1`.
+- Report whether the database has been initialized.
+
+Response:
+
+```json
+{"driver": "sqlite", "schema_version": 1, "initialized": true}
+```
+
+## Reset Storage
+
+`POST /v1/storage/reset`
+
+Rules:
+
+- Clear benchmark-created durable data.
+- Recreate the schema.
+- Preserve process health.
+
+Response:
+
+```json
+{"ok": true, "schema_version": 1}
+```
+
+
+
+
+        Finish when ./run.sh is ready.
+```
+
+ succeeded in 0ms:
+        thresholds=thresholds,
+    )
+
+
+@app.post("/v1/initiative/order")
+def initiative_order():
+    data = json_body()
+    return jsonify(order=public_order(initiative_order_for(data.get("combatants"))))
+
+
+@app.post("/v1/auth/register")
+def register_user():
+    data = json_body()
+    username = data.get("username")
+    password = data.get("password")
+    role = data.get("role")
+    validate_username(username)
+    validate_password(password)
+    validate_role(role)
+
+    if username in USERS:
+        return jsonify(error="duplicate username"), 409
+
+    USERS[username] = {
+        "username": username,
+        "role": role,
+        "password_hash": password_hash_for(username, password),
+    }
+    return jsonify(username=username, role=role), 201
+
+
+@app.post("/v1/auth/login")
+def login_user():
+    data = json_body()
+    username = data.get("username")
+    password = data.get("password")
+    if not isinstance(username, str) or not isinstance(password, str):
+        raise ValueError("username and password are required")
+
+    user = USERS.get(username)
+    if user is None:
+        return jsonify(error="bad credentials"), 401
+
+    password_hash = password_hash_for(username, password)
+    if not hmac.compare_digest(user["password_hash"], password_hash):
+        return jsonify(error="bad credentials"), 401
+
+    return jsonify(username=username, token=f"session-{username}")
+
+
+@app.post("/v1/combat/sessions")
+def create_combat_session():
+    data = json_body()
+    session_id = data.get("id")
+    if not isinstance(session_id, str) or session_id == "":
+        raise ValueError("id must be a non-empty string")
+    if session_id in COMBAT_SESSIONS:
+        raise ValueError("combat session id already exists")
+
+    order = initiative_order_for(data.get("combatants"))
+    if not order:
+        raise ValueError("combatants must not be empty")
+
+    COMBAT_SESSIONS[session_id] = {
+        "id": session_id,
+        "round": 1,
+        "turn_index": 0,
+        "order": order,
+        "conditions": {combatant["name"]: [] for combatant in order},
+        "condition_targets": set(),
+    }
+    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
+
+
+@app.post("/v1/combat/sessions/<session_id>/conditions")
+def add_combat_condition(session_id):
+    session, error = get_combat_session(session_id)
+    if error is not None:
+        return error
+
+    data = json_body()
+    target = data.get("target")
+    if not isinstance(target, str):
+        raise ValueError("target must be a string")
+    if target not in session["conditions"]:
+        raise ValueError("target must name a combatant")
+    condition = data.get("condition")
+    if not isinstance(condition, str):
+        raise ValueError("condition must be a string")
+    duration_rounds = require_int(data, "duration_rounds")
+    if duration_rounds <= 0:
+        raise ValueError("duration_rounds must be positive")
+
+    session["condition_targets"].add(target)
+    session["conditions"][target].append(
+        {"condition": condition, "remaining_rounds": duration_rounds}
+    )
+    return jsonify(
+        target=target,
+        conditions=[
+            {
+                "condition": item["condition"],
+                "remaining_rounds": item["remaining_rounds"],
+            }
+            for item in session["conditions"][target]
+        ],
+    )
+
+
+@app.post("/v1/combat/sessions/<session_id>/advance")
+def advance_combat_turn(session_id):
+    session, error = get_combat_session(session_id)
+    if error is not None:
+        return error
+
+    session["turn_index"] += 1
+    if session["turn_index"] >= len(session["order"]):
+        session["turn_index"] = 0
+        session["round"] += 1
+
+    active = session["order"][session["turn_index"]]
+    active_conditions = session["conditions"][active["name"]]
+    for condition in active_conditions:
+        condition["remaining_rounds"] -= 1
+    session["conditions"][active["name"]] = [
+        condition
+        for condition in active_conditions
+        if condition["remaining_rounds"] > 0
+    ]
+
+    return jsonify(
+        id=session["id"],
+        round=session["round"],
+        turn_index=session["turn_index"],
+        active={"name": active["name"], "score": active["score"]},
+        conditions=public_conditions(session),
+    )
+
+
+@app.post("/v1/characters/ability-modifier")
+def character_ability_modifier():
+    data = json_body()
+    score = require_int(data, "score")
+    return jsonify(score=score, modifier=ability_modifier_for(score))
+
+
+@app.post("/v1/characters/proficiency")
+def character_proficiency():
+    data = json_body()
+    level = require_int(data, "level")
+    return jsonify(level=level, proficiency_bonus=proficiency_bonus_for(level))
+
+
+@app.post("/v1/characters/derived-stats")
+def character_derived_stats():
+    data = json_body()
+    level = require_int(data, "level")
+    abilities = data.get("abilities")
+    armor = data.get("armor")
+    if not isinstance(abilities, dict):
+        raise ValueError("abilities must be an object")
+    if not isinstance(armor, dict):
+        raise ValueError("armor must be an object")
+
+    modifiers = {}
+    for key in ABILITY_KEYS:
+        score = require_int(abilities, key)
+        modifiers[key] = ability_modifier_for(score)
+
+    armor_base = require_int(armor, "base")
+    dex_cap = require_int(armor, "dex_cap")
+    shield = armor.get("shield")
+    if not isinstance(shield, bool):
+        raise ValueError("shield must be a boolean")
+
+    proficiency_bonus = proficiency_bonus_for(level)
+    hp_max = level * (6 + modifiers["con"])
+    armor_class = armor_base + min(modifiers["dex"], dex_cap) + (2 if shield else 0)
+
+    return jsonify(
+        level=level,
+        proficiency_bonus=proficiency_bonus,
+        hp_max=hp_max,
+        armor_class=armor_class,
+        modifiers=modifiers,
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=int(os.environ["PORT"]))
+
+exec
+/bin/zsh -lc 'rg -n "COMBAT_SESSIONS|USERS|get_combat_session|register|login|combat" app.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+29:COMBAT_SESSIONS = {}
+30:USERS = {}
+83:def initiative_order_for(combatants):
+84:    if not isinstance(combatants, list):
+85:        raise ValueError("combatants must be a list")
+88:    for combatant in combatants:
+89:        if not isinstance(combatant, dict):
+90:            raise ValueError("invalid combatant")
+91:        name = combatant.get("name")
+93:            raise ValueError("combatant name must be a string")
+94:        dex = require_int(combatant, "dex")
+95:        roll = require_int(combatant, "roll")
+106:def combat_session_response(session):
+117:def get_combat_session(session_id):
+118:    session = COMBAT_SESSIONS.get(session_id)
+120:        return None, (jsonify(error="unknown combat session"), 404)
+268:    return jsonify(order=public_order(initiative_order_for(data.get("combatants"))))
+271:@app.post("/v1/auth/register")
+272:def register_user():
+281:    if username in USERS:
+284:    USERS[username] = {
+292:@app.post("/v1/auth/login")
+293:def login_user():
+300:    user = USERS.get(username)
+311:@app.post("/v1/combat/sessions")
+312:def create_combat_session():
+317:    if session_id in COMBAT_SESSIONS:
+318:        raise ValueError("combat session id already exists")
+320:    order = initiative_order_for(data.get("combatants"))
+322:        raise ValueError("combatants must not be empty")
+324:    COMBAT_SESSIONS[session_id] = {
+329:        "conditions": {combatant["name"]: [] for combatant in order},
+332:    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
+335:@app.post("/v1/combat/sessions/<session_id>/conditions")
+336:def add_combat_condition(session_id):
+337:    session, error = get_combat_session(session_id)
+346:        raise ValueError("target must name a combatant")
+370:@app.post("/v1/combat/sessions/<session_id>/advance")
+371:def advance_combat_turn(session_id):
+372:    session, error = get_combat_session(session_id)
+
+codex
+I’m going to add a tiny SQLite layer using the standard library: one table for users and one JSON-backed table for combat sessions, plus metadata. This keeps the route behavior deterministic while making state survive process restarts.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..cb714fe36fb4ba87b6153edc60461c2b607e099b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,10 +28,130 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
++
++
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
+ 
+ 
+ def json_body():
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..cb714fe36fb4ba87b6153edc60461c2b607e099b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,10 +28,130 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
++
++
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
+ 
+ 
+ def json_body():
+
+codex
+The storage scaffolding is in place. I’m patching the routes now so duplicate checks, login, combat mutation, status, and reset all go through the database.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+codex
+The route conversion is complete. I’m validating with Python syntax checks and a Flask test-client smoke test so I don’t have to start the HTTP server.
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from app import app
+
+client = app.test_client()
+checks = []
+
+r = client.get('/health')
+checks.append(('health', r.status_code, r.json))
+r = client.get('/v1/storage/status')
+checks.append(('storage-status', r.status_code, r.json))
+r = client.post('/v1/storage/reset')
+checks.append(('storage-reset', r.status_code, r.json))
+r = client.post('/v1/auth/register', json={'username':'tester','password':'password1','role':'dm'})
+checks.append(('register', r.status_code, r.json))
+r = client.post('/v1/auth/login', json={'username':'tester','password':'password1'})
+checks.append(('login', r.status_code, r.json))
+r = client.post('/v1/combat/sessions', json={'id':'c1','combatants':[{'name':'Fighter','dex':2,'roll':12},{'name':'Mage','dex':3,'roll':12}]})
+checks.append(('combat-create', r.status_code, r.json))
+r = client.post('/v1/combat/sessions/c1/conditions', json={'target':'Fighter','condition':'blinded','duration_rounds':2})
+checks.append(('condition', r.status_code, r.json))
+r = client.post('/v1/combat/sessions/c1/advance')
+checks.append(('advance', r.status_code, r.json))
+
+for name, status, body in checks:
+    print(name, status, body)
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+exec
+/bin/zsh -lc 'python3 -m py_compile app.py' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py", line 8, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+codex
+Syntax is clean, but the direct smoke test missed the repo’s `.deps` path that `run.sh` sets. I’m rerunning with the same Python path the server will use.
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+from app import app
+
+client = app.test_client()
+checks = []
+
+r = client.get('/health')
+checks.append(('health', r.status_code, r.json))
+r = client.get('/v1/storage/status')
+checks.append(('storage-status', r.status_code, r.json))
+r = client.post('/v1/storage/reset')
+checks.append(('storage-reset', r.status_code, r.json))
+r = client.post('/v1/auth/register', json={'username':'tester','password':'password1','role':'dm'})
+checks.append(('register', r.status_code, r.json))
+r = client.post('/v1/auth/register', json={'username':'tester','password':'password1','role':'dm'})
+checks.append(('register-duplicate', r.status_code, r.json))
+r = client.post('/v1/auth/login', json={'username':'tester','password':'password1'})
+checks.append(('login', r.status_code, r.json))
+r = client.post('/v1/combat/sessions', json={'id':'c1','combatants':[{'name':'Fighter','dex':2,'roll':12},{'name':'Mage','dex':3,'roll':12}]})
+checks.append(('combat-create', r.status_code, r.json))
+r = client.post('/v1/combat/sessions/c1/conditions', json={'target':'Fighter','condition':'blinded','duration_rounds':2})
+checks.append(('condition', r.status_code, r.json))
+r = client.post('/v1/combat/sessions/c1/advance')
+checks.append(('advance', r.status_code, r.json))
+
+for name, status, body in checks:
+    print(name, status, body)
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+ succeeded in 197ms:
+health 200 {'ok': True}
+storage-status 200 {'driver': 'sqlite', 'initialized': True, 'schema_version': 1}
+storage-reset 200 {'ok': True, 'schema_version': 1}
+register 201 {'role': 'dm', 'username': 'tester'}
+register-duplicate 409 {'error': 'duplicate username'}
+login 200 {'token': 'session-tester', 'username': 'tester'}
+combat-create 200 {'active': {'name': 'Mage', 'score': 15}, 'id': 'c1', 'order': [{'name': 'Mage', 'score': 15}, {'name': 'Fighter', 'score': 14}], 'round': 1, 'turn_index': 0}
+condition 200 {'conditions': [{'condition': 'blinded', 'remaining_rounds': 2}], 'target': 'Fighter'}
+advance 200 {'active': {'name': 'Fighter', 'score': 14}, 'conditions': {'Fighter': [{'condition': 'blinded', 'remaining_rounds': 1}]}, 'id': 'c1', 'round': 1, 'turn_index': 1}
+
+codex
+The smoke test passed against Flask’s test client and confirmed the SQLite file is initialized. I’m clearing the temporary smoke-test rows now so the workspace is left with an empty initialized schema.
+exec
+/bin/zsh -lc "ls -l run.sh game.db && sqlite3 game.db '.tables'" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+from app import reset_storage, storage_initialized
+reset_storage()
+print('initialized', storage_initialized())
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+exec
+/bin/zsh -lc 'git diff -- app.py run.sh requirements.txt' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+ succeeded in 145ms:
+initialized True
+
+ succeeded in 190ms:
+combat_sessions  metadata         users          
+
+codex
+`run.sh` is executable and still starts `python3 app.py` in the foreground with the pinned dependency path. I’m doing one final source pass for accidental issues before wrapping up.
+exec
+/bin/zsh -lc "sed -n '190,460p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+    if monster_count <= 10:
+        return 2.5
+    if monster_count <= 14:
+        return 3
+    return 4
+
+
+def difficulty_for(adjusted_xp, thresholds):
+    difficulty = "trivial"
+    for name in ("easy", "medium", "hard", "deadly"):
+        if adjusted_xp >= thresholds[name]:
+            difficulty = name
+    return difficulty
+
+
+def initiative_order_for(combatants):
+    if not isinstance(combatants, list):
+        raise ValueError("combatants must be a list")
+
+    enriched = []
+    for combatant in combatants:
+        if not isinstance(combatant, dict):
+            raise ValueError("invalid combatant")
+        name = combatant.get("name")
+        if not isinstance(name, str):
+            raise ValueError("combatant name must be a string")
+        dex = require_int(combatant, "dex")
+        roll = require_int(combatant, "roll")
+        enriched.append({"name": name, "dex": dex, "score": roll + dex})
+
+    enriched.sort(key=lambda item: (-item["score"], -item["dex"], item["name"]))
+    return enriched
+
+
+def public_order(order):
+    return [{"name": item["name"], "score": item["score"]} for item in order]
+
+
+def combat_session_response(session):
+    active = session["order"][session["turn_index"]]
+    return {
+        "id": session["id"],
+        "round": session["round"],
+        "turn_index": session["turn_index"],
+        "active": {"name": active["name"], "score": active["score"]},
+        "order": public_order(session["order"]),
+    }
+
+
+def get_combat_session(session_id):
+    with db_connect() as db:
+        row = db.execute(
+            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+    if row is None:
+        return None, (jsonify(error="unknown combat session"), 404)
+    return deserialize_combat_session(row["data"]), None
+
+
+def public_conditions(session):
+    result = {}
+    for name, conditions in session["conditions"].items():
+        if conditions or name in session["condition_targets"]:
+            result[name] = [
+                {
+                    "condition": condition["condition"],
+                    "remaining_rounds": condition["remaining_rounds"],
+                }
+                for condition in conditions
+            ]
+    return result
+
+
+def password_hash_for(username, password):
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        f"dnd-rest:{username}".encode("utf-8"),
+        PASSWORD_ITERATIONS,
+    )
+    return digest.hex()
+
+
+def validate_username(username):
+    if not isinstance(username, str) or USERNAME_RE.fullmatch(username) is None:
+        raise ValueError("username must be 2-32 chars: lowercase letters, digits, _, -")
+
+
+def validate_password(password):
+    if not isinstance(password, str) or len(password) < 8:
+        raise ValueError("password must be at least 8 characters")
+
+
+def validate_role(role):
+    if role not in ("dm", "player"):
+        raise ValueError("role must be dm or player")
+
+
+initialize_storage()
+
+
+@app.errorhandler(ValueError)
+def bad_request(error):
+    return jsonify(error=str(error)), 400
+
+
+@app.get("/health")
+def health():
+    return jsonify(ok=True)
+
+
+@app.get("/v1/storage/status")
+def storage_status():
+    return jsonify(
+        driver="sqlite",
+        schema_version=SCHEMA_VERSION,
+        initialized=storage_initialized(),
+    )
+
+
+@app.post("/v1/storage/reset")
+def storage_reset():
+    reset_storage()
+    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
+
+
+@app.post("/v1/dice/stats")
+def dice_stats():
+    data = json_body()
+    expression = data.get("expression")
+    if not isinstance(expression, str):
+        raise ValueError("invalid dice expression")
+
+    match = DICE_RE.fullmatch(expression)
+    if match is None:
+        raise ValueError("invalid dice expression")
+
+    dice_count = int(match.group(1))
+    sides = int(match.group(2))
+    if dice_count <= 0 or sides <= 0:
+        raise ValueError("invalid dice expression")
+
+    modifier = int(match.group(4) or 0)
+    if match.group(3) == "-":
+        modifier = -modifier
+
+    min_value = dice_count + modifier
+    max_value = dice_count * sides + modifier
+    average = dice_count * (sides + 1) / 2 + modifier
+    if average.is_integer():
+        average = int(average)
+
+    return jsonify(
+        dice_count=dice_count,
+        sides=sides,
+        modifier=modifier,
+        min=min_value,
+        max=max_value,
+        average=average,
+    )
+
+
+@app.post("/v1/checks/ability")
+def ability_check():
+    data = json_body()
+    roll = require_int(data, "roll")
+    modifier = require_int(data, "modifier")
+    dc = require_int(data, "dc")
+    total = roll + modifier
+
+    return jsonify(total=total, success=total >= dc, margin=total - dc)
+
+
+@app.post("/v1/encounters/adjusted-xp")
+def adjusted_xp():
+    data = json_body()
+    party = data.get("party")
+    monsters = data.get("monsters")
+    if not isinstance(party, list) or not isinstance(monsters, list):
+        raise ValueError("party and monsters must be lists")
+
+    thresholds = {"easy": 0, "medium": 0, "hard": 0, "deadly": 0}
+    for member in party:
+        if not isinstance(member, dict):
+            raise ValueError("invalid party member")
+        level = require_int(member, "level")
+        if level not in LEVEL_THRESHOLDS:
+            raise ValueError("unsupported party level")
+        for name, value in LEVEL_THRESHOLDS[level].items():
+            thresholds[name] += value
+
+    base_xp = 0
+    monster_count = 0
+    for monster in monsters:
+        if not isinstance(monster, dict):
+            raise ValueError("invalid monster")
+        cr = monster.get("cr")
+        count = require_int(monster, "count")
+        if cr not in CR_XP or count < 0:
+            raise ValueError("unsupported monster")
+        base_xp += CR_XP[cr] * count
+        monster_count += count
+
+    multiplier = multiplier_for(monster_count)
+    adjusted = base_xp * multiplier
+    if isinstance(adjusted, float) and adjusted.is_integer():
+        adjusted = int(adjusted)
+
+    return jsonify(
+        base_xp=base_xp,
+        monster_count=monster_count,
+        multiplier=multiplier,
+        adjusted_xp=adjusted,
+        difficulty=difficulty_for(adjusted, thresholds),
+        thresholds=thresholds,
+    )
+
+
+@app.post("/v1/initiative/order")
+def initiative_order():
+    data = json_body()
+    return jsonify(order=public_order(initiative_order_for(data.get("combatants"))))
+
+
+@app.post("/v1/auth/register")
+def register_user():
+    data = json_body()
+    username = data.get("username")
+    password = data.get("password")
+    role = data.get("role")
+    validate_username(username)
+    validate_password(password)
+    validate_role(role)
+
+    if load_user(username) is not None:
+        return jsonify(error="duplicate username"), 409
+
+    create_user(username, role, password_hash_for(username, password))
+    return jsonify(username=username, role=role), 201
+
+
+@app.post("/v1/auth/login")
+def login_user():
+    data = json_body()
+    username = data.get("username")
+    password = data.get("password")
+    if not isinstance(username, str) or not isinstance(password, str):
+        raise ValueError("username and password are required")
+
+    user = load_user(username)
+    if user is None:
+        return jsonify(error="bad credentials"), 401
+
+    password_hash = password_hash_for(username, password)
+    if not hmac.compare_digest(user["password_hash"], password_hash):
+        return jsonify(error="bad credentials"), 401
+
+    return jsonify(username=username, token=f"session-{username}")
+
+
+@app.post("/v1/combat/sessions")
+def create_combat_session():
+    data = json_body()
+    session_id = data.get("id")
+    if not isinstance(session_id, str) or session_id == "":
+        raise ValueError("id must be a non-empty string")
+    if combat_session_exists(session_id):
+        raise ValueError("combat session id already exists")
+
+    order = initiative_order_for(data.get("combatants"))
+    if not order:
+
+exec
+/bin/zsh -lc "sed -n '1,190p' app.py" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+import hashlib
+import hmac
+import json
+import os
+import re
+import sqlite3
+
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+
+CR_XP = {
+    "0": 10,
+    "1/8": 25,
+    "1/4": 50,
+    "1/2": 100,
+    "1": 200,
+    "2": 450,
+    "3": 700,
+    "4": 1100,
+    "5": 1800,
+}
+
+LEVEL_THRESHOLDS = {
+    3: {"easy": 75, "medium": 150, "hard": 225, "deadly": 400},
+}
+
+DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+PASSWORD_ITERATIONS = 120_000
+SCHEMA_VERSION = 1
+DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
+
+
+def db_connect():
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def initialize_storage():
+    with db_connect() as db:
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                role TEXT NOT NULL,
+                password_hash TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS combat_sessions (
+                id TEXT PRIMARY KEY,
+                data TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
+            """
+            INSERT INTO metadata (key, value)
+            VALUES ('schema_version', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (str(SCHEMA_VERSION),),
+        )
+
+
+def reset_storage():
+    with db_connect() as db:
+        db.execute("DROP TABLE IF EXISTS combat_sessions")
+        db.execute("DROP TABLE IF EXISTS users")
+        db.execute("DROP TABLE IF EXISTS metadata")
+    initialize_storage()
+
+
+def storage_initialized():
+    try:
+        with db_connect() as db:
+            rows = db.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type = 'table'
+                AND name IN ('metadata', 'users', 'combat_sessions')
+                """
+            ).fetchall()
+            version = db.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            ).fetchone()
+        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
+    except sqlite3.Error:
+        return False
+
+
+def serialize_combat_session(session):
+    data = dict(session)
+    data["condition_targets"] = sorted(session["condition_targets"])
+    return json.dumps(data, sort_keys=True, separators=(",", ":"))
+
+
+def deserialize_combat_session(raw_data):
+    session = json.loads(raw_data)
+    session["condition_targets"] = set(session.get("condition_targets", []))
+    return session
+
+
+def save_combat_session(session):
+    with db_connect() as db:
+        db.execute(
+            """
+            INSERT INTO combat_sessions (id, data)
+            VALUES (?, ?)
+            ON CONFLICT(id) DO UPDATE SET data = excluded.data
+            """,
+            (session["id"], serialize_combat_session(session)),
+        )
+
+
+def combat_session_exists(session_id):
+    with db_connect() as db:
+        row = db.execute(
+            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+    return row is not None
+
+
+def load_user(username):
+    with db_connect() as db:
+        row = db.execute(
+            "SELECT username, role, password_hash FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
+
+
+def create_user(username, role, password_hash):
+    with db_connect() as db:
+        db.execute(
+            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
+            (username, role, password_hash),
+        )
+
+
+def json_body():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("expected json object")
+    return data
+
+
+def require_int(data, key):
+    value = data.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{key} must be an integer")
+    return value
+
+
+def ability_modifier_for(score):
+    if score < 1 or score > 30:
+        raise ValueError("score must be between 1 and 30")
+    return (score - 10) // 2
+
+
+def proficiency_bonus_for(level):
+    if level < 1 or level > 20:
+        raise ValueError("level must be between 1 and 20")
+    return 2 + (level - 1) // 4
+
+
+def multiplier_for(monster_count):
+    if monster_count <= 1:
+        return 1
+    if monster_count == 2:
+        return 1.5
+    if monster_count <= 6:
+        return 2
+    if monster_count <= 10:
+
+exec
+/bin/zsh -lc 'PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 -m py_compile app.py && PYTHONPATH="$PWD/.deps:${PYTHONPATH:-}" python3 - <<'"'PY'
+from app import app
+c = app.test_client()
+for method, path in [('GET', '/v1/storage/status'), ('POST', '/v1/storage/reset'), ('GET', '/v1/storage/status')]:
+    r = c.open(path, method=method)
+    print(method, path, r.status_code, r.json)
+PY" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+ succeeded in 206ms:
+GET /v1/storage/status 200 {'driver': 'sqlite', 'initialized': True, 'schema_version': 1}
+POST /v1/storage/reset 200 {'ok': True, 'schema_version': 1}
+GET /v1/storage/status 200 {'driver': 'sqlite', 'initialized': True, 'schema_version': 1}
+
+codex
+The final storage endpoint check passed after reset, and `game.db` contains the expected `metadata`, `users`, and `combat_sessions` tables. I’m checking the current directory status once more so I can report exactly what changed.
+exec
+/bin/zsh -lc 'git status --short . && ls -l app.py run.sh game.db' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask
+ succeeded in 0ms:
+?? ./
+-rw-r--r--@ 1 dorkitude  staff  17014 Jul 10 18:35 app.py
+-rw-r--r--@ 1 dorkitude  staff  28672 Jul 10 18:36 game.db
+-rwxr-xr-x@ 1 dorkitude  staff    100 Jul 10 18:25 run.sh
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+codex
+Implemented SQLite-backed storage in [app.py](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py).
+
+Changes:
+- Added `game.db` initialization on app startup with schema version `1`.
+- Added `GET /v1/storage/status`.
+- Added `POST /v1/storage/reset`.
+- Moved users and combat sessions from process dictionaries into SQLite-backed storage.
+- Left [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/run.sh) intact and executable; it starts the Flask server in the foreground using `PORT`.
+
+Verified with:
+- `python3 -m py_compile app.py`
+- Flask test-client smoke checks for health, storage status/reset, auth, and combat state
+
+I did not start the HTTP server.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+index 3f31c0da1501c66973654ba0de7c975bd319808c..c5f042fe949778b33f63c04e196c14342f6da565
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T012515Z_codex_gpt-5.5_python-flask/app.py
+@@ -1,7 +1,9 @@
+ import hashlib
+ import hmac
++import json
+ import os
+ import re
++import sqlite3
+ 
+ from flask import Flask, jsonify, request
+ 
+@@ -26,12 +28,132 @@
+ 
+ DICE_RE = re.compile(r"^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$")
+ ABILITY_KEYS = ("str", "dex", "con", "int", "wis", "cha")
+-COMBAT_SESSIONS = {}
+-USERS = {}
+ USERNAME_RE = re.compile(r"^[a-z0-9_-]{2,32}$")
+ PASSWORD_ITERATIONS = 120_000
++SCHEMA_VERSION = 1
++DB_PATH = os.path.join(os.path.dirname(__file__), "game.db")
++
++
++def db_connect():
++    connection = sqlite3.connect(DB_PATH)
++    connection.row_factory = sqlite3.Row
++    return connection
++
++
++def initialize_storage():
++    with db_connect() as db:
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS metadata (
++                key TEXT PRIMARY KEY,
++                value TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS users (
++                username TEXT PRIMARY KEY,
++                role TEXT NOT NULL,
++                password_hash TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            CREATE TABLE IF NOT EXISTS combat_sessions (
++                id TEXT PRIMARY KEY,
++                data TEXT NOT NULL
++            )
++            """
++        )
++        db.execute(
++            """
++            INSERT INTO metadata (key, value)
++            VALUES ('schema_version', ?)
++            ON CONFLICT(key) DO UPDATE SET value = excluded.value
++            """,
++            (str(SCHEMA_VERSION),),
++        )
++
++
++def reset_storage():
++    with db_connect() as db:
++        db.execute("DROP TABLE IF EXISTS combat_sessions")
++        db.execute("DROP TABLE IF EXISTS users")
++        db.execute("DROP TABLE IF EXISTS metadata")
++    initialize_storage()
++
++
++def storage_initialized():
++    try:
++        with db_connect() as db:
++            rows = db.execute(
++                """
++                SELECT name FROM sqlite_master
++                WHERE type = 'table'
++                AND name IN ('metadata', 'users', 'combat_sessions')
++                """
++            ).fetchall()
++            version = db.execute(
++                "SELECT value FROM metadata WHERE key = 'schema_version'"
++            ).fetchone()
++        return len(rows) == 3 and version is not None and version["value"] == str(SCHEMA_VERSION)
++    except sqlite3.Error:
++        return False
++
++
++def serialize_combat_session(session):
++    data = dict(session)
++    data["condition_targets"] = sorted(session["condition_targets"])
++    return json.dumps(data, sort_keys=True, separators=(",", ":"))
++
++
++def deserialize_combat_session(raw_data):
++    session = json.loads(raw_data)
++    session["condition_targets"] = set(session.get("condition_targets", []))
++    return session
++
++
++def save_combat_session(session):
++    with db_connect() as db:
++        db.execute(
++            """
++            INSERT INTO combat_sessions (id, data)
++            VALUES (?, ?)
++            ON CONFLICT(id) DO UPDATE SET data = excluded.data
++            """,
++            (session["id"], serialize_combat_session(session)),
++        )
+ 
+ 
++def combat_session_exists(session_id):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT 1 FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    return row is not None
++
++
++def load_user(username):
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT username, role, password_hash FROM users WHERE username = ?",
++            (username,),
++        ).fetchone()
++    if row is None:
++        return None
++    return {"username": row["username"], "role": row["role"], "password_hash": row["password_hash"]}
++
++
++def create_user(username, role, password_hash):
++    with db_connect() as db:
++        db.execute(
++            "INSERT INTO users (username, role, password_hash) VALUES (?, ?, ?)",
++            (username, role, password_hash),
++        )
++
++
+ def json_body():
+     data = request.get_json(silent=True)
+     if not isinstance(data, dict):
+@@ -115,10 +237,13 @@
+ 
+ 
+ def get_combat_session(session_id):
+-    session = COMBAT_SESSIONS.get(session_id)
+-    if session is None:
++    with db_connect() as db:
++        row = db.execute(
++            "SELECT data FROM combat_sessions WHERE id = ?", (session_id,)
++        ).fetchone()
++    if row is None:
+         return None, (jsonify(error="unknown combat session"), 404)
+-    return session, None
++    return deserialize_combat_session(row["data"]), None
+ 
+ 
+ def public_conditions(session):
+@@ -160,6 +285,9 @@
+         raise ValueError("role must be dm or player")
+ 
+ 
++initialize_storage()
++
++
+ @app.errorhandler(ValueError)
+ def bad_request(error):
+     return jsonify(error=str(error)), 400
+@@ -170,6 +298,21 @@
+     return jsonify(ok=True)
+ 
+ 
++@app.get("/v1/storage/status")
++def storage_status():
++    return jsonify(
++        driver="sqlite",
++        schema_version=SCHEMA_VERSION,
++        initialized=storage_initialized(),
++    )
++
++
++@app.post("/v1/storage/reset")
++def storage_reset():
++    reset_storage()
++    return jsonify(ok=True, schema_version=SCHEMA_VERSION)
++
++
+ @app.post("/v1/dice/stats")
+ def dice_stats():
+     data = json_body()
+@@ -278,14 +421,10 @@
+     validate_password(password)
+     validate_role(role)
+ 
+-    if username in USERS:
++    if load_user(username) is not None:
+         return jsonify(error="duplicate username"), 409
+ 
+-    USERS[username] = {
+-        "username": username,
+-        "role": role,
+-        "password_hash": password_hash_for(username, password),
+-    }
++    create_user(username, role, password_hash_for(username, password))
+     return jsonify(username=username, role=role), 201
+ 
+ 
+@@ -297,7 +436,7 @@
+     if not isinstance(username, str) or not isinstance(password, str):
+         raise ValueError("username and password are required")
+ 
+-    user = USERS.get(username)
++    user = load_user(username)
+     if user is None:
+         return jsonify(error="bad credentials"), 401
+ 
+@@ -314,14 +453,14 @@
+     session_id = data.get("id")
+     if not isinstance(session_id, str) or session_id == "":
+         raise ValueError("id must be a non-empty string")
+-    if session_id in COMBAT_SESSIONS:
++    if combat_session_exists(session_id):
+         raise ValueError("combat session id already exists")
+ 
+     order = initiative_order_for(data.get("combatants"))
+     if not order:
+         raise ValueError("combatants must not be empty")
+ 
+-    COMBAT_SESSIONS[session_id] = {
++    session = {
+         "id": session_id,
+         "round": 1,
+         "turn_index": 0,
+@@ -329,7 +468,8 @@
+         "conditions": {combatant["name"]: [] for combatant in order},
+         "condition_targets": set(),
+     }
+-    return jsonify(combat_session_response(COMBAT_SESSIONS[session_id]))
++    save_combat_session(session)
++    return jsonify(combat_session_response(session))
+ 
+ 
+ @app.post("/v1/combat/sessions/<session_id>/conditions")
+@@ -355,6 +495,7 @@
+     session["conditions"][target].append(
+         {"condition": condition, "remaining_rounds": duration_rounds}
+     )
++    save_combat_session(session)
+     return jsonify(
+         target=target,
+         conditions=[
+@@ -387,6 +528,7 @@
+         for condition in active_conditions
+         if condition["remaining_rounds"] > 0
+     ]
++    save_combat_session(session)
+ 
+     return jsonify(
+         id=session["id"],
+
+tokens used
+35,987

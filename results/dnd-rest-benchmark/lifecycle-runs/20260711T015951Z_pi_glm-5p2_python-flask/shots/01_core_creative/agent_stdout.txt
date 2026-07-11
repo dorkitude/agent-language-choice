@@ -1,0 +1,19 @@
+Done, Chef! 🎲 Here's what I built for the **core D&D REST engine** in Python/Flask 3.1.3:
+
+## Files
+
+**`app.py`** — Flask routes for all four endpoints:
+- `GET /health` → `{"ok": true}`
+- `POST /v1/dice/stats` — regex-parsed `<count>d<sides>[±<mod>]`, validates positivity, returns `dice_count/sides/modifier/min/max/average`; true mean `(min+max)/2` (collapses whole floats → int to match the sample); invalid → 400
+- `POST /v1/checks/ability` — `total=roll+modifier`, `success=total>=dc`, `margin=total-dc`
+- `POST /v1/encounters/adjusted-xp` — CR→XP table, monster-count multipliers, summed party thresholds (level-3), picks highest difficulty reached; unknown CR → 400
+- `POST /v1/initiative/order` — `score=roll+dex`, sorts by score desc → dex desc → name asc
+
+**`run.sh`** — cds to its own dir, sets `PYTHONPATH=.deps`, auto-installs Flask (uv, falling back to pip) only if missing, then `exec python3 app.py` in the foreground on `127.0.0.1:$PORT`.
+
+**`requirements.txt`** — `Flask==3.1.3` (unchanged pin). `.deps/` pre-populated so the server starts immediately.
+
+## Verification
+Ran every endpoint through Flask's test client (no server started). All sample requests reproduce the spec responses **exactly** — including `2d6+3→{min:5,max:15,average:10}`, the ability check `{total:14,success:false,margin:-1}`, the encounter `{base_xp:850,multiplier:2,adjusted_xp:1700,difficulty:deadly,thresholds:{...}}`, and initiative `[rogue:17, ogre:15]`. Edge cases checked too: fractional averages (`3d6→10.5`), 1.5× multiplier (`52.5`), tie-breaking, empty combatants, and 400s for `0d6`/`2d0`/garbage/double-modifier/unknown-CR. ✨
+
+I did **not** start the server, per the contract — `./run.sh` is ready for the evaluator to launch.

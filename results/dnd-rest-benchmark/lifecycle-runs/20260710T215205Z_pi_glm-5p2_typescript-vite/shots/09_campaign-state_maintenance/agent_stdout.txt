@@ -1,0 +1,29 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+Added **Campaign State APIs** (Stage 6) to the existing D&D REST codebase, backed by SQLite via the existing `node:sqlite` storage layer — all prior endpoints preserved.
+
+### `src/storage.ts`
+- Added 3 new tables to the schema DDL: `campaigns`, `campaign_characters`, `campaign_events` (each with `id TEXT PRIMARY KEY`, plus `campaign_id` foreign-reference on the child tables).
+- Added CRUD helpers: `getCampaign`/`putCampaign`, `getCharacter`/`putCharacter`/`listCharacters` (ordered by `rowid` for insertion order), `getEvent`/`putEvent`/`countEvents`.
+- Extended `resetStorage()` to drop the new tables so the cumulative evaluator's reset stays consistent.
+
+### `src/dndPlugin.ts`
+- Imported the new storage helpers.
+- Added four handlers:
+  - `createCampaign` → `POST /v1/campaigns` → **201** `{id, name, dm}` (409 on dup id, 400 on bad fields)
+  - `addCharacter` → `POST /v1/campaigns/:cid/characters` → **201** `{id, name, level, class}` (404 unknown campaign, 409 dup id, 400 bad fields)
+  - `addEvent` → `POST /v1/campaigns/:cid/events` → **201** `{id, kind}` (summary deliberately omitted per spec; 404/409/400 as above)
+  - `readCampaignState` → `GET /v1/campaigns/:cid/state` → **200** with `characters[]` and `log_count` (404 unknown campaign)
+- Wired the GET route into the GET section and the three POST routes into the POST block.
+
+### Verified
+- `tsc --noEmit` clean ✅
+- Full spec flow produces the exact expected JSON (single-character state, multi-character insertion ordering, `log_count`) ✅
+- All edge cases return correct codes: 400 (malformed), 404 (unknown campaign), 409 (duplicate id) ✅
+- Regression endpoints (dice, combat, compendium, auth, storage status/reset) still work ✅
+- `run.sh` untouched — starts `vite` in the foreground on `127.0.0.1:$PORT` ✅
+- No leftover server processes ✅
+
+The `class` column name works fine unquoted in SQLite (not a reserved keyword there), and the `201` create status follows the same durable-record pattern already used by the compendium/auth endpoints.

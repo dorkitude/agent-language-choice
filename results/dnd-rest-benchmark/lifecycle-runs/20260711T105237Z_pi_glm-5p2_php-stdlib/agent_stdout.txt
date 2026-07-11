@@ -1,0 +1,18 @@
+Everything checks out, Chef 🎲✨
+
+## Summary
+
+Added the three DM-tools endpoints to `index.php` while preserving all prior-stage behavior:
+
+**`POST /v1/dm/encounter-builder`** — looks up each monster's CR from the compendium (`monsters` table), then reuses the **exact same** adjusted-XP math as the core suite (shared `encounter_multiplier`, `xp_for_cr`, `difficulty_thresholds` helpers). For the spec example (4× level 3, 3 goblins @ CR 1/4): base 150 × multiplier 2 = 300 → "easy" → recommendation `"safe warm-up"`. ✅
+
+**`POST /v1/dm/loot-parcel`** — deterministic tier-based parcel; tier 1 returns `75 gp` + 2 healing potions (seed accepted but fixed per tier for stability). ✅
+
+**`POST /v1/dm/session-recap`** — pulls the latest campaign event summary from SQLite and derives a deterministic open thread (`"Nyx scouts the goblin trail."` → `"Resolve goblin trail ambush"`). Returns 404 for unknown campaigns. ✅
+
+Verified end-to-end against a live PHP 8.5.8 server:
+- All three spec examples match byte-for-byte (HTTP 200).
+- Unknown monster → 400, unknown campaign → 404, bad tier → 400, missing fields → 400.
+- Prior-stage `/v1/encounters/adjusted-xp` still returns its original shape unchanged.
+
+`run.sh` is unchanged and correct: wipes `game.db`, pre-inits the schema, runs `php -S 127.0.0.1:$PORT` in the foreground. No Composer packages added; PHP stdlib only.

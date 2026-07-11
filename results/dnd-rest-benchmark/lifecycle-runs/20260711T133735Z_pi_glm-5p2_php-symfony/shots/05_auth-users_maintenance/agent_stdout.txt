@@ -1,0 +1,34 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I added the **Users & Password Login** stage to the existing PHP/Symfony D&D REST API while preserving all prior endpoints (health, dice, ability checks, XP, initiative, character rules, combat state — all confirmed still returning 200).
+
+### What I added to `index.php`
+
+**Two new routes** (Symfony Routing, POST-only):
+- `POST /v1/auth/register` → `registerUser()`
+- `POST /v1/auth/login` → `loginUser()`
+
+**File-backed user store** (mirrors the existing combat-session pattern, PID-scoped temp file): `usersFile()`, `loadUsers()`, `saveUsers()`.
+
+**Real password hashing** via PHP's standard `password_hash()` / `password_verify()` (bcrypt `$2y$12$`), isolated behind `hashPassword()` / `verifyPassword()` helpers. The plaintext password is **never** stored or echoed — register returns only `{username, role}`, login returns only `{username, token}`.
+
+### Behavior verified by live curl tests
+| Case | Status |
+|---|---|
+| Register valid `dm`/`player` | `200` `{username, role}` |
+| Duplicate username | `409` |
+| Bad username (uppercase / 1 char) | `400` |
+| Short password (<8) | `400` |
+| Bad role | `400` |
+| Login correct | `200` `token: "session-dm"` |
+| Login wrong password | `401` |
+| Login non-existent user | `401` |
+| Login missing field / bad JSON | `400` |
+| Existing endpoints (health, dice, ability, combat) | `200` ✅ |
+
+Validation order on register: format checks (`400`) before duplicate check (`409`); on login, missing/non-string fields are `400` (malformed), while missing-user / wrong-password are uniformly `401` (so user existence isn't leaked).
+
+### `run.sh`
+Updated to also clean up stale `dnd_users_*.json` files on startup, then starts `php -S 127.0.0.1:"$PORT" index.php` in the foreground. It's executable and ready. 🗡️

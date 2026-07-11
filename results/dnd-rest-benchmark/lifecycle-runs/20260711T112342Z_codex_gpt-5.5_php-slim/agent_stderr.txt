@@ -1,0 +1,2721 @@
+OpenAI Codex v0.144.1
+--------
+workdir: /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019f50f0-2b06-72e0-8150-13c8bdcb621f
+--------
+user
+You are participating in a staged programming-language benchmark.
+
+        Target: php-slim
+        Language: php
+        Framework/runtime: slim
+        Lifecycle stage: combat-state
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use PHP 8.5.8, Composer 2.10.2, Slim 4.15.2, and slim/psr7 1.8.0.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # Maintenance Stage 2: Stateful Combat
+
+You are inheriting an existing D&D REST API codebase. Preserve every endpoint
+from the core and character-rule suites and add the endpoints below.
+
+All state may be in memory. State only needs to last for the lifetime of the
+server process.
+
+All success responses must be JSON. Invalid requests must return a non-2xx
+status, preferably `400` for malformed input and `404` for unknown session IDs.
+
+## Create Combat Session
+
+`POST /v1/combat/sessions`
+
+Request:
+
+```json
+{
+  "id": "enc-1",
+  "combatants": [
+    {"name": "fighter", "dex": 1, "roll": 13},
+    {"name": "rogue", "dex": 3, "roll": 14},
+    {"name": "mage", "dex": 2, "roll": 14}
+  ]
+}
+```
+
+Rules:
+
+- `id` is client-supplied and must uniquely identify the session.
+- Initiative score is `roll + dex`.
+- Sort initiative by score descending, then dex descending, then name ascending.
+- New sessions start at `round = 1` and `turn_index = 0`.
+- `active` is the combatant at the current `turn_index`.
+
+Response:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 0,
+  "active": {"name": "rogue", "score": 17},
+  "order": [
+    {"name": "rogue", "score": 17},
+    {"name": "mage", "score": 16},
+    {"name": "fighter", "score": 14}
+  ]
+}
+```
+
+## Add Condition
+
+`POST /v1/combat/sessions/{id}/conditions`
+
+Request:
+
+```json
+{
+  "target": "fighter",
+  "condition": "blessed",
+  "duration_rounds": 2
+}
+```
+
+Rules:
+
+- `target` must name a combatant in the session.
+- `condition` is an arbitrary string.
+- `duration_rounds` must be a positive integer.
+- Conditions are attached to the named combatant.
+
+Response:
+
+```json
+{
+  "target": "fighter",
+  "conditions": [
+    {"condition": "blessed", "remaining_rounds": 2}
+  ]
+}
+```
+
+## Advance Turn
+
+`POST /v1/combat/sessions/{id}/advance`
+
+Rules:
+
+- Advance `turn_index` to the next combatant.
+- When the turn index wraps from the end of the initiative order back to `0`,
+  increment `round`.
+- At the start of a combatant's turn, decrement each condition attached to that
+  active combatant.
+- Remove a condition when its remaining duration reaches `0`.
+- Conditions on inactive combatants do not decrement.
+
+Response shape:
+
+```json
+{
+  "id": "enc-1",
+  "round": 1,
+  "turn_index": 1,
+  "active": {"name": "mage", "score": 16},
+  "conditions": {
+    "fighter": [
+      {"condition": "blessed", "remaining_rounds": 2}
+    ]
+  }
+}
+```
+
+
+
+            Previous deterministic failure report:
+
+            ```text
+            suite=combat-state base_url=http://127.0.0.1:62620 passed=false tests=14/20
+PASS	health	1ms	HTTP 200
+PASS	dice-stats-2d6-plus-3	0ms	HTTP 200
+PASS	dice-stats-1d20-minus-1	0ms	HTTP 200
+PASS	dice-stats-invalid	0ms	HTTP 400
+PASS	ability-check-failure	0ms	HTTP 200
+PASS	ability-check-success	0ms	HTTP 200
+PASS	encounter-adjusted-xp	0ms	HTTP 200
+PASS	initiative-order	0ms	HTTP 200
+PASS	ability-modifier-negative	0ms	HTTP 200
+PASS	ability-modifier-high	0ms	HTTP 200
+PASS	ability-modifier-invalid	0ms	HTTP 400
+PASS	proficiency-level-boundary	0ms	HTTP 200
+PASS	derived-stats	0ms	HTTP 200
+PASS	combat-create-session	0ms	HTTP 200
+FAIL	combat-add-condition	0ms	HTTP 404	status 404, want 200
+  response: {"error":"not found"}
+FAIL	combat-advance-to-mage	0ms	HTTP 404	status 404, want 200
+  response: {"error":"not found"}
+FAIL	combat-advance-to-fighter-decrements	0ms	HTTP 404	status 404, want 200
+  response: {"error":"not found"}
+FAIL	combat-advance-wrap-round	0ms	HTTP 404	status 404, want 200
+  response: {"error":"not found"}
+FAIL	combat-advance-condition-expires	0ms	HTTP 404	status 404, want 200
+  response: {"error":"not found"}
+FAIL	combat-advance-expired-removed	0ms	HTTP 404	status 404, want 200
+  response: {"error":"not found"}
+
+
+Error: suite failed: 14/20 tests passed
+Usage:
+  dndeval run [flags]
+
+Flags:
+      --base-url string   Target server base URL (default "http://127.0.0.1:8080")
+      --fail-fast         Stop at first failed test
+  -h, --help              help for run
+      --json-out string   Write JSON report to this path
+      --suite string      Suite ID (default "core")
+      --timeout string    Per-request timeout (default "3s")
+  -v, --verbose           Show response details for passed tests
+
+
+
+failed test IDs: combat-add-condition, combat-advance-to-mage, combat-advance-to-fighter-decrements, combat-advance-wrap-round, combat-advance-condition-expires, combat-advance-expired-removed
+            ```
+
+            Fix the implementation so the same evaluator suite passes. Do not
+            remove previously implemented behavior while fixing this failure.
+
+
+        Finish when ./run.sh is ready.
+codex
+I’ll inspect the Slim app structure and current combat routes first, then patch the smallest missing state handling needed for the failing endpoints.
+exec
+/bin/zsh -lc 'git status --short' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+ M ../../../../experiments/dnd-rest-benchmark/rest_harness.py
+ M ../20260709T203725Z_pi_glm-5p2_python-django/server_stderr.txt
+?? ../20260710T160029Z_claude_opus_go-stdlib/
+?? ../20260710T161619Z_claude_sonnet_go-stdlib/
+?? ../20260710T161626Z_codex_gpt-5.5_go-stdlib/
+?? ../20260710T164322Z_pi_kimi-k2p7-code_go-stdlib/
+?? ../20260710T172009Z_pi_glm-5p2_go-stdlib/
+?? ../20260710T184326Z_claude_opus_typescript-node/
+?? ../20260710T184335Z_claude_sonnet_typescript-node/
+?? ../20260710T184344Z_codex_gpt-5.5_typescript-node/
+?? ../20260710T193054Z_pi_kimi-k2p7-code_typescript-node/
+?? ../20260710T195906Z_pi_glm-5p2_typescript-node/
+?? ../20260710T203820Z_claude_opus_typescript-vite/
+?? ../20260710T211133Z_claude_sonnet_typescript-vite/
+?? ../20260710T212708Z_codex_gpt-5.5_typescript-vite/
+?? ../20260710T214347Z_pi_kimi-k2p7-code_typescript-vite/
+?? ../20260710T215205Z_pi_glm-5p2_typescript-vite/
+?? ../20260710T225158Z_claude_opus_typescript-nextjs/
+?? ../20260710T225951Z_claude_sonnet_typescript-nextjs/
+?? ../20260710T230000Z_codex_gpt-5.5_typescript-nextjs/
+?? ../20260710T233736Z_pi_kimi-k2p7-code_typescript-nextjs/
+?? ../20260711T002805Z_pi_glm-5p2_typescript-nextjs/
+?? ../20260711T004028Z_claude_opus_python-stdlib/
+?? ../20260711T004034Z_claude_sonnet_python-stdlib/
+?? ../20260711T004038Z_codex_gpt-5.5_python-stdlib/
+?? ../20260711T010021Z_pi_kimi-k2p7-code_python-stdlib/
+?? ../20260711T011508Z_pi_glm-5p2_python-stdlib/
+?? ../20260711T012501Z_claude_opus_python-flask/
+?? ../20260711T012508Z_claude_sonnet_python-flask/
+?? ../20260711T012515Z_codex_gpt-5.5_python-flask/
+?? ../20260711T014639Z_pi_kimi-k2p7-code_python-flask/
+?? ../20260711T015951Z_pi_glm-5p2_python-flask/
+?? ../20260711T023053Z_claude_opus_python-django/
+?? ../20260711T024638Z_claude_sonnet_python-django/
+?? ../20260711T031134Z_codex_gpt-5.5_python-django/
+?? ../20260711T033151Z_pi_kimi-k2p7-code_python-django/
+?? ../20260711T035512Z_pi_glm-5p2_python-django/
+?? ../20260711T043550Z_claude_opus_java-stdlib/
+?? ../20260711T044321Z_claude_sonnet_java-stdlib/
+?? ../20260711T044325Z_codex_gpt-5.5_java-stdlib/
+?? ../20260711T050447Z_pi_kimi-k2p7-code_java-stdlib/
+?? ../20260711T052826Z_pi_glm-5p2_java-stdlib/
+?? ../20260711T060703Z_claude_opus_ruby-stdlib/
+?? ../20260711T060708Z_claude_sonnet_ruby-stdlib/
+?? ../20260711T060712Z_codex_gpt-5.5_ruby-stdlib/
+?? ../20260711T062415Z_pi_kimi-k2p7-code_ruby-stdlib/
+?? ../20260711T064252Z_pi_glm-5p2_ruby-stdlib/
+?? ../20260711T073910Z_claude_opus_ruby-sinatra/
+?? ../20260711T075556Z_claude_sonnet_ruby-sinatra/
+?? ../20260711T080759Z_codex_gpt-5.5_ruby-sinatra/
+?? ../20260711T083219Z_pi_kimi-k2p7-code_ruby-sinatra/
+?? ../20260711T085934Z_pi_glm-5p2_ruby-sinatra/
+?? ../20260711T092405Z_claude_opus_ruby-rails/
+?? ../20260711T093710Z_claude_sonnet_ruby-rails/
+?? ../20260711T093731Z_codex_gpt-5.5_ruby-rails/
+?? ../20260711T100327Z_pi_kimi-k2p7-code_ruby-rails/
+?? ../20260711T102312Z_pi_glm-5p2_ruby-rails/
+?? ../20260711T103327Z_claude_opus_php-stdlib/
+?? ../20260711T103332Z_claude_sonnet_php-stdlib/
+?? ../20260711T103336Z_codex_gpt-5.5_php-stdlib/
+?? ../20260711T103925Z_pi_kimi-k2p7-code_php-stdlib/
+?? ../20260711T105237Z_pi_glm-5p2_php-stdlib/
+?? ../20260711T112326Z_claude_opus_php-slim/
+?? ../20260711T112334Z_claude_sonnet_php-slim/
+?? ./
+
+exec
+/bin/zsh -lc 'pwd && rg --files' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+shots/02_characters_maintenance/server_stderr.txt
+shots/02_characters_maintenance/agent_stderr.txt
+shots/02_characters_maintenance/server_stdout.txt
+shots/02_characters_maintenance/PROMPT.md
+shots/02_characters_maintenance/agent_stdout.txt
+shots/02_characters_maintenance/dndeval-characters-report.json
+shots/02_characters_maintenance/agent_last_message.txt
+shots/02_characters_maintenance/setup.json
+shots/01_core_creative/dndeval-core-report.json
+shots/01_core_creative/server_stderr.txt
+shots/01_core_creative/agent_stderr.txt
+shots/01_core_creative/server_stdout.txt
+shots/01_core_creative/PROMPT.md
+shots/01_core_creative/agent_stdout.txt
+shots/01_core_creative/agent_last_message.txt
+shots/01_core_creative/setup.json
+shots/04_combat-state_bugfix/PROMPT.md
+shots/03_combat-state_maintenance/server_stderr.txt
+shots/03_combat-state_maintenance/agent_stderr.txt
+shots/03_combat-state_maintenance/server_stdout.txt
+shots/03_combat-state_maintenance/PROMPT.md
+shots/03_combat-state_maintenance/agent_stdout.txt
+shots/03_combat-state_maintenance/agent_last_message.txt
+shots/03_combat-state_maintenance/setup.json
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json
+dndeval-core-report.json
+composer.json
+VERSION-PINS.json
+server_stderr.txt
+agent_stderr.txt
+lifecycle-result.json
+run.sh
+server_stdout.txt
+PROMPT.md
+agent_stdout.txt
+dndeval-characters-report.json
+agent_last_message.txt
+index.php
+setup.json
+composer.lock
+dndeval-combat-state-report.json
+
+codex
+The repo is very small: `index.php`, Composer metadata, and `run.sh`. The git status noise is outside this run directory, so I’ll ignore it and focus on the current workspace files.
+exec
+/bin/zsh -lc "sed -n '1,120p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+exec
+/bin/zsh -lc "sed -n '1,260p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 0ms:
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+$app = AppFactory::create();
+$combatSessions = [];
+
+function jsonResponse(Response $response, array $payload, int $status = 200): Response
+{
+    $response->getBody()->write(json_encode($payload));
+    return $response
+        ->withStatus($status)
+        ->withHeader('Content-Type', 'application/json');
+}
+
+function badRequest(Response $response): Response
+{
+    return jsonResponse($response, ['error' => 'bad request'], 400);
+}
+
+function jsonBody(Request $request): ?array
+{
+    $decoded = json_decode((string) $request->getBody(), true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function boundedInt(mixed $value, int $min, int $max): ?int
+{
+    if (!is_int($value) || $value < $min || $value > $max) {
+        return null;
+    }
+
+    return $value;
+}
+
+function requiredInt(mixed $value): ?int
+{
+    return is_int($value) ? $value : null;
+}
+
+function abilityModifier(int $score): int
+{
+    return (int) floor(($score - 10) / 2);
+}
+
+function proficiencyBonus(int $level): int
+{
+    return intdiv($level - 1, 4) + 2;
+}
+
+function notFound(Response $response): Response
+{
+    return jsonResponse($response, ['error' => 'not found'], 404);
+}
+
+function initiativeOrder(array $combatants): array
+{
+    usort($combatants, function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+
+    return array_map(
+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+        $combatants
+    );
+}
+
+function combatSessionPayload(string $id, array $session): array
+{
+    return [
+        'id' => $id,
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => $session['order'][$session['turn_index']],
+        'order' => $session['order'],
+    ];
+}
+
+function visibleConditions(array $conditions): array
+{
+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+}
+
+$app->get('/health', function (Request $request, Response $response) {
+    return jsonResponse($response, ['ok' => true]);
+});
+
+$app->post('/v1/dice/stats', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    $expression = $body['expression'] ?? null;
+
+    if (!is_string($expression) || !preg_match('/^([0-9]+)d([0-9]+)(?:([+-])([0-9]+))?$/', $expression, $matches)) {
+        return badRequest($response);
+    }
+
+    $count = (int) $matches[1];
+    $sides = (int) $matches[2];
+    if ($count <= 0 || $sides <= 0) {
+        return badRequest($response);
+    }
+
+    $modifier = isset($matches[4]) ? (int) $matches[4] : 0;
+    if (($matches[3] ?? '') === '-') {
+        $modifier = -$modifier;
+    }
+
+    $min = $count + $modifier;
+    $max = ($count * $sides) + $modifier;
+
+    return jsonResponse($response, [
+        'dice_count' => $count,
+        'sides' => $sides,
+        'modifier' => $modifier,
+        'min' => $min,
+        'max' => $max,
+        'average' => ($min + $max) / 2,
+    ]);
+});
+
+$app->post('/v1/checks/ability', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if ($body === null) {
+        return badRequest($response);
+    }
+
+    $roll = (int) ($body['roll'] ?? 0);
+    $modifier = (int) ($body['modifier'] ?? 0);
+    $dc = (int) ($body['dc'] ?? 0);
+    $total = $roll + $modifier;
+    $margin = $total - $dc;
+
+    return jsonResponse($response, [
+        'total' => $total,
+        'success' => $total >= $dc,
+        'margin' => $margin,
+    ]);
+});
+
+$app->post('/v1/encounters/adjusted-xp', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if ($body === null || !isset($body['party'], $body['monsters']) || !is_array($body['party']) || !is_array($body['monsters'])) {
+        return badRequest($response);
+    }
+
+    $xpByCr = [
+        '0' => 10,
+        '1/8' => 25,
+        '1/4' => 50,
+        '1/2' => 100,
+        '1' => 200,
+        '2' => 450,
+        '3' => 700,
+        '4' => 1100,
+        '5' => 1800,
+    ];
+
+    $baseXp = 0;
+    $monsterCount = 0;
+    foreach ($body['monsters'] as $monster) {
+        if (!is_array($monster) || !isset($monster['cr'], $monster['count'])) {
+            return badRequest($response);
+        }
+
+        $cr = (string) $monster['cr'];
+        $count = (int) $monster['count'];
+        if ($count < 0 || !array_key_exists($cr, $xpByCr)) {
+            return badRequest($response);
+        }
+
+        $baseXp += $xpByCr[$cr] * $count;
+        $monsterCount += $count;
+    }
+
+    $thresholds = ['easy' => 0, 'medium' => 0, 'hard' => 0, 'deadly' => 0];
+    foreach ($body['party'] as $member) {
+        if (!is_array($member) || (int) ($member['level'] ?? 0) !== 3) {
+            return badRequest($response);
+        }
+
+        $thresholds['easy'] += 75;
+        $thresholds['medium'] += 150;
+        $thresholds['hard'] += 225;
+        $thresholds['deadly'] += 400;
+    }
+
+    $multiplier = match (true) {
+        $monsterCount <= 1 => 1,
+        $monsterCount === 2 => 1.5,
+        $monsterCount <= 6 => 2,
+        $monsterCount <= 10 => 2.5,
+        $monsterCount <= 14 => 3,
+        default => 4,
+    };
+
+    $adjustedXp = $baseXp * $multiplier;
+    $difficulty = 'trivial';
+    foreach (['easy', 'medium', 'hard', 'deadly'] as $name) {
+        if ($adjustedXp >= $thresholds[$name]) {
+            $difficulty = $name;
+        }
+    }
+
+    return jsonResponse($response, [
+        'base_xp' => $baseXp,
+        'monster_count' => $monsterCount,
+        'multiplier' => $multiplier,
+        'adjusted_xp' => $adjustedXp,
+        'difficulty' => $difficulty,
+        'thresholds' => $thresholds,
+    ]);
+});
+
+$app->post('/v1/initiative/order', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+        return badRequest($response);
+    }
+
+    $combatants = [];
+    foreach ($body['combatants'] as $combatant) {
+        if (!is_array($combatant) || !isset($combatant['name'])) {
+            return badRequest($response);
+        }
+
+        $combatants[] = [
+            'name' => (string) $combatant['name'],
+            'dex' => (int) ($combatant['dex'] ?? 0),
+            'score' => (int) ($combatant['roll'] ?? 0) + (int) ($combatant['dex'] ?? 0),
+        ];
+    }
+
+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+});
+
+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+    $body = jsonBody($request);
+    if (
+        $body === null
+        || !isset($body['id'], $body['combatants'])
+        || !is_string($body['id'])
+        || $body['id'] === ''
+        || !is_array($body['combatants'])
+        || count($body['combatants']) === 0
+        || isset($combatSessions[$body['id']])
+    ) {
+        return badRequest($response);
+    }
+
+    $combatants = [];
+    foreach ($body['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+            || !is_string($combatant['name'])
+            || $combatant['name'] === ''
+
+exec
+/bin/zsh -lc 'cat composer.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+{
+  "require": {
+    "slim/slim": "4.15.2",
+    "slim/psr7": "1.8.0"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
+codex
+The session creation route exists and stores sessions in a closure-captured array. I’m reading the rest of `index.php` now because a 404 on nested combat routes usually means either route patterns are malformed or the code never registered them.
+exec
+/bin/zsh -lc "sed -n '260,620p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+            || $combatant['name'] === ''
+            || !is_int($combatant['dex'])
+            || !is_int($combatant['roll'])
+        ) {
+            return badRequest($response);
+        }
+
+        $combatants[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    $id = $body['id'];
+    $order = initiativeOrder($combatants);
+    $conditions = [];
+    foreach ($order as $combatant) {
+        $conditions[$combatant['name']] = [];
+    }
+
+    $combatSessions[$id] = [
+        'round' => 1,
+        'turn_index' => 0,
+        'order' => $order,
+        'conditions' => $conditions,
+    ];
+
+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+});
+
+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+    $id = $args['id'];
+    if (!isset($combatSessions[$id])) {
+        return notFound($response);
+    }
+
+    $body = jsonBody($request);
+    if (
+        $body === null
+        || !isset($body['target'], $body['condition'], $body['duration_rounds'])
+        || !is_string($body['target'])
+        || !is_string($body['condition'])
+        || !is_int($body['duration_rounds'])
+        || $body['duration_rounds'] <= 0
+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+    ) {
+        return badRequest($response);
+    }
+
+    $target = $body['target'];
+    $combatSessions[$id]['conditions'][$target][] = [
+        'condition' => $body['condition'],
+        'remaining_rounds' => $body['duration_rounds'],
+    ];
+
+    return jsonResponse($response, [
+        'target' => $target,
+        'conditions' => $combatSessions[$id]['conditions'][$target],
+    ]);
+});
+
+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+    $id = $args['id'];
+    if (!isset($combatSessions[$id])) {
+        return notFound($response);
+    }
+
+    $session = &$combatSessions[$id];
+    $session['turn_index']++;
+    if ($session['turn_index'] >= count($session['order'])) {
+        $session['turn_index'] = 0;
+        $session['round']++;
+    }
+
+    $activeName = $session['order'][$session['turn_index']]['name'];
+    $remaining = [];
+    foreach ($session['conditions'][$activeName] as $condition) {
+        $condition['remaining_rounds']--;
+        if ($condition['remaining_rounds'] > 0) {
+            $remaining[] = $condition;
+        }
+    }
+    $session['conditions'][$activeName] = $remaining;
+
+    return jsonResponse($response, [
+        'id' => $id,
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => $session['order'][$session['turn_index']],
+        'conditions' => (object) visibleConditions($session['conditions']),
+    ]);
+});
+
+$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if ($body === null || !array_key_exists('score', $body)) {
+        return badRequest($response);
+    }
+
+    $score = boundedInt($body['score'], 1, 30);
+    if ($score === null) {
+        return badRequest($response);
+    }
+
+    return jsonResponse($response, [
+        'score' => $score,
+        'modifier' => abilityModifier($score),
+    ]);
+});
+
+$app->post('/v1/characters/proficiency', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if ($body === null || !array_key_exists('level', $body)) {
+        return badRequest($response);
+    }
+
+    $level = boundedInt($body['level'], 1, 20);
+    if ($level === null) {
+        return badRequest($response);
+    }
+
+    return jsonResponse($response, [
+        'level' => $level,
+        'proficiency_bonus' => proficiencyBonus($level),
+    ]);
+});
+
+$app->post('/v1/characters/derived-stats', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if (
+        $body === null
+        || !array_key_exists('level', $body)
+        || !isset($body['abilities'], $body['armor'])
+        || !is_array($body['abilities'])
+        || !is_array($body['armor'])
+    ) {
+        return badRequest($response);
+    }
+
+    $level = boundedInt($body['level'], 1, 20);
+    if ($level === null) {
+        return badRequest($response);
+    }
+
+    $modifiers = [];
+    foreach (['str', 'dex', 'con', 'int', 'wis', 'cha'] as $ability) {
+        if (!array_key_exists($ability, $body['abilities'])) {
+            return badRequest($response);
+        }
+
+        $score = boundedInt($body['abilities'][$ability], 1, 30);
+        if ($score === null) {
+            return badRequest($response);
+        }
+
+        $modifiers[$ability] = abilityModifier($score);
+    }
+
+    if (
+        !array_key_exists('base', $body['armor'])
+        || !array_key_exists('shield', $body['armor'])
+        || !array_key_exists('dex_cap', $body['armor'])
+        || !is_bool($body['armor']['shield'])
+    ) {
+        return badRequest($response);
+    }
+
+    $armorBase = requiredInt($body['armor']['base']);
+    $dexCap = requiredInt($body['armor']['dex_cap']);
+    if ($armorBase === null || $dexCap === null) {
+        return badRequest($response);
+    }
+
+    $shieldBonus = $body['armor']['shield'] ? 2 : 0;
+
+    return jsonResponse($response, [
+        'level' => $level,
+        'proficiency_bonus' => proficiencyBonus($level),
+        'hp_max' => $level * (6 + $modifiers['con']),
+        'armor_class' => $armorBase + min($modifiers['dex'], $dexCap) + $shieldBonus,
+        'modifiers' => $modifiers,
+    ]);
+});
+
+$app->run();
+?>
+
+exec
+/bin/zsh -lc 'rg -n "combat|conditions|advance|sessions" index.php shots/03_combat-state_maintenance shots/04_combat-state_bugfix dndeval-combat-state-report.json' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+dndeval-combat-state-report.json:2:  "suite": "combat-state",
+dndeval-combat-state-report.json:100:      "id": "combat-create-session",
+dndeval-combat-state-report.json:101:      "name": "Create deterministic combat session",
+dndeval-combat-state-report.json:107:      "id": "combat-add-condition",
+dndeval-combat-state-report.json:108:      "name": "Add condition to combatant",
+dndeval-combat-state-report.json:116:      "id": "combat-advance-to-mage",
+dndeval-combat-state-report.json:125:      "id": "combat-advance-to-fighter-decrements",
+dndeval-combat-state-report.json:134:      "id": "combat-advance-wrap-round",
+dndeval-combat-state-report.json:143:      "id": "combat-advance-condition-expires",
+dndeval-combat-state-report.json:152:      "id": "combat-advance-expired-removed",
+index.php:9:$combatSessions = [];
+index.php:59:function initiativeOrder(array $combatants): array
+index.php:61:    usort($combatants, function (array $a, array $b): int {
+index.php:68:        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+index.php:69:        $combatants
+index.php:73:function combatSessionPayload(string $id, array $session): array
+index.php:84:function visibleConditions(array $conditions): array
+index.php:86:    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+index.php:220:    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+index.php:224:    $combatants = [];
+index.php:225:    foreach ($body['combatants'] as $combatant) {
+index.php:226:        if (!is_array($combatant) || !isset($combatant['name'])) {
+index.php:230:        $combatants[] = [
+index.php:231:            'name' => (string) $combatant['name'],
+index.php:232:            'dex' => (int) ($combatant['dex'] ?? 0),
+index.php:233:            'score' => (int) ($combatant['roll'] ?? 0) + (int) ($combatant['dex'] ?? 0),
+index.php:237:    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+index.php:240:$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+index.php:244:        || !isset($body['id'], $body['combatants'])
+index.php:247:        || !is_array($body['combatants'])
+index.php:248:        || count($body['combatants']) === 0
+index.php:249:        || isset($combatSessions[$body['id']])
+index.php:254:    $combatants = [];
+index.php:255:    foreach ($body['combatants'] as $combatant) {
+index.php:257:            !is_array($combatant)
+index.php:258:            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+index.php:259:            || !is_string($combatant['name'])
+index.php:260:            || $combatant['name'] === ''
+index.php:261:            || !is_int($combatant['dex'])
+index.php:262:            || !is_int($combatant['roll'])
+index.php:267:        $combatants[] = [
+index.php:268:            'name' => $combatant['name'],
+index.php:269:            'dex' => $combatant['dex'],
+index.php:270:            'score' => $combatant['roll'] + $combatant['dex'],
+index.php:275:    $order = initiativeOrder($combatants);
+index.php:276:    $conditions = [];
+index.php:277:    foreach ($order as $combatant) {
+index.php:278:        $conditions[$combatant['name']] = [];
+index.php:281:    $combatSessions[$id] = [
+index.php:285:        'conditions' => $conditions,
+index.php:288:    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+index.php:291:$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+index.php:293:    if (!isset($combatSessions[$id])) {
+index.php:305:        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+index.php:311:    $combatSessions[$id]['conditions'][$target][] = [
+index.php:318:        'conditions' => $combatSessions[$id]['conditions'][$target],
+index.php:322:$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+index.php:324:    if (!isset($combatSessions[$id])) {
+index.php:328:    $session = &$combatSessions[$id];
+index.php:337:    foreach ($session['conditions'][$activeName] as $condition) {
+index.php:343:    $session['conditions'][$activeName] = $remaining;
+index.php:350:        'conditions' => (object) visibleConditions($session['conditions']),
+shots/04_combat-state_bugfix/PROMPT.md:7:        Lifecycle stage: combat-state
+shots/04_combat-state_bugfix/PROMPT.md:71:`POST /v1/combat/sessions`
+shots/04_combat-state_bugfix/PROMPT.md:78:  "combatants": [
+shots/04_combat-state_bugfix/PROMPT.md:91:- New sessions start at `round = 1` and `turn_index = 0`.
+shots/04_combat-state_bugfix/PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+shots/04_combat-state_bugfix/PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+shots/04_combat-state_bugfix/PROMPT.md:126:- `target` must name a combatant in the session.
+shots/04_combat-state_bugfix/PROMPT.md:129:- Conditions are attached to the named combatant.
+shots/04_combat-state_bugfix/PROMPT.md:136:  "conditions": [
+shots/04_combat-state_bugfix/PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+shots/04_combat-state_bugfix/PROMPT.md:148:- Advance `turn_index` to the next combatant.
+shots/04_combat-state_bugfix/PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+shots/04_combat-state_bugfix/PROMPT.md:152:  active combatant.
+shots/04_combat-state_bugfix/PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+shots/04_combat-state_bugfix/PROMPT.md:164:  "conditions": {
+shots/04_combat-state_bugfix/PROMPT.md:177:            suite=combat-state base_url=http://127.0.0.1:62620 passed=false tests=14/20
+shots/04_combat-state_bugfix/PROMPT.md:191:PASS	combat-create-session	0ms	HTTP 200
+shots/04_combat-state_bugfix/PROMPT.md:192:FAIL	combat-add-condition	0ms	HTTP 404	status 404, want 200
+shots/04_combat-state_bugfix/PROMPT.md:194:FAIL	combat-advance-to-mage	0ms	HTTP 404	status 404, want 200
+shots/04_combat-state_bugfix/PROMPT.md:196:FAIL	combat-advance-to-fighter-decrements	0ms	HTTP 404	status 404, want 200
+shots/04_combat-state_bugfix/PROMPT.md:198:FAIL	combat-advance-wrap-round	0ms	HTTP 404	status 404, want 200
+shots/04_combat-state_bugfix/PROMPT.md:200:FAIL	combat-advance-condition-expires	0ms	HTTP 404	status 404, want 200
+shots/04_combat-state_bugfix/PROMPT.md:202:FAIL	combat-advance-expired-removed	0ms	HTTP 404	status 404, want 200
+shots/04_combat-state_bugfix/PROMPT.md:221:failed test IDs: combat-add-condition, combat-advance-to-mage, combat-advance-to-fighter-decrements, combat-advance-wrap-round, combat-advance-condition-expires, combat-advance-expired-removed
+shots/03_combat-state_maintenance/agent_last_message.txt:3:- Added in-memory combat sessions.
+shots/03_combat-state_maintenance/agent_last_message.txt:4:- Added `POST /v1/combat/sessions`.
+shots/03_combat-state_maintenance/agent_last_message.txt:5:- Added `POST /v1/combat/sessions/{id}/conditions`.
+shots/03_combat-state_maintenance/agent_last_message.txt:6:- Added `POST /v1/combat/sessions/{id}/advance`.
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:2:  "suite": "combat-state",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:100:      "id": "combat-create-session",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:101:      "name": "Create deterministic combat session",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:107:      "id": "combat-add-condition",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:108:      "name": "Add condition to combatant",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:116:      "id": "combat-advance-to-mage",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:125:      "id": "combat-advance-to-fighter-decrements",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:134:      "id": "combat-advance-wrap-round",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:143:      "id": "combat-advance-condition-expires",
+shots/03_combat-state_maintenance/dndeval-combat-state-report.json:152:      "id": "combat-advance-expired-removed",
+shots/03_combat-state_maintenance/agent_stderr.txt:18:        Lifecycle stage: combat-state
+shots/03_combat-state_maintenance/agent_stderr.txt:82:`POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/agent_stderr.txt:89:  "combatants": [
+shots/03_combat-state_maintenance/agent_stderr.txt:102:- New sessions start at `round = 1` and `turn_index = 0`.
+shots/03_combat-state_maintenance/agent_stderr.txt:103:- `active` is the combatant at the current `turn_index`.
+shots/03_combat-state_maintenance/agent_stderr.txt:123:`POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/agent_stderr.txt:137:- `target` must name a combatant in the session.
+shots/03_combat-state_maintenance/agent_stderr.txt:140:- Conditions are attached to the named combatant.
+shots/03_combat-state_maintenance/agent_stderr.txt:147:  "conditions": [
+shots/03_combat-state_maintenance/agent_stderr.txt:155:`POST /v1/combat/sessions/{id}/advance`
+shots/03_combat-state_maintenance/agent_stderr.txt:159:- Advance `turn_index` to the next combatant.
+shots/03_combat-state_maintenance/agent_stderr.txt:162:- At the start of a combatant's turn, decrement each condition attached to that
+shots/03_combat-state_maintenance/agent_stderr.txt:163:  active combatant.
+shots/03_combat-state_maintenance/agent_stderr.txt:165:- Conditions on inactive combatants do not decrement.
+shots/03_combat-state_maintenance/agent_stderr.txt:175:  "conditions": {
+shots/03_combat-state_maintenance/agent_stderr.txt:187:I’ll inspect the existing Slim app shape and tests/scripts first, then add the combat state endpoints without disturbing prior routes.
+shots/03_combat-state_maintenance/agent_stderr.txt:404:    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:408:    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:409:    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:410:        if (!is_array($combatant) || !isset($combatant['name'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:414:        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:415:            'name' => (string) $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:416:            'dex' => (int) ($combatant['dex'] ?? 0),
+shots/03_combat-state_maintenance/agent_stderr.txt:417:            'score' => (int) ($combatant['roll'] ?? 0) + (int) ($combatant['dex'] ?? 0),
+shots/03_combat-state_maintenance/agent_stderr.txt:421:    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:428:        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:429:        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:625:I’m going to add one in-memory session store and reuse the existing JSON/bad request helpers. The combat routes will sit after the existing initiative route, since they share the same ordering rules.
+shots/03_combat-state_maintenance/agent_stderr.txt:637:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:650:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:652:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:659:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:660:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:664:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:675:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:677:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:687:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:692:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:695:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:699:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:702:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:703:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:704:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:710:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:711:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:713:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:714:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:716:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:717:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:718:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:719:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:720:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:721:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:727:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:728:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:729:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:730:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:735:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:736:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:737:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:738:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:741:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:745:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:748:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:751:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:753:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:765:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:771:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:778:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:782:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:784:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:788:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:797:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:803:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:810:+        'conditions' => visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:824:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:837:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:839:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:846:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:847:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:851:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:862:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:864:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:874:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:879:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:882:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:886:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:889:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:890:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:891:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:897:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:898:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:900:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:901:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:903:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:904:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:905:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:906:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:907:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:908:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:914:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:915:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:916:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:917:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:922:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:923:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:924:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:925:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:928:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:932:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:935:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:938:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:940:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:952:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:958:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:965:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:969:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:971:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:975:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:984:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:990:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:997:+        'conditions' => visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:1015:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1028:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1030:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1037:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1038:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1042:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1053:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1055:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:1065:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1070:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:1073:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1077:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1080:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1081:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:1082:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:1088:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1089:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1091:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1092:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1094:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1095:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1096:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1097:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:1098:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1099:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1105:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1106:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1107:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1108:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1113:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:1114:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1115:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1116:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1119:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1123:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1126:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:1129:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1131:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1143:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1149:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1156:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:1160:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1162:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1166:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:1175:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1181:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:1188:+        'conditions' => visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:1198:Syntax passes. I noticed one JSON edge case: PHP encodes an empty associative map as `[]`, so I’m tightening the advance response to keep `conditions` as a JSON object even when empty.
+shots/03_combat-state_maintenance/agent_stderr.txt:1210:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1223:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1225:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1232:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1233:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1237:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1248:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1250:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:1260:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1265:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:1268:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1272:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1275:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1276:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:1277:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:1283:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1284:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1286:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1287:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1289:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1290:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1291:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1292:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:1293:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1294:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1300:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1301:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1302:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1303:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1308:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:1309:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1310:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1311:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1314:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1318:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1321:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:1324:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1326:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1338:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1344:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1351:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:1355:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1357:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1361:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:1370:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1376:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:1383:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:1397:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1410:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1412:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1419:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1420:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1424:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1435:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1437:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:1447:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1452:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:1455:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1459:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1462:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1463:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:1464:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:1470:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1471:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1473:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1474:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1476:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1477:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1478:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1479:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:1480:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1481:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1487:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1488:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1489:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1490:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1495:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:1496:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1497:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1498:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1501:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1505:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1508:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:1511:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1513:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1525:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1531:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1538:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:1542:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1544:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1548:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:1557:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1563:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:1570:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:1589:$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1639:function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1641:    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1648:        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1649:        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1653:function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1664:function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1666:    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:1805:    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1809:    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1810:    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1811:        if (!is_array($combatant) || !isset($combatant['name'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1815:        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1816:            'name' => (string) $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1817:            'dex' => (int) ($combatant['dex'] ?? 0),
+shots/03_combat-state_maintenance/agent_stderr.txt:1818:            'score' => (int) ($combatant['roll'] ?? 0) + (int) ($combatant['dex'] ?? 0),
+shots/03_combat-state_maintenance/agent_stderr.txt:1822:    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:1825:$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1829:        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1832:        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1833:        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:1834:        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:1839:    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1840:    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1842:            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:1843:            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1844:            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1845:            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:1846:            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1847:            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1852:        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1853:            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1854:            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1855:            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:1860:    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:1861:    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1862:    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1863:        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1866:    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1870:        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:1873:    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:1876:$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1878:    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1890:        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1896:    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:1903:        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:1927:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:1940:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1942:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1949:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:1950:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:1954:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1965:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:1967:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:1977:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:1982:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:1985:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:1989:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1992:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:1993:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:1994:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:2000:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2001:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2003:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2004:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2006:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2007:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2008:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2009:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:2010:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2011:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2017:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2018:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2019:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2020:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2025:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:2026:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2027:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2028:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2031:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2035:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2038:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:2041:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2043:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2055:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2061:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2068:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:2072:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2074:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2078:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:2087:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2093:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:2100:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:2111:$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2113:    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2117:    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:2126:    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2132:    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:2139:        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:2229:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2242:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2244:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2251:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2252:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2256:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2267:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2269:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:2279:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2284:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:2287:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2291:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2294:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2295:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:2296:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:2302:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2303:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2305:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2306:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2308:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2309:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2310:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2311:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:2312:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2313:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2319:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2320:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2321:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2322:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2327:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:2328:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2329:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2330:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2333:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2337:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2340:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:2343:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2345:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2357:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2363:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2370:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:2374:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2376:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2380:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:2389:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2395:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:2402:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:2421:     9	$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2471:    59	function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2473:    61	    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2480:    68	        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2481:    69	        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2485:    73	function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2496:    84	function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2498:    86	    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:2525:   220	    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2529:   224	    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2530:   225	    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2531:   226	        if (!is_array($combatant) || !isset($combatant['name'])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2535:   230	        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2536:   231	            'name' => (string) $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2537:   232	            'dex' => (int) ($combatant['dex'] ?? 0),
+shots/03_combat-state_maintenance/agent_stderr.txt:2538:   233	            'score' => (int) ($combatant['roll'] ?? 0) + (int) ($combatant['dex'] ?? 0),
+shots/03_combat-state_maintenance/agent_stderr.txt:2542:   237	    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:2545:   240	$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2549:   244	        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2552:   247	        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2553:   248	        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:2554:   249	        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:2559:   254	    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2560:   255	    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2562:   257	            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2563:   258	            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2564:   259	            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2565:   260	            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:2566:   261	            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2567:   262	            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2572:   267	        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2573:   268	            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2574:   269	            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2575:   270	            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2580:   275	    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:2581:   276	    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2582:   277	    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2583:   278	        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2586:   281	    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2590:   285	        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2593:   288	    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:2596:   291	$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2598:   293	    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2610:   305	        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2616:   311	    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2623:   318	        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:2627:   322	$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2629:   324	    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2633:   328	    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:2642:   337	    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2648:   343	    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:2655:   350	        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:2678:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2691:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2693:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2700:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2701:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2705:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2716:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2718:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:2728:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2733:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:2736:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2740:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2743:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2744:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:2745:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:2751:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2752:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2754:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2755:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2757:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2758:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2759:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2760:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:2761:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2762:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2768:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2769:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2770:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2771:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2776:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:2777:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2778:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2779:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2782:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2786:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2789:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:2792:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2794:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2806:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2812:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2819:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:2823:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2825:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2829:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:2838:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2844:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:2851:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:2872:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2885:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2887:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2894:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2895:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2899:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2910:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:2912:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:2922:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:2927:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:2930:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2934:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2937:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2938:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:2939:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:2945:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:2946:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:2948:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2949:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2951:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:2952:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2953:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2954:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:2955:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2956:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:2962:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2963:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2964:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2965:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:2970:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:2971:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2972:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2973:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:2976:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:2980:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:2983:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:2986:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:2988:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3000:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3006:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3013:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:3017:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3019:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3023:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:3032:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3038:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:3045:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/agent_stderr.txt:3054:- Added in-memory combat sessions.
+shots/03_combat-state_maintenance/agent_stderr.txt:3055:- Added `POST /v1/combat/sessions`.
+shots/03_combat-state_maintenance/agent_stderr.txt:3056:- Added `POST /v1/combat/sessions/{id}/conditions`.
+shots/03_combat-state_maintenance/agent_stderr.txt:3057:- Added `POST /v1/combat/sessions/{id}/advance`.
+shots/03_combat-state_maintenance/agent_stderr.txt:3070:+$combatSessions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3083:+function initiativeOrder(array $combatants): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3085:+    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:3092:+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3093:+        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:3097:+function combatSessionPayload(string $id, array $session): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3108:+function visibleConditions(array $conditions): array
+shots/03_combat-state_maintenance/agent_stderr.txt:3110:+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+shots/03_combat-state_maintenance/agent_stderr.txt:3120:-    usort($combatants, function (array $a, array $b): int {
+shots/03_combat-state_maintenance/agent_stderr.txt:3125:+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+shots/03_combat-state_maintenance/agent_stderr.txt:3128:+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3132:+        || !isset($body['id'], $body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3135:+        || !is_array($body['combatants'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3136:+        || count($body['combatants']) === 0
+shots/03_combat-state_maintenance/agent_stderr.txt:3137:+        || isset($combatSessions[$body['id']])
+shots/03_combat-state_maintenance/agent_stderr.txt:3143:-        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+shots/03_combat-state_maintenance/agent_stderr.txt:3144:-        $combatants
+shots/03_combat-state_maintenance/agent_stderr.txt:3146:+    $combatants = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3147:+    foreach ($body['combatants'] as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3149:+            !is_array($combatant)
+shots/03_combat-state_maintenance/agent_stderr.txt:3150:+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3151:+            || !is_string($combatant['name'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3152:+            || $combatant['name'] === ''
+shots/03_combat-state_maintenance/agent_stderr.txt:3153:+            || !is_int($combatant['dex'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3154:+            || !is_int($combatant['roll'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3160:+        $combatants[] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3161:+            'name' => $combatant['name'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3162:+            'dex' => $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3163:+            'score' => $combatant['roll'] + $combatant['dex'],
+shots/03_combat-state_maintenance/agent_stderr.txt:3168:+    $order = initiativeOrder($combatants);
+shots/03_combat-state_maintenance/agent_stderr.txt:3169:+    $conditions = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3170:+    foreach ($order as $combatant) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3171:+        $conditions[$combatant['name']] = [];
+shots/03_combat-state_maintenance/agent_stderr.txt:3174:+    $combatSessions[$id] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3178:+        'conditions' => $conditions,
+shots/03_combat-state_maintenance/agent_stderr.txt:3181:+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+shots/03_combat-state_maintenance/agent_stderr.txt:3184:+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3186:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3198:+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+shots/03_combat-state_maintenance/agent_stderr.txt:3204:+    $combatSessions[$id]['conditions'][$target][] = [
+shots/03_combat-state_maintenance/agent_stderr.txt:3211:+        'conditions' => $combatSessions[$id]['conditions'][$target],
+shots/03_combat-state_maintenance/agent_stderr.txt:3215:+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3217:+    if (!isset($combatSessions[$id])) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3221:+    $session = &$combatSessions[$id];
+shots/03_combat-state_maintenance/agent_stderr.txt:3230:+    foreach ($session['conditions'][$activeName] as $condition) {
+shots/03_combat-state_maintenance/agent_stderr.txt:3236:+    $session['conditions'][$activeName] = $remaining;
+shots/03_combat-state_maintenance/agent_stderr.txt:3243:+        'conditions' => (object) visibleConditions($session['conditions']),
+shots/03_combat-state_maintenance/PROMPT.md:7:        Lifecycle stage: combat-state
+shots/03_combat-state_maintenance/PROMPT.md:71:`POST /v1/combat/sessions`
+shots/03_combat-state_maintenance/PROMPT.md:78:  "combatants": [
+shots/03_combat-state_maintenance/PROMPT.md:91:- New sessions start at `round = 1` and `turn_index = 0`.
+shots/03_combat-state_maintenance/PROMPT.md:92:- `active` is the combatant at the current `turn_index`.
+shots/03_combat-state_maintenance/PROMPT.md:112:`POST /v1/combat/sessions/{id}/conditions`
+shots/03_combat-state_maintenance/PROMPT.md:126:- `target` must name a combatant in the session.
+shots/03_combat-state_maintenance/PROMPT.md:129:- Conditions are attached to the named combatant.
+shots/03_combat-state_maintenance/PROMPT.md:136:  "conditions": [
+shots/03_combat-state_maintenance/PROMPT.md:144:`POST /v1/combat/sessions/{id}/advance`
+shots/03_combat-state_maintenance/PROMPT.md:148:- Advance `turn_index` to the next combatant.
+shots/03_combat-state_maintenance/PROMPT.md:151:- At the start of a combatant's turn, decrement each condition attached to that
+shots/03_combat-state_maintenance/PROMPT.md:152:  active combatant.
+shots/03_combat-state_maintenance/PROMPT.md:154:- Conditions on inactive combatants do not decrement.
+shots/03_combat-state_maintenance/PROMPT.md:164:  "conditions": {
+shots/03_combat-state_maintenance/agent_stdout.txt:3:- Added in-memory combat sessions.
+shots/03_combat-state_maintenance/agent_stdout.txt:4:- Added `POST /v1/combat/sessions`.
+shots/03_combat-state_maintenance/agent_stdout.txt:5:- Added `POST /v1/combat/sessions/{id}/conditions`.
+shots/03_combat-state_maintenance/agent_stdout.txt:6:- Added `POST /v1/combat/sessions/{id}/advance`.
+
+codex
+The bug is not route registration. PHP’s built-in server reloads `index.php` for each request, so the top-level `$combatSessions = []` is empty again after session creation. I’m going to make the session store process-run scoped via a local state file that `run.sh` clears on startup, preserving the required lifetime without changing endpoints.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+
+codex
+The combat routes now reload and save the shared session state on each request. I’m also updating `run.sh` so every evaluator run starts with a clean session store before the foreground server starts.
+apply patch
+patch: completed
+/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..f9e9e93f02d52482f11f80074230c3178a5092fb
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,4 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++rm -f .combat_sessions.json
+ php -S 127.0.0.1:"$PORT" index.php
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..f9e9e93f02d52482f11f80074230c3178a5092fb
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,4 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++rm -f .combat_sessions.json
+ php -S 127.0.0.1:"$PORT" index.php
+
+codex
+I’m not starting the HTTP server because the benchmark contract explicitly says not to before the final answer. I’ll do static checks and inspect the diff instead.
+exec
+/bin/zsh -lc 'ls -l run.sh && git diff -- index.php run.sh' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 dorkitude  staff  101 Jul 11 04:30 run.sh
+
+exec
+/bin/zsh -lc 'php -l index.php' in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..f9e9e93f02d52482f11f80074230c3178a5092fb
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,4 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++rm -f .combat_sessions.json
+ php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 302ms:
+No syntax errors detected in index.php
+
+codex
+Syntax passes and `run.sh` is executable. Since this run directory is untracked from the parent repository, `git diff` does not show the local file changes, so I’ll inspect the patched sections directly.
+exec
+/bin/zsh -lc "sed -n '1,115p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+exec
+/bin/zsh -lc "sed -n '1,20p' run.sh" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+#!/usr/bin/env bash
+set -euo pipefail
+rm -f .combat_sessions.json
+php -S 127.0.0.1:"$PORT" index.php
+
+ succeeded in 0ms:
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+$app = AppFactory::create();
+$combatStateFile = __DIR__ . '/.combat_sessions.json';
+
+function jsonResponse(Response $response, array $payload, int $status = 200): Response
+{
+    $response->getBody()->write(json_encode($payload));
+    return $response
+        ->withStatus($status)
+        ->withHeader('Content-Type', 'application/json');
+}
+
+function badRequest(Response $response): Response
+{
+    return jsonResponse($response, ['error' => 'bad request'], 400);
+}
+
+function jsonBody(Request $request): ?array
+{
+    $decoded = json_decode((string) $request->getBody(), true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function boundedInt(mixed $value, int $min, int $max): ?int
+{
+    if (!is_int($value) || $value < $min || $value > $max) {
+        return null;
+    }
+
+    return $value;
+}
+
+function requiredInt(mixed $value): ?int
+{
+    return is_int($value) ? $value : null;
+}
+
+function abilityModifier(int $score): int
+{
+    return (int) floor(($score - 10) / 2);
+}
+
+function proficiencyBonus(int $level): int
+{
+    return intdiv($level - 1, 4) + 2;
+}
+
+function notFound(Response $response): Response
+{
+    return jsonResponse($response, ['error' => 'not found'], 404);
+}
+
+function loadCombatSessions(string $stateFile): array
+{
+    if (!is_file($stateFile)) {
+        return [];
+    }
+
+    $contents = file_get_contents($stateFile);
+    if ($contents === false || $contents === '') {
+        return [];
+    }
+
+    $decoded = json_decode($contents, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function saveCombatSessions(string $stateFile, array $sessions): void
+{
+    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
+}
+
+function initiativeOrder(array $combatants): array
+{
+    usort($combatants, function (array $a, array $b): int {
+        return ($b['score'] <=> $a['score'])
+            ?: ($b['dex'] <=> $a['dex'])
+            ?: strcmp($a['name'], $b['name']);
+    });
+
+    return array_map(
+        fn (array $combatant): array => ['name' => $combatant['name'], 'score' => $combatant['score']],
+        $combatants
+    );
+}
+
+function combatSessionPayload(string $id, array $session): array
+{
+    return [
+        'id' => $id,
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => $session['order'][$session['turn_index']],
+        'order' => $session['order'],
+    ];
+}
+
+function visibleConditions(array $conditions): array
+{
+    return array_filter($conditions, fn (array $items): bool => count($items) > 0);
+}
+
+$app->get('/health', function (Request $request, Response $response) {
+    return jsonResponse($response, ['ok' => true]);
+});
+
+$app->post('/v1/dice/stats', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    $expression = $body['expression'] ?? null;
+
+exec
+/bin/zsh -lc "sed -n '240,370p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+    if ($body === null || !isset($body['combatants']) || !is_array($body['combatants'])) {
+        return badRequest($response);
+    }
+
+    $combatants = [];
+    foreach ($body['combatants'] as $combatant) {
+        if (!is_array($combatant) || !isset($combatant['name'])) {
+            return badRequest($response);
+        }
+
+        $combatants[] = [
+            'name' => (string) $combatant['name'],
+            'dex' => (int) ($combatant['dex'] ?? 0),
+            'score' => (int) ($combatant['roll'] ?? 0) + (int) ($combatant['dex'] ?? 0),
+        ];
+    }
+
+    return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+});
+
+$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+    $body = jsonBody($request);
+    $combatSessions = loadCombatSessions($combatStateFile);
+    if (
+        $body === null
+        || !isset($body['id'], $body['combatants'])
+        || !is_string($body['id'])
+        || $body['id'] === ''
+        || !is_array($body['combatants'])
+        || count($body['combatants']) === 0
+        || isset($combatSessions[$body['id']])
+    ) {
+        return badRequest($response);
+    }
+
+    $combatants = [];
+    foreach ($body['combatants'] as $combatant) {
+        if (
+            !is_array($combatant)
+            || !isset($combatant['name'], $combatant['dex'], $combatant['roll'])
+            || !is_string($combatant['name'])
+            || $combatant['name'] === ''
+            || !is_int($combatant['dex'])
+            || !is_int($combatant['roll'])
+        ) {
+            return badRequest($response);
+        }
+
+        $combatants[] = [
+            'name' => $combatant['name'],
+            'dex' => $combatant['dex'],
+            'score' => $combatant['roll'] + $combatant['dex'],
+        ];
+    }
+
+    $id = $body['id'];
+    $order = initiativeOrder($combatants);
+    $conditions = [];
+    foreach ($order as $combatant) {
+        $conditions[$combatant['name']] = [];
+    }
+
+    $combatSessions[$id] = [
+        'round' => 1,
+        'turn_index' => 0,
+        'order' => $order,
+        'conditions' => $conditions,
+    ];
+    saveCombatSessions($combatStateFile, $combatSessions);
+
+    return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+});
+
+$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+    $id = $args['id'];
+    $combatSessions = loadCombatSessions($combatStateFile);
+    if (!isset($combatSessions[$id])) {
+        return notFound($response);
+    }
+
+    $body = jsonBody($request);
+    if (
+        $body === null
+        || !isset($body['target'], $body['condition'], $body['duration_rounds'])
+        || !is_string($body['target'])
+        || !is_string($body['condition'])
+        || !is_int($body['duration_rounds'])
+        || $body['duration_rounds'] <= 0
+        || !array_key_exists($body['target'], $combatSessions[$id]['conditions'])
+    ) {
+        return badRequest($response);
+    }
+
+    $target = $body['target'];
+    $combatSessions[$id]['conditions'][$target][] = [
+        'condition' => $body['condition'],
+        'remaining_rounds' => $body['duration_rounds'],
+    ];
+    saveCombatSessions($combatStateFile, $combatSessions);
+
+    return jsonResponse($response, [
+        'target' => $target,
+        'conditions' => $combatSessions[$id]['conditions'][$target],
+    ]);
+});
+
+$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+    $id = $args['id'];
+    $combatSessions = loadCombatSessions($combatStateFile);
+    if (!isset($combatSessions[$id])) {
+        return notFound($response);
+    }
+
+    $session = &$combatSessions[$id];
+    $session['turn_index']++;
+    if ($session['turn_index'] >= count($session['order'])) {
+        $session['turn_index'] = 0;
+        $session['round']++;
+    }
+
+    $activeName = $session['order'][$session['turn_index']]['name'];
+    $remaining = [];
+    foreach ($session['conditions'][$activeName] as $condition) {
+        $condition['remaining_rounds']--;
+        if ($condition['remaining_rounds'] > 0) {
+            $remaining[] = $condition;
+        }
+    }
+    $session['conditions'][$activeName] = $remaining;
+    unset($session);
+    saveCombatSessions($combatStateFile, $combatSessions);
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..f9e9e93f02d52482f11f80074230c3178a5092fb
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,4 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++rm -f .combat_sessions.json
+ php -S 127.0.0.1:"$PORT" index.php
+
+exec
+/bin/zsh -lc "sed -n '370,395p' index.php" in /Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim
+ succeeded in 0ms:
+    saveCombatSessions($combatStateFile, $combatSessions);
+    $session = $combatSessions[$id];
+
+    return jsonResponse($response, [
+        'id' => $id,
+        'round' => $session['round'],
+        'turn_index' => $session['turn_index'],
+        'active' => $session['order'][$session['turn_index']],
+        'conditions' => (object) visibleConditions($session['conditions']),
+    ]);
+});
+
+$app->post('/v1/characters/ability-modifier', function (Request $request, Response $response) {
+    $body = jsonBody($request);
+    if ($body === null || !array_key_exists('score', $body)) {
+        return badRequest($response);
+    }
+
+    $score = boundedInt($body['score'], 1, 30);
+    if ($score === null) {
+        return badRequest($response);
+    }
+
+    return jsonResponse($response, [
+        'score' => $score,
+        'modifier' => abilityModifier($score),
+
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..f9e9e93f02d52482f11f80074230c3178a5092fb
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,4 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++rm -f .combat_sessions.json
+ php -S 127.0.0.1:"$PORT" index.php
+
+codex
+Implemented the combat-state bugfix.
+
+Changed [index.php](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php:9) so combat sessions persist across PHP built-in server requests using a local `.combat_sessions.json` store. The create, add-condition, and advance routes now load/save that store, so the nested session endpoints should no longer return 404 after creation.
+
+Updated [run.sh](/Users/dorkitude/a/dev/phd/research-projects/2026-07-08-agent-language-choice/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh:1) to clear `.combat_sessions.json` before starting the foreground server, keeping state scoped to each server run.
+
+Verification: `php -l index.php` passes. I did not start the server, per the benchmark contract.
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+index f7bb47ea89d85b1a53da32bcc41746e8bdf5dd2e..5131c32aeee3e690b0418bee5f32fb8b73c48a7b
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/index.php
+@@ -6,7 +6,7 @@
+ use Slim\Factory\AppFactory;
+ 
+ $app = AppFactory::create();
+-$combatSessions = [];
++$combatStateFile = __DIR__ . '/.combat_sessions.json';
+ 
+ function jsonResponse(Response $response, array $payload, int $status = 200): Response
+ {
+@@ -56,6 +56,26 @@
+     return jsonResponse($response, ['error' => 'not found'], 404);
+ }
+ 
++function loadCombatSessions(string $stateFile): array
++{
++    if (!is_file($stateFile)) {
++        return [];
++    }
++
++    $contents = file_get_contents($stateFile);
++    if ($contents === false || $contents === '') {
++        return [];
++    }
++
++    $decoded = json_decode($contents, true);
++    return is_array($decoded) ? $decoded : [];
++}
++
++function saveCombatSessions(string $stateFile, array $sessions): void
++{
++    file_put_contents($stateFile, json_encode($sessions), LOCK_EX);
++}
++
+ function initiativeOrder(array $combatants): array
+ {
+     usort($combatants, function (array $a, array $b): int {
+@@ -237,8 +257,9 @@
+     return jsonResponse($response, ['order' => initiativeOrder($combatants)]);
+ });
+ 
+-$app->post('/v1/combat/sessions', function (Request $request, Response $response) use (&$combatSessions) {
++$app->post('/v1/combat/sessions', function (Request $request, Response $response) use ($combatStateFile) {
+     $body = jsonBody($request);
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (
+         $body === null
+         || !isset($body['id'], $body['combatants'])
+@@ -284,12 +305,14 @@
+         'order' => $order,
+         'conditions' => $conditions,
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, combatSessionPayload($id, $combatSessions[$id]));
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/conditions', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -312,6 +335,7 @@
+         'condition' => $body['condition'],
+         'remaining_rounds' => $body['duration_rounds'],
+     ];
++    saveCombatSessions($combatStateFile, $combatSessions);
+ 
+     return jsonResponse($response, [
+         'target' => $target,
+@@ -319,8 +343,9 @@
+     ]);
+ });
+ 
+-$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use (&$combatSessions) {
++$app->post('/v1/combat/sessions/{id}/advance', function (Request $request, Response $response, array $args) use ($combatStateFile) {
+     $id = $args['id'];
++    $combatSessions = loadCombatSessions($combatStateFile);
+     if (!isset($combatSessions[$id])) {
+         return notFound($response);
+     }
+@@ -341,6 +366,9 @@
+         }
+     }
+     $session['conditions'][$activeName] = $remaining;
++    unset($session);
++    saveCombatSessions($combatStateFile, $combatSessions);
++    $session = $combatSessions[$id];
+ 
+     return jsonResponse($response, [
+         'id' => $id,
+diff --git a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+index f1c6b38e1b3e0ac17b0c4fe35c7e7318b7322e92..f9e9e93f02d52482f11f80074230c3178a5092fb
+--- a/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
++++ b/results/dnd-rest-benchmark/lifecycle-runs/20260711T112342Z_codex_gpt-5.5_php-slim/run.sh
+@@ -1,3 +1,4 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
++rm -f .combat_sessions.json
+ php -S 127.0.0.1:"$PORT" index.php
+
+tokens used
+33,010

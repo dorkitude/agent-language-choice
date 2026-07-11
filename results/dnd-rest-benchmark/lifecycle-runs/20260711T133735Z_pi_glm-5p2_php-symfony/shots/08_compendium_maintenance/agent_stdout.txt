@@ -1,0 +1,34 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the **Monster and Item Compendium** APIs to the existing D&D REST API while preserving all prior-stage behavior.
+
+### Changes to `index.php`
+
+**1. New SQLite tables** (in `initSchema`, idempotent):
+- `monsters` — `slug` (PK), `name`, `cr`, `armor_class`, `hit_points`, `tags` (JSON array)
+- `items` — `slug` (PK), `name`, `type`, `rarity`, `cost_gp`
+
+**2. Four new handlers:**
+| Endpoint | Handler | Status |
+|---|---|---|
+| `POST /v1/compendium/monsters` | `createMonster` | 201 (no `tags` in response) |
+| `GET /v1/compendium/monsters/{slug}` | `readMonster` | 200 (includes `tags`) |
+| `POST /v1/compendium/items` | `createItem` | 201 |
+| `GET /v1/compendium/items/{slug}` | `readItem` | 200 |
+
+**3. Validation per spec:**
+- `400` for malformed input (missing/wrong-type fields)
+- `404` for unknown slugs on read
+- `409` for duplicate slugs on create
+- `tags` optional on monster create (defaults to `[]`)
+
+**4. Updated `resetDb`** to also clear `monsters` and `items` tables so storage reset stays consistent.
+
+### Preserved behavior
+- Schema version stays `1` (storage status test expects this)
+- All 14 prior routes, handlers, and response shapes unchanged
+- `run.sh` unchanged — it already removes `game.db` and runs `init-schema` (now creates the new tables too) before serving in the foreground on `127.0.0.1:$PORT`
+
+All existing endpoints (health, dice, ability checks, combat sessions, auth, storage) and the new compendium endpoints were verified end-to-end. 🗡️🧪

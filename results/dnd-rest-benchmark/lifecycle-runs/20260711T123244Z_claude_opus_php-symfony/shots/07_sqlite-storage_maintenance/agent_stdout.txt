@@ -1,0 +1,16 @@
+Done, Chef! 🎲✨ Stage 4 (SQLite Game Storage) is complete.
+
+## What I did 🛠️
+
+**Migrated durable state to SQLite** — combat sessions and user accounts now live in `game.db` (in the project dir) instead of scattered JSON temp files. I did this surgically: `with_combat_state()` and `with_user_state()` are now thin wrappers over a shared `with_kv_state()` helper that stores each domain's data as a JSON blob in a `kv` table inside an atomic `BEGIN IMMEDIATE` transaction. Because the handlers still receive plain PHP arrays by reference, **zero handler logic changed** — every prior endpoint behaves identically. ✅
+
+**Added the two storage endpoints:**
+- `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}` (checks `sqlite_master` for the table)
+- `POST /v1/storage/reset` → drops + recreates schema, clearing benchmark data while the process stays healthy → `{"ok":true,"schema_version":1}`
+
+**Schema on startup** — `init_schema()` runs idempotently. `run.sh` now removes any stale `game.db` and invokes `php index.php` once in CLI SAPI (a guarded init-and-exit path) to build the schema *before* the server binds, then serves in the foreground on `127.0.0.1:$PORT`.
+
+## Verified 🔍
+`php -l` clean, and a full live run confirmed: fresh status, reset, register→login roundtrip, combat create/advance, dice stats, plus post-reset login correctly returning **401** (data cleared) and a GET on `/v1/storage/reset` returning **405**.
+
+One note: the "Address already in use" you saw in the first test was a leftover server from a prior stage on that port — the clean re-run on a fresh port confirmed all responses come from the new SQLite-backed code. 💾

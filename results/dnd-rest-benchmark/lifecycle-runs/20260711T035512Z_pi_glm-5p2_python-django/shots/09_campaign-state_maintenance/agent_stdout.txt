@@ -1,0 +1,41 @@
+Everything checks out, Chef! 🎲✨
+
+## Summary
+
+Added **Stage 6: Campaign State APIs** to the existing Django D&D REST API. All four new endpoints are SQLite-backed and all prior-stage endpoints are preserved.
+
+### Changes made
+
+**`dndsite/storage.py`** — Added 3 new tables + 8 data-access functions:
+- `campaigns` (id, name, dm)
+- `campaign_characters` (campaign_id, id, name, level, class) — composite PK, FK with `ON DELETE CASCADE`
+- `campaign_events` (campaign_id, id, kind, summary) — composite PK, FK with `ON DELETE CASCADE`
+- Functions: `insert_campaign`, `get_campaign`, `get_character`, `insert_character`, `list_characters` (ordered by `rowid` for deterministic insertion order), `get_event`, `insert_event`, `count_events`
+- Updated `reset()` to drop the new tables (verified: after reset, campaign state returns 404)
+
+**`dndsite/views.py`** — Added 4 view functions with a `_CAMPAIGN_LOCK`:
+- `campaign_create` — `POST /v1/campaigns` → 201, 409 on dup, 400 on malformed
+- `campaign_add_character` — `POST /v1/campaigns/<cid>/characters` → 201, 404 unknown campaign, 409 dup, 400 malformed
+- `campaign_add_event` — `POST /v1/campaigns/<cid>/events` → 201 (response excludes `summary` per spec), 404/409/400
+- `campaign_state` — `GET /v1/campaigns/<cid>/state` → 200 with `{id, name, dm, characters[], log_count}`, 404 unknown
+
+**`dndsite/urls.py`** — Added 4 new route patterns.
+
+### Verification (all passed ✅)
+| Test | Expected | Got |
+|------|----------|-----|
+| Create campaign | `{"id","name","dm"}` 201 | ✅ |
+| Duplicate campaign | 409 | ✅ |
+| Malformed campaign | 400 | ✅ |
+| Add character | `{"id","name","level","class"}` 201 | ✅ |
+| Character → unknown campaign | 404 | ✅ |
+| Duplicate character | 409 | ✅ |
+| Malformed character (level 0) | 400 | ✅ |
+| Add event | `{"id","kind"}` (no summary) 201 | ✅ |
+| Duplicate event | 409 | ✅ |
+| Read state | full state with `log_count: 1` | ✅ |
+| State → unknown campaign | 404 | ✅ |
+| Prior stages (dice, combat, auth, compendium, storage) | all preserved | ✅ |
+| After storage reset | campaign gone (404) | ✅ |
+
+`./run.sh` is unchanged and ready — starts the server in the foreground on `127.0.0.1:$PORT`. Django system check reports no issues. 🧙‍♂️

@@ -28,6 +28,9 @@ The staged D&D lifecycle roadmap, prompt contract, and future backlog are in
 [`docs/roadmap/`](docs/roadmap/). Results and early interpretation are in
 [`docs/findings/`](docs/findings/).
 
+The full 5-model by 14-target D&D REST lifecycle matrix is summarized in
+[`docs/findings/002-full-lifecycle-matrix.md`](docs/findings/002-full-lifecycle-matrix.md).
+
 ## Folders
 
 - `experiments/` — experiment designs and code

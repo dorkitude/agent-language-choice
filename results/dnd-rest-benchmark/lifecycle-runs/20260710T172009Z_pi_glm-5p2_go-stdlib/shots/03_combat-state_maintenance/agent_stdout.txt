@@ -1,0 +1,20 @@
+All green, Chef 🎲✨ The combat-state stage is wired up and the smoke test traces the exact spec example end-to-end.
+
+## What I added to `main.go`
+
+Three new routes (registered alongside the existing 8 endpoints, none of which were touched):
+
+1. **`POST /v1/combat/sessions`** — stores an in-memory session. Computes `score = roll + dex`, sorts by score desc → dex desc → name asc (reusing the same tie-break logic as `/v1/initiative/order`), starts `round=1`, `turn_index=0`, returns `active` + `order`.
+2. **`POST /v1/combat/sessions/{id}/conditions`** — attaches a condition to a named combatant. `400` for unknown target / non-positive `duration_rounds`, `404` for unknown session.
+3. **`POST /v1/combat/sessions/{id}/advance`** — bumps `turn_index`, wraps + increments `round` at the end, ticks down the *active* combatant's conditions at the start of their turn, removes any hitting `0`, and returns the full `conditions` map (only combatants that still have conditions).
+
+## Verification
+
+- `gofmt -l` clean, `go vet` clean, `go build` ok
+- Create/advance responses match the spec JSON byte-for-byte (rogue:17, mage:16, fighter:14)
+- Full condition lifecycle verified: `blessed(2)` → ticks to `1` on fighter's turn → survives rogue+mage turns untouched → ticks to `0` on fighter's next turn and is dropped (`conditions: {}`)
+- Round wrap correct (turn 2→0 bumps round 1→2)
+- Prior-stage endpoints still pass (health, initiative order, dice 400, etc.)
+- `run.sh` unchanged — already runs `go run .` in the foreground on `127.0.0.1:$PORT`
+
+State lives in a `sync.Mutex`-guarded `map[string]*combatSession`, so it lasts for the process lifetime as required. No third-party packages added — just `net/http` path wildcards (`{id}`) and `encoding/json`. 🛡️

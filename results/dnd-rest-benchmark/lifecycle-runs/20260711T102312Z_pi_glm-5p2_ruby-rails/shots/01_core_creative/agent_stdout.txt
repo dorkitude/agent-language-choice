@@ -1,0 +1,36 @@
+Done, Chef! 🎲🐉 The Core D&D REST Engine is built on Ruby 4.0.5 + Rails 8.1.3 and `./run.sh` is ready.
+
+## What I built
+
+A minimal **Rails API-only app** (no Bundler dependency — gems are installed into the default GEM_PATH, since the seeded `bundle` binstub was broken on Ruby 4.0.5; `rackup` runs directly).
+
+**Structure:**
+```
+config.ru                    # run Rails.application (seeded, kept)
+app.rb                       # requires config/environment
+run.sh                       # exec rackup -o 127.0.0.1 -p $PORT config.ru
+config/boot.rb               # no Bundler setup
+config/application.rb        # Dnd::Application < Rails::Application (api_only)
+config/environment.rb        # initialize!
+config/routes.rb             # 5 endpoints
+app/controllers/*.rb         # logic
+```
+
+## Endpoints (all spec samples verified byte-for-byte)
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` | `2d6+3` → `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` |
+
+## Key correctness decisions
+- **Dice grammar** — strict regex `\A(\d+)d(\d+)(?:([+-])(\d+))?\z`; rejects `0d6`, `d6`, `2d`, `2D6` (uppercase is out-of-grammar), double signs, and whitespace with HTTP 400.
+- **Average** — `(min+max)/2` integer floor division, matching the D&D 5e stat-block convention (1d4→2, 3d6→10).
+- **Multiplier/adjusted_xp** — whole-valued floats (e.g. `600.0` from `400×1.5`) are emitted as ints to match the spec's integer-shaped samples; fractional values like `1.5`/`2.5`/`37.5` stay floats.
+- **Difficulty** — highest threshold reached (trivial→easy→medium→hard→deadly), thresholds summed across party.
+- **Initiative** — sort by `[-score, -dex, name]` → score desc, dex desc, name asc (tie-breaks verified).
+
+Pinned versions honored exactly: rails 8.1.3, rack 3.2.6, rackup 2.3.1, puma 8.0.2, ruby 4.0.5. No server is left running. 🗡️

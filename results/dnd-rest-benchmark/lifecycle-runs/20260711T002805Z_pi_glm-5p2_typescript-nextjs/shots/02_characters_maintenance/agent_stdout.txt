@@ -1,0 +1,25 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+Added three new Next.js route handlers for the **characters** maintenance stage, preserving all existing core endpoints.
+
+### New endpoints (all under `app/v1/characters/`)
+
+| Endpoint | File | Behavior |
+|---|---|---|
+| `POST /v1/characters/ability-modifier` | `ability-modifier/route.ts` | Validates `score` is integer 1–30; returns `Math.floor((score-10)/2)` (floors negative halves → score 9 = -1) |
+| `POST /v1/characters/proficiency` | `proficiency/route.ts` | Validates `level` is integer 1–20; returns `2 + floor((level-1)/4)` (1-4→2, 5-8→3, 9-12→4, 13-16→5, 17-20→6) |
+| `POST /v1/characters/derived-stats` | `derived-stats/route.ts` | Validates level/abilities/armor, computes all six modifiers, proficiency, `hp_max = level*(6+con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + (shield?2:0)` |
+
+### Design choices
+- **Self-contained routes** matching the existing codebase style (no shared lib, avoiding `NodeNext` import-extension pitfalls).
+- **Strict validation**: abilities must be integers 1–30 (consistent with the standalone ability-modifier rule, as the spec requires "the same formula"); `level` must be integer 1–20; armor `base`/`dex_cap` must be finite numbers; `shield` defaults to `0` unless strictly `true`. All invalid → `400`.
+- **Modifier key order** preserved as `str, dex, con, int, wis, cha` to match the spec example exactly.
+
+### Verification
+- Spec example for `derived-stats` reproduced byte-for-byte: `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}`
+- Edge cases checked: score 9→-1, dex-cap clamping, shield on/off, invalid level/score/missing-ability all return 400.
+- Cumulative core suite re-verified: `health`, `dice/stats`, `checks/ability`, `encounters/adjusted-xp`, `initiative/order` all still pass.
+
+`./run.sh` is unchanged, executable, and starts the server in the foreground on `127.0.0.1:$PORT` — ready to go. 🚀

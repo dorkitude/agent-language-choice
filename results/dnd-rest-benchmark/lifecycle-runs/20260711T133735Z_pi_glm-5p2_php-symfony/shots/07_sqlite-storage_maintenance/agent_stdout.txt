@@ -1,0 +1,33 @@
+All done, Chef! 🎲🐘
+
+## What I built
+
+**Moved durable game data behind SQLite** (`game.db` in the project dir) via PDO, replacing the per-PID temp-JSON files:
+
+- `combat_sessions` table — `id`, `round`, `turn_index`, plus `turn_order`/`conditions` as JSON columns (preserves the exact nested-shape the combat handlers expect, including the empty-bucket `{"Fighter":[]}` semantics).
+- `users` table — `username`, `role`, `password_hash` (bcrypt).
+- `meta` table — stamps `schema_version = 1`.
+
+I kept the `loadSessions/saveSessions/loadUsers/saveUsers` signatures identical, so **none of the existing handlers changed** — they just read/write SQLite now.
+
+**New endpoints** (Symfony routes, same dispatch as the rest):
+- `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- `POST /v1/storage/reset` → `{"ok":true,"schema_version":1}` (clears combat + user rows, recreates schema, keeps process alive)
+
+**Startup / `run.sh`**:
+1. `rm -f game.db` (+ stale temp files) so each run starts clean — this preserves the old per-process slate semantics and prevents cross-run auth `409` drift.
+2. `php index.php init-schema` — a CLI guard in `index.php` builds the schema and exits, so `game.db` exists *before* the first request.
+3. `php -S 127.0.0.1:$PORT index.php` in the foreground. The HTTP path also calls `initSchema()` (static-guarded, idempotent) so the schema is always ready.
+
+## Verification
+
+Ran the **full cumulative contract** against a live server — every prior test still green:
+- core (8), characters (13) — stateless math, untouched.
+- combat-state (20) — create → add condition → advance×6 with exact decrement/expire/wrap-round behavior, `404` on unknown session.
+- auth-users (24) — register `201`, duplicate `409`, login `200`, bad/unknown `401`.
+- storage: `status` ✓, `reset` ✓, `status` after reset `initialized:true` ✓, and post-reset the user + combat session are gone (confirming reset actually clears durable data).
+- `404` unknown route, `405` wrong method.
+
+Also confirmed: no `dnd_combat_*.json`/`dnd_users_*.json` temp files are created anymore, and `game.db` holds the rows (bcrypt hash and all) between requests. PHP lint + `bash -n run.sh` clean, no dangling refs to the removed `stateFile/usersFile`.
+
+`./run.sh` is ready — server not started. 🗡️💾

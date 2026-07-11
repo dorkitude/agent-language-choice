@@ -1,0 +1,33 @@
+Done, Chef! 🎲✨
+
+## The bug & fix
+
+**Root cause:** In `conditionsSnapshot()` (in `src/dndPlugin.ts`), the code skipped any combatant whose condition list had become empty:
+
+```ts
+if (list.length > 0) {
+  out[name] = list.map(...)
+}
+```
+
+When a condition expired (reached `0` at the start of the combatant's turn), `advanceSession` correctly filtered it out — leaving `fighter → []` in the in-memory `Map` — but the snapshot then *dropped the key entirely*, producing `"conditions": {}`.
+
+The `combat-advance-expired-removed` test expects the `"fighter"` key to still be present (as an empty array) after the expired condition is removed.
+
+**Fix:** Removed the `list.length > 0` guard so combatants who once had conditions keep their key in the snapshot, now with an empty array:
+
+```ts
+out[name] = list.map(({ condition, remaining_rounds }) => ({
+  condition,
+  remaining_rounds,
+}))
+```
+
+Now advance-5 returns `"conditions":{"fighter":[]}` — key preserved, expired condition gone. 🗡️
+
+## Verification
+- `combat-state`: **20/20** ✅ (previously 19/20)
+- `core`: **8/8** ✅
+- `characters`: **13/13** ✅
+
+No prior-stage behavior touched — the change is isolated to the conditions snapshot. `./run.sh` is unchanged and ready to serve in the foreground on `127.0.0.1:$PORT`.

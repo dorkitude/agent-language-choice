@@ -1,0 +1,7 @@
+Fixed! 🎉 The bug was that `_conditions_view` dropped any combatant whose condition list was empty — including one whose condition had just expired to 0 and gotten removed, which is exactly the case the failing test checked. I fixed it by:
+
+1. Only creating a `conditions` entry for a combatant the first time a condition is added to them (instead of pre-seeding every combatant with `[]`), so untouched combatants never appear in the response.
+2. Removing the `if conds` filter in `_conditions_view`, so once a combatant *has* an entry, it stays visible (as `[]`) even after all its conditions expire.
+3. Guarding the decrement step in `combat_advance` to only touch `session["conditions"]` for combatants that already have an entry, so advancing turns doesn't spuriously create empty entries for untouched combatants.
+
+Verified manually end-to-end: create session → add condition to fighter → advance through expiry, and the response correctly shows `"fighter": []` after expiry (not missing), while `rogue`/`mage` never appear since they were never given conditions. `run.sh` is untouched and still starts the Django dev server in the foreground on `127.0.0.1:$PORT`.

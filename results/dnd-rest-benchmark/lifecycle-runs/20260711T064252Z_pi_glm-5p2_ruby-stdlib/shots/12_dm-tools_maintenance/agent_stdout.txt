@@ -1,0 +1,25 @@
+Everything's in place, Chef! 🎲✨
+
+## Summary
+
+I added the **DM Tools** stage (Stage 8) to the existing Ruby stdlib D&D REST API while preserving all 37 prior endpoints. The evaluator's full cumulative `dm-tools` suite passes **40/40**.
+
+### What I added (`server.rb`)
+
+Three new handlers, all reusing existing core math (`XP_TABLE`, `encounter_multiplier`, `THRESHOLDS`, `num`) and the SQLite compendium/campaign state:
+
+1. **`POST /v1/dm/encounter-builder`** — looks up each monster's CR from the `compendium_monsters` table, computes base/adjusted XP via the same multiplier + threshold logic as `/v1/encounters/adjusted-xp`, classifies difficulty, and maps it to a deterministic `recommendation` (`easy` → `"safe warm-up"`). Returns 400 for malformed input, 404 for an unknown monster slug.
+
+2. **`POST /v1/dm/loot-parcel`** — returns a deterministic tier-based parcel from a `TIER_LOOT` table (tier 1 → `coins_gp: 75`, `healing-potion ×2`). 400 for bad input.
+
+3. **`POST /v1/dm/session-recap`** — reads the campaign's latest event summary from `campaign_events` (404 if the campaign doesn't exist) and derives `open_threads` deterministically from event summaries (`"Nyx scouts the goblin trail."` → `"Resolve goblin trail ambush"`).
+
+### Verification
+
+- `ruby -c server.rb` → syntax OK
+- Manual curl runs of the exact test payloads produced byte-for-byte expected responses
+- Built the real Go evaluator (`dndeval`) and ran the cumulative `dm-tools` suite: **passed=true, 40/40**, including `dm-encounter-builder`, `dm-loot-parcel`, `dm-session-recap`
+- Invalid requests return non-2xx (400/404) as required
+- `run.sh` unchanged (`ruby server.rb`, foreground, listens on `127.0.0.1:$PORT`)
+
+The server is **not** running — `./run.sh` is ready to go. 🛡️

@@ -1,0 +1,21 @@
+All done, Chef! 🎲🐉 The core D&D REST engine is live and verified.
+
+## Summary
+
+**`app.rb`** — a Sinatra 4.2.1 classic app (Ruby 4.0.5, Rack 3.2.6, rackup 2.3.1, Puma 8.0.2) implementing all five endpoints:
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | → `{"ok":true}` |
+| `POST /v1/dice/stats` | Regex-parses `NdM[±mod]`, validates count/sides > 0, returns `dice_count/sides/modifier/min/max/average`; invalid → 400 |
+| `POST /v1/checks/ability` | `total = roll+modifier`, `success = total >= dc`, `margin = total - dc` |
+| `POST /v1/encounters/adjusted-xp` | CR→XP table, count-based multiplier, summed party thresholds (level-3), highest-reached difficulty (`trivial`→`deadly`) |
+| `POST /v1/initiative/order` | `score = roll+dex`, sorted by score desc → dex desc → name asc |
+
+**Key design choices:**
+- **`average`** uses integer floor division `(min+max)/2` — matches the spec's `10` example (not `10.0`), and follows the D&D average-damage convention (e.g. `1d20 → 10`).
+- **`normalize_num`** converts whole-number floats to ints so `multiplier`/`adjusted_xp` serialize cleanly (`1.5` stays `1.5`, but `600.0` → `600`, `2` stays `2`).
+- **`rackup` 2.3.1** added to the Gemfile — Sinatra 4.2.1's CLI runner requires it (it's a pinned version, not a downgrade).
+- All malformed JSON / missing fields / invalid expressions return **HTTP 400** with a JSON error body; `content_type: json` is set globally.
+
+`./run.sh` starts Puma in the foreground on `127.0.0.1:$PORT`. Every spec example was curl-tested and matches byte-for-byte. ✅

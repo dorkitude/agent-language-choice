@@ -1,0 +1,27 @@
+All done, Chef! 🎲✨
+
+## Summary
+
+I added the **Stateful Combat** stage on top of the existing D&D REST API without touching any prior-stage endpoints.
+
+### New endpoints (all Next route handlers under `app/`)
+
+| Method | Path | File |
+|---|---|---|
+| `POST` | `/v1/combat/sessions` | `app/v1/combat/sessions/route.ts` |
+| `POST` | `/v1/combat/sessions/{id}/conditions` | `app/v1/combat/sessions/[id]/conditions/route.ts` |
+| `POST` | `/v1/combat/sessions/{id}/advance` | `app/v1/combat/sessions/[id]/advance/route.ts` |
+
+### Key design decisions
+
+- **Shared in-memory state** via `globalThis.__combatSessions` — a single `Map` keyed by session id, shared across all three handlers and survives Next.js dev hot-reloads. No relative imports (matches the existing self-contained route style and avoids `NodeNext` `.js`-extension pitfalls).
+- **Initiative sort**: score desc → dex desc → name asc (same ordering as the existing `/v1/initiative/order` endpoint).
+- **Advance semantics**: bump `turn_index`; on wrap past the end, reset to `0` and increment `round`; then decrement *only the newly-active combatant's* conditions and drop any that hit `0`. Inactive combatants' conditions are untouched — which is exactly why the spec's example shows `fighter`'s `blessed` staying at `2` after advancing onto `mage`. ✅
+- **Validation**: malformed input → `400` (bad id, empty/invalid combatants, non-positive/non-integer `duration_rounds`, unknown target, invalid JSON, duplicate session id); unknown session id → `404`.
+
+### Verification
+- `tsc --noEmit` shows **zero new errors** from the combat routes — only the pre-existing `next/server` module-resolution warnings that affect *every* route file (including prior stages) and don't impact `next dev`.
+- Traced all three spec examples by hand; outputs match exactly.
+- `run.sh` is preserved, executable, and starts `next dev` in the foreground on `127.0.0.1:$PORT`.
+
+Per the contract, I have **not** started the server. `./run.sh` is ready to go. 🚀

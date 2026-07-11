@@ -1,0 +1,32 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I added the **Stage 6: Campaign State APIs** to the existing Flask D&D REST API, preserving all prior endpoints.
+
+### What changed in `app.py`
+
+**New SQLite tables** (in `init_schema`):
+- `campaigns(id, name, dm)` — PK on `id`
+- `campaign_characters(id, campaign_id, name, level, class)` — composite PK `(campaign_id, id)`
+- `campaign_events(id, campaign_id, kind, summary)` — composite PK `(campaign_id, id)`
+
+**Data lifecycle updated** so the new tables are wiped on startup (`clear_data`) and dropped on reset (`reset_db`) — keeping each process start deterministic.
+
+**New routes:**
+| Endpoint | Success | Unknown campaign | Duplicate ID | Malformed |
+|---|---|---|---|---|
+| `POST /v1/campaigns` | 201 → `{id,name,dm}` | — | 409 | 400 |
+| `POST /v1/campaigns/<cid>/characters` | 201 → `{id,name,level,class}` | 404 | 409 | 400 |
+| `POST /v1/campaigns/<cid>/events` | 201 → `{id,kind}` (summary stored, not returned) | 404 | 409 | 400 |
+| `GET /v1/campaigns/<cid>/state` | 200 → full state w/ `characters[]` + `log_count` | 404 | — | — |
+
+### Design notes
+- Followed the existing **compendium/auth pattern** (201 + 409) rather than the combat-session pattern (200 + 400), since the spec explicitly calls for **409 on duplicate IDs** — the hallmark of a resource-store endpoint.
+- Character/event IDs are **scoped per-campaign** (composite key), matching the nested URL structure `/v1/campaigns/<cid>/...`.
+- Characters list returns in **insertion order** (`ORDER BY rowid`) for deterministic output.
+- Used a dict literal for the character response since `class` is a Python reserved keyword (can't be a kwarg).
+- Precedence (404 before 400) mirrors the existing `add_condition` handler.
+
+### Verification
+Smoke-tested the full spec scenario end-to-end: create campaign → add character → add event → read state returns exactly `{"id":"camp-1","name":"Lost Mine","dm":"dm","characters":[{"id":"char-1","name":"Nyx","level":3,"class":"rogue"}],"log_count":1}`. Also confirmed all prior-stage endpoints (combat sessions, compendium, auth, dice, storage status/reset) still pass. `./run.sh` is unchanged and ready. 🚀
