@@ -123,31 +123,8 @@ def slug(value: str) -> str:
     return value.strip("-") or "run"
 
 
-def resolve_fireworks_api_key(op_ref: str | None, op_account: str | None) -> str | None:
-    for env_name in ("FIREWORKS_API_KEY", "LLM_GATEWAY_DEFAULT_FIREWORKS_API_KEY"):
-        value = os.environ.get(env_name, "").strip()
-        if value:
-            return value
-
-    if not op_ref:
-        return None
-
-    cmd = ["op", "read", op_ref]
-    if op_account:
-        cmd.extend(["--account", op_account])
-
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except FileNotFoundError as exc:
-        raise SystemExit("1Password CLI `op` is not installed.") from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip()
-        raise SystemExit(f"Could not read Fireworks key with op: {stderr}") from exc
-
-    key = result.stdout.strip()
-    if not key:
-        raise SystemExit(f"1Password ref {op_ref!r} resolved to an empty value.")
-    return key
+def resolve_fireworks_api_key() -> str | None:
+    return os.environ.get("FIREWORKS_API_KEY", "").strip() or None
 
 
 def benchmark_env() -> dict[str, str]:
@@ -238,8 +215,6 @@ def run_agent(
     prompt: str,
     run_dir: Path,
     timeout_seconds: int,
-    op_ref: str | None,
-    op_account: str | None,
     codex_danger_full_access: bool,
     codex_reasoning_effort: str,
     claude_effort: str,
@@ -248,7 +223,7 @@ def run_agent(
     command: list[str]
 
     if provider == "pi":
-        key = resolve_fireworks_api_key(op_ref, op_account)
+        key = resolve_fireworks_api_key()
         if key:
             env["FIREWORKS_API_KEY"] = key
         model_id = PI_MODEL_ALIASES.get(model, model)
@@ -443,8 +418,6 @@ def run_one(args: argparse.Namespace) -> int:
         prompt=prompt,
         run_dir=run_dir,
         timeout_seconds=args.agent_timeout,
-        op_ref=args.op_ref,
-        op_account=args.op_account,
         codex_danger_full_access=args.codex_danger_full_access,
         codex_reasoning_effort=args.codex_reasoning_effort,
         claude_effort=args.claude_effort,
@@ -575,8 +548,6 @@ def run_matrix(args: argparse.Namespace) -> int:
             task=combo["task"],
             agent_timeout=args.agent_timeout,
             test_timeout=args.test_timeout,
-            op_ref=args.op_ref,
-            op_account=args.op_account,
             codex_danger_full_access=args.codex_danger_full_access,
             codex_reasoning_effort=args.codex_reasoning_effort,
             claude_effort=args.claude_effort,
@@ -626,8 +597,6 @@ def main(argv: list[str]) -> int:
     run_parser.add_argument("--task", required=True)
     run_parser.add_argument("--agent-timeout", type=int, default=600)
     run_parser.add_argument("--test-timeout", type=int, default=20)
-    run_parser.add_argument("--op-ref")
-    run_parser.add_argument("--op-account")
     run_parser.add_argument("--codex-reasoning-effort", default="medium")
     run_parser.add_argument("--claude-effort", default="medium")
     run_parser.add_argument(
@@ -649,8 +618,6 @@ def main(argv: list[str]) -> int:
     matrix_parser.add_argument("--tasks", help="Comma-separated task IDs")
     matrix_parser.add_argument("--agent-timeout", type=int, default=600)
     matrix_parser.add_argument("--test-timeout", type=int, default=20)
-    matrix_parser.add_argument("--op-ref")
-    matrix_parser.add_argument("--op-account")
     matrix_parser.add_argument("--codex-reasoning-effort", default="medium")
     matrix_parser.add_argument("--claude-effort", default="medium")
     matrix_parser.add_argument("--codex-danger-full-access", action="store_true")

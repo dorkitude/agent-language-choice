@@ -125,12 +125,7 @@ instead of mixing the two as identical task types.
 
 ## Fireworks auth
 
-The harness follows the ISC experiment's credential order:
-
-1. `FIREWORKS_API_KEY`
-2. `LLM_GATEWAY_DEFAULT_FIREWORKS_API_KEY`
-3. `--op-ref` with `op read`
-
+Set `FIREWORKS_API_KEY` in the environment before running `pi`-backed models.
 The key is passed to `pi` through the child-process environment, not as a
 command-line argument.
 

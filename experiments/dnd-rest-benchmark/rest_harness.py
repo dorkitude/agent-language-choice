@@ -579,18 +579,8 @@ def benchmark_env() -> dict[str, str]:
     return env
 
 
-def resolve_fireworks_api_key(op_ref: str | None, op_account: str | None) -> str | None:
-    for env_name in ("FIREWORKS_API_KEY", "LLM_GATEWAY_DEFAULT_FIREWORKS_API_KEY"):
-        value = os.environ.get(env_name, "").strip()
-        if value:
-            return value
-    if not op_ref:
-        return None
-    cmd = ["op", "read", op_ref]
-    if op_account:
-        cmd.extend(["--account", op_account])
-    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    return result.stdout.strip()
+def resolve_fireworks_api_key() -> str | None:
+    return os.environ.get("FIREWORKS_API_KEY", "").strip() or None
 
 
 def slug(value: str) -> str:
@@ -793,7 +783,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str) -> dict[str,
     env = benchmark_env()
     command: list[str]
     if args.provider == "pi":
-        key = resolve_fireworks_api_key(args.op_ref, args.op_account)
+        key = resolve_fireworks_api_key()
         if key:
             env["FIREWORKS_API_KEY"] = key
         command = [
@@ -1474,8 +1464,6 @@ def main(argv: list[str]) -> int:
     common.add_argument("--agent-timeout", type=int, default=900)
     common.add_argument("--setup-timeout", type=int, default=600)
     common.add_argument("--server-timeout", type=int, default=45)
-    common.add_argument("--op-ref")
-    common.add_argument("--op-account")
     common.add_argument("--codex-reasoning-effort", default="medium")
     common.add_argument("--claude-effort", default="medium")
     common.add_argument("--codex-danger-full-access", action="store_true")
