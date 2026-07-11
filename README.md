@@ -37,3 +37,7 @@ The full 5-model by 14-target D&D REST lifecycle matrix is summarized in
 - `results/` — experiment outputs
 - `records/` — correspondence, submissions, and other records
 - `docs/` — indexed roadmap, prompt, and findings notes
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
