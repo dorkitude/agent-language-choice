@@ -1409,6 +1409,7 @@ def completed_lifecycle_exists(provider: str, model: str, target: str, stages_va
             and meta.get("model") == model
             and meta.get("target") == target
             and meta.get("stages") == wanted_stages
+            and run_status(data, path.parent) != "blocked"
         ):
             return True
     return False
@@ -1422,7 +1423,7 @@ def completed_run_exists(provider: str, model: str, target: str) -> bool:
             continue
         meta = data.get("metadata", {})
         if (
-            data.get("passed")
+            run_status(data, path.parent) != "blocked"
             and meta.get("provider") == provider
             and meta.get("model") == model
             and meta.get("target") == target
