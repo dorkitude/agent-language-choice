@@ -1,0 +1,19 @@
+Done, Chef! 🎉 The auth stage is wired in and `run.sh` is ready.
+
+## What I added ✨
+
+**Two new endpoints** in `src/main.rs`, routed alongside the existing ones:
+
+- `POST /v1/auth/register` — validates username (2–32 chars, `[a-z0-9_-]`), password (≥8 chars), and role (`dm`/`player`). Returns `{"username","role"}`, `409` on duplicate, `400` on malformed input.
+- `POST /v1/auth/login` — returns `{"username","token":"session-<username>"}` on valid creds, `401` on bad/unknown creds.
+
+**Real password hashing** 🔐 — since Rust's stdlib ships no crypto, I implemented a pure-Rust **SHA-256** (FIPS 180-4) and hash `username:password` (username as per-user salt). It's isolated behind `hash_password`/`verify_password` so a production Argon2/bcrypt can drop in without touching call sites. The plaintext password is never stored or echoed, and verification uses a constant-time-ish compare.
+
+**State plumbing** — introduced `AppState { combat, users }` so combat sessions and users coexist; combat routing is unchanged.
+
+## Verified ✅
+- All auth happy/error paths return the right status codes (200/400/401/409).
+- Prior stages still work (health, dice, and the rest route unchanged).
+- Compiles clean (one harmless dead-code warning on the stored `role` field, kept for future use).
+
+The only remaining warning is that stored `User.role` isn't read back — I kept the field since it's legitimate persisted state and doesn't affect behavior. Server was started only for testing and is stopped; nothing is left running. 🐉

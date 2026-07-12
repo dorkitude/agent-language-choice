@@ -1,0 +1,28 @@
+Done, Chef! 🎲 The Core D&D REST Engine is built and verified. 🦀
+
+## What was built
+
+A pure-stdlib Rust HTTP server in `src/main.rs` (no Cargo deps, no HTTP/JSON crates) — exactly matching the target guidance:
+
+- **HTTP layer**: `std::net::TcpListener`/`TcpStream` + `BufReader`, reads the request line, headers, and full body via `Content-Length` (with `Expect: 100-continue` support), thread-per-connection for concurrency.
+- **JSON layer**: hand-rolled recursive-descent parser (objects, arrays, numbers, strings w/ escapes + surrogate pairs, bools, null) and a serializer with smart number formatting (integers print without `.0`, `.5` fractions preserved).
+
+## Endpoints — all match the spec examples byte-for-byte
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"ok":true}` |
+| `POST /v1/dice/stats` `2d6+3` | `{"dice_count":2,"sides":6,"modifier":3,"min":5,"max":15,"average":10}` |
+| `POST /v1/checks/ability` | `{"total":14,"success":false,"margin":-1}` |
+| `POST /v1/encounters/adjusted-xp` | `{"base_xp":850,"monster_count":3,"multiplier":2,"adjusted_xp":1700,"difficulty":"deadly","thresholds":{"easy":300,"medium":600,"hard":900,"deadly":1600}}` |
+| `POST /v1/initiative/order` | `{"order":[{"name":"rogue","score":17},{"name":"ogre","score":15}]}` |
+
+## Edge cases verified ✅
+- Dice: negative modifiers, fractional averages (`1d6`→`3.5`), whitespace trimming, strict validation (`0d6`, `2d6+-3`, `1/2`, missing fields → 400).
+- Encounters: fractional CRs (`1/8`,`1/4`,`1/2`), `1.5`/`2.5` multipliers, all 5 difficulty tiers incl. `trivial`, party threshold summation.
+- Initiative: full tie-break chain (score desc → dex desc → name asc).
+- 404 for unknown routes; 20 concurrent requests all `200`.
+
+## Contract compliance
+- `./run.sh` preserved — compiles with `rustc --edition=2024` (no Cargo) and runs the server in the **foreground** on `127.0.0.1:$PORT`. ✨
+- No server left running; clean compile, zero warnings.

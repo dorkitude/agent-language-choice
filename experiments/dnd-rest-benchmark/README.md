@@ -2,14 +2,16 @@
 
 REST API benchmark suite for the agent language-choice study.
 
-This suite is designed to create tasks that should be materially easier in Go
-than in TypeScript when agents are restricted to standard libraries:
+This suite is designed to stress language/framework properties while keeping
+evaluation language-agnostic: the evaluator only talks HTTP.
 
-- Go has `net/http`, `encoding/json`, routing primitives, concurrency, and
-  build/test feedback in the standard toolchain.
-- TypeScript without npm packages must use Node's low-level HTTP APIs, manual
-  routing/body parsing, and a separate `tsc`/Node execution path.
-- The evaluator is central and language-agnostic: it only talks HTTP.
+The initial framing used Go versus TypeScript as the headline contrast. The
+first full lifecycle matrix showed that TypeScript, especially Vite, was not
+the strongest weak case. The current primary contrast is explicit,
+compiler-backed, locally inspectable targets such as Go and Rust versus
+Ruby/Rails-style convention, dynamic dispatch, and framework-mediated
+semantics. TypeScript remains a secondary contrast for ecosystem churn and
+dependency-surface effects.
 
 ## Implementation Contract
 
@@ -98,6 +100,10 @@ Current lifecycle stages:
 The indexed roadmap, prompt contract, and stage-by-stage notes are in
 [`../../docs/roadmap/`](../../docs/roadmap/). Findings from completed runs are
 in [`../../docs/findings/`](../../docs/findings/).
+
+Current target set includes Go, Rust, TypeScript, Python, Java, Ruby, and PHP
+variants. Rust is stdlib-only: agents must use `rustc` and `std::net` without
+HTTP crates.
 
 Plan a lifecycle run:
 

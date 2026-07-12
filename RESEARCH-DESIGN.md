@@ -6,8 +6,8 @@ citations not yet finalized).
 ## Research question
 
 Why do LLM coding agents appear to perform better in some programming languages
-(e.g. Go) than others (e.g. Ruby), and which *language design dimensions*
-explain the difference?
+and frameworks (e.g. Go/Rust stdlib targets) than others (e.g. Ruby/Rails), and
+which *language design dimensions* explain the difference?
 
 We do not claim any language is "better." We treat languages as points in a
 design space and test whether position along specific design dimensions
@@ -126,21 +126,23 @@ Stack / GitHub language shares) as a covariate in all analyses.
 
 ## Languages under test
 
-Go, TypeScript, Python, Java, Ruby, PHP. Candidates to add: Rust (compiled +
-strict but low-uniformity/steep semantics — separates D1 from D6), C#.
+Go, Rust, TypeScript, Python, Java, Ruby, PHP. Rust is included because it is
+compiled and strict like Go, but has a steeper type/borrow model and no stdlib
+HTTP abstraction. That makes it useful for separating D1 compiler-signal
+quality from D3 stdlib coverage and D4/D5 ergonomic explicitness.
 
 Preliminary placement (to be replaced with cited/measured values — this table
 is our hypothesis, not a result):
 
-| Dimension | Go | TypeScript | Python | Java | Ruby | PHP |
-|---|---|---|---|---|---|---|
-| D1 compile/type signal | high | mid-high (tsc, but `any`/config-dependent) | low (opt. hints) | high | low | low-mid |
-| D2 ecosystem stability | high | low (npm churn) | mid | high | mid | mid |
-| D3 stdlib coverage | high | low (Node stdlib thin) | high | high | mid | mid-high |
-| D4 verbosity/redundancy | high | mid | low | high | low | mid |
-| D5 explicitness | high | mid | low (metaclasses etc.) | mid-high | low (monkey-patching) | mid |
-| D6 idiom uniformity | high (gofmt) | low | mid (PEP8, but many frameworks) | mid | mid | low |
-| C1 corpus prevalence | mid | high | high | high | mid | mid-high |
+| Dimension | Go | Rust | TypeScript | Python | Java | Ruby | PHP |
+|---|---|---|---|---|---|---|---|
+| D1 compile/type signal | high | very high | mid-high (tsc, but `any`/config-dependent) | low (opt. hints) | high | low | low-mid |
+| D2 ecosystem stability | high | high-mid | low (npm churn) | mid | high | mid | mid |
+| D3 stdlib coverage | high | mid (no HTTP server abstraction) | low (Node stdlib thin) | high | high | mid | mid-high |
+| D4 verbosity/redundancy | high | high | mid | low | high | low | mid |
+| D5 explicitness | high | very high | mid | low (metaclasses etc.) | mid-high | low (monkey-patching/Rails conventions) | mid |
+| D6 idiom uniformity | high (gofmt) | mid-high (rustfmt, but many architectural idioms) | low | mid (PEP8, but many frameworks) | mid | mid | low |
+| C1 corpus prevalence | mid | mid | high | high | high | mid | mid-high |
 
 Each cell needs either a citation or a measurement before the paper.
 
@@ -161,10 +163,13 @@ API, concurrency (rate limiter, worker pool), third-party-dependency-required
 task (deliberately probes D2), refactor/extend-existing-code task (probes D5 —
 requires seeding per-language starter repos, held structurally parallel).
 
-REST/API tasks should be a primary stressor for the Go vs TypeScript contrast:
-Go's standard library includes production-usable HTTP server and JSON support,
-while TypeScript without npm packages must use lower-level Node HTTP APIs,
-manual routing/body parsing, and a separate compile/runtime path. To keep this
+REST/API tasks began as a stressor for the Go vs TypeScript contrast: Go's
+standard library includes production-usable HTTP server and JSON support, while
+TypeScript without npm packages must use lower-level Node HTTP APIs, manual
+routing/body parsing, and a separate compile/runtime path. The first lifecycle
+matrix showed Ruby/Rails is the stronger empirical foil for implicitness and
+framework-mediated semantics. Rust adds a compiled/strict comparison point with
+strong compiler feedback but weaker stdlib HTTP coverage. To keep all of this
 like-for-like, evaluate REST tasks only through a central black-box HTTP
 evaluator.
 

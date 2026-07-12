@@ -59,6 +59,7 @@ LATEST = {
     "symfony-http-foundation": "8.1.1",
     "symfony-routing": "8.1.0",
     "openjdk": "26.0.1",
+    "rust": "1.97.0",
 }
 
 PI_MODEL_ALIASES = {
@@ -353,6 +354,75 @@ def targets() -> dict[str, Target]:
             setup=[],
             markers=["Main.java"],
         ),
+        "rust-stdlib": Target(
+            id="rust-stdlib",
+            language="rust",
+            framework="stdlib",
+            guidance=(
+                "Use Rust 1.97.0 and the standard library only. Do not add Cargo "
+                "dependencies or HTTP crates. Implement HTTP handling with "
+                "std::net::TcpListener/TcpStream and serde-free JSON string handling."
+            ),
+            starter_files={
+                "Cargo.toml": textwrap.dedent(
+                    """
+                    [package]
+                    name = "dndrest"
+                    version = "0.1.0"
+                    edition = "2024"
+
+                    [dependencies]
+                    """
+                ).lstrip(),
+                "src/main.rs": textwrap.dedent(
+                    """
+                    use std::env;
+                    use std::io::{Read, Write};
+                    use std::net::{TcpListener, TcpStream};
+
+                    fn main() -> std::io::Result<()> {
+                        let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+                        let listener = TcpListener::bind(format!("127.0.0.1:{port}"))?;
+                        for stream in listener.incoming() {
+                            if let Ok(mut stream) = stream {
+                                let _ = handle(&mut stream);
+                            }
+                        }
+                        Ok(())
+                    }
+
+                    fn handle(stream: &mut TcpStream) -> std::io::Result<()> {
+                        let mut buf = [0_u8; 4096];
+                        let n = stream.read(&mut buf)?;
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        let first = req.lines().next().unwrap_or("");
+                        if first == "GET /health HTTP/1.1" {
+                            respond(stream, 200, r#"{"ok":true}"#)
+                        } else {
+                            respond(stream, 404, r#"{"error":"not found"}"#)
+                        }
+                    }
+
+                    fn respond(stream: &mut TcpStream, status: u16, body: &str) -> std::io::Result<()> {
+                        let label = match status {
+                            200 => "OK",
+                            404 => "Not Found",
+                            _ => "Error",
+                        };
+                        write!(
+                            stream,
+                            "HTTP/1.1 {status} {label}\\r\\nContent-Type: application/json\\r\\nContent-Length: {}\\r\\nConnection: close\\r\\n\\r\\n{}",
+                            body.len(),
+                            body
+                        )
+                    }
+                    """
+                ).lstrip(),
+                "run.sh": "#!/usr/bin/env bash\nset -euo pipefail\nrustc --edition=2024 src/main.rs -o dndrest\n./dndrest\n",
+            },
+            setup=[],
+            markers=["src/main.rs", "Cargo.toml"],
+        ),
         "ruby-stdlib": Target(
             id="ruby-stdlib",
             language="ruby",
@@ -562,7 +632,9 @@ def composer_package(packages: dict[str, str], start_command: str) -> dict[str, 
 
 def benchmark_env() -> dict[str, str]:
     env = os.environ.copy()
+    rustup_toolchain_bin = Path.home() / ".rustup" / "toolchains" / "1.97.0-aarch64-apple-darwin" / "bin"
     prefixes = [
+        str(rustup_toolchain_bin),
         "/opt/homebrew/bin",
         "/opt/homebrew/opt/ruby/bin",
         "/opt/homebrew/lib/ruby/gems/4.0.0/bin",

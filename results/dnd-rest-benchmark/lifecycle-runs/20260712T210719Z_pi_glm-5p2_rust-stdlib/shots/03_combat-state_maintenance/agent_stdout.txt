@@ -1,0 +1,20 @@
+All endpoints pass — both the cumulative prior-stage suites (core + characters) and the new combat-state stage. 🎲⚔️
+
+## Summary
+
+Chef, the maintenance stage is wired up. Here's what I added to `src/main.rs` while preserving every existing endpoint:
+
+**Shared in-memory state** — `Arc<Mutex<HashMap<String, CombatSession>>>` cloned into each connection thread. A `CombatSession` holds `id`, `round`, `turn_index`, the sorted `order: Vec<Combatant>`, and a `conditions: HashMap<String, Vec<Condition>>`.
+
+**Three new routes** (path-parameter matching added to `route`):
+- `POST /v1/combat/sessions` — computes `score = roll + dex`, sorts by score desc → dex desc → name asc, starts `round=1, turn_index=0`, returns `active` + `order`.
+- `POST /v1/combat/sessions/{id}/conditions` — validates target is a real combatant and `duration_rounds` is a positive int; appends the condition and returns the target's full condition list. Unknown session → 404 (checked first), bad target/duration → 400.
+- `POST /v1/combat/sessions/{id}/advance` — bumps `turn_index` (wrapping → `round++`), then decrements only the *newly active* combatant's conditions, removing any that hit 0. Inactive combatants are untouched.
+
+**Key correctness checks verified:**
+- Spec example responses reproduced byte-for-byte.
+- Condition decrement only fires on the active combatant's turn; round-wrap increments `round`; conditions expire at `remaining_rounds == 0` and drop out of the `conditions` map.
+- `404` for unknown session IDs, `400` for malformed input (bad target, non-positive duration, missing fields, invalid JSON).
+- All 8 core + 13 character endpoints still return their expected status codes.
+
+No Cargo dependencies added — pure `std::net` + the existing hand-rolled JSON parser/serializer. `run.sh` is unchanged and ready (`rustc --edition=2024` → `./dndrest` in the foreground on `127.0.0.1:$PORT`). 🚀

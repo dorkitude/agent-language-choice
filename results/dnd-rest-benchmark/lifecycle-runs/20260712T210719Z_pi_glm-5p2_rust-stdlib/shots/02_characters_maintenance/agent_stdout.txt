@@ -1,0 +1,25 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I inherited the existing D&D REST API (Rust stdlib + `TcpListener`, no Cargo deps) and added the three **characters** stage endpoints while preserving all 8 core endpoints.
+
+### What I added (`src/main.rs`)
+
+**Helpers:**
+- `floor_div(a, b)` — proper floor division so negative halves floor correctly (Rust's `/` truncates toward zero, which would give `9 → 0`; this gives `9 → -1` ✅)
+- `ability_modifier_of(score)` = `floor_div(score - 10, 2)`
+- `proficiency_bonus_of(level)` = `2 + (level - 1) / 4` (cleanly maps all five tiers 1-4→2, 5-8→3, 9-12→4, 13-16→5, 17-20→6)
+- `as_bool()` helper on the JSON enum
+
+**Routes:**
+- `POST /v1/characters/ability-modifier` — validates score ∈ [1,30], returns `{score, modifier}`
+- `POST /v1/characters/proficiency` — validates level ∈ [1,20], returns `{level, proficiency_bonus}`
+- `POST /v1/characters/derived-stats` — validates level, all 6 abilities (∈[1,30]), and armor fields; computes modifiers, `hp_max = level * (6 + con_mod)`, `armor_class = base + min(dex_mod, dex_cap) + shield_bonus`
+
+### Verification
+- Spec example reproduces **exactly**: `{"level":5,"proficiency_bonus":3,"hp_max":35,"armor_class":16,"modifiers":{"str":3,"dex":2,"con":1,"int":-1,"wis":1,"cha":0}}`
+- Boundary cases (score 7→-2, level 0/21→400, missing fields→400) all correct
+- All 8 prior core endpoints still return 200 with identical bodies
+
+`run.sh` is unchanged and executable — it rebuilds with `rustc 1.97.0 --edition=2024` and runs the server in the foreground on `127.0.0.1:$PORT`. 🦀

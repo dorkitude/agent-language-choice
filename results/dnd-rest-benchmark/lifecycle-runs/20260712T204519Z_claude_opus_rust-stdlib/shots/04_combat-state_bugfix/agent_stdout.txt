@@ -1,0 +1,27 @@
+All three cumulative suites pass, including the previously failing `combat-advance-expired-removed`. 🎉
+
+## What was wrong 🐛
+
+In `advance_turn`, the conditions map was built by skipping any combatant whose condition list was empty:
+
+```rust
+if c.conditions.is_empty() { continue; }
+```
+
+When the active combatant's last condition decremented to `0` and got removed *that same turn*, the fighter dropped out of the map entirely (`"conditions":{}`), but the evaluator expects the just-acted combatant to still appear with an empty array (`"fighter":[]`) so the expiry is observable.
+
+## The fix 🔧
+
+I now keep a combatant in the response map if it still has conditions **or** it's the currently active combatant:
+
+```rust
+let active_name = active.name.clone();
+...
+if c.conditions.is_empty() && c.name != active_name {
+    continue;
+}
+```
+
+This preserves every prior-stage behavior (core 8/8, characters 13/13) and matches the subset-based JSON comparison the evaluator uses. `./run.sh` compiles and launches `dndrest` unchanged, listening on `127.0.0.1:$PORT` in the foreground.
+
+Ready to go, Chef! ✨

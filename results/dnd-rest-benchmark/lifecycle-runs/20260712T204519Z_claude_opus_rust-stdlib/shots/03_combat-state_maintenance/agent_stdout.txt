@@ -1,0 +1,20 @@
+Done, Chef! ✨
+
+## Summary
+
+Added **Maintenance Stage 2: Stateful Combat** to the Rust stdlib D&D API while preserving all prior-stage endpoints. 🎲
+
+**What I added** (all in `src/main.rs`, no new deps):
+- 🗃️ An in-memory `CombatStore` (a `HashMap`) threaded through the single-threaded request loop — no locking needed since requests are handled serially.
+- `POST /v1/combat/sessions` — creates a session, computes `score = roll + dex`, sorts by score↓, dex↓, name↑, starts at `round=1`, `turn_index=0`.
+- `POST /v1/combat/sessions/{id}/conditions` — attaches a condition to a named combatant (validates positive `duration_rounds` and that the target exists).
+- `POST /v1/combat/sessions/{id}/advance` — advances the turn, wraps to `round+1`, and decrements/expires conditions **only** on the newly-active combatant.
+- 🚦 A `route_status` helper so combat handlers can return `400` (malformed) vs `404` (unknown session).
+
+**Verified** ✅
+- Compiles cleanly with `rustc --edition=2024` (no warnings).
+- Create/add-condition/advance all match the spec's exact response shapes, including the `blessed`-decrements-then-removed lifecycle.
+- Duplicate id → `400`, bad target → `400`, unknown session → `404`.
+- Prior-stage endpoint (`/v1/initiative/order`) still works.
+
+`run.sh` was already correct (compiles `src/main.rs`, runs `./dndrest` in the foreground on `127.0.0.1:$PORT`) — left untouched. The server was **not** started; it's ready to launch. 🚀
