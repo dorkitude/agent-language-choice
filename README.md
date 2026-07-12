@@ -1,7 +1,16 @@
 # Agent Language Choice
 
 Independent research project investigating the effect of language & framework choice on
-agentic code generation.
+agentic code generation.  Specificlaly, studying the effect of these design dimensions:
+
+- compilation/verification signal
+- ecosystem churn
+- stdlib coverage
+- verbosity
+- explicitness
+- idiom uniformity
+
+
 
 ## Overview
 
