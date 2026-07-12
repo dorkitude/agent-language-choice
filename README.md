@@ -1,6 +1,7 @@
 # Agent Language Choice
 
-Research project started 2026-07-08.
+Independent research project investigating the effect of language & framework choice on
+agentic code generation.
 
 ## Overview
 
