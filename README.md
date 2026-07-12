@@ -62,11 +62,24 @@ The generated files are
 and
 [`results/dnd-rest-benchmark/dnd-rest-findings.html`](results/dnd-rest-benchmark/dnd-rest-findings.html).
 
+The queryable experiment-state database is
+[`results/dnd-rest-benchmark/experiment-state.sqlite3`](results/dnd-rest-benchmark/experiment-state.sqlite3).
+Rebuild it from JSON artifacts and list infrastructure-blocked shots with:
+
+```sh
+python3 experiments/dnd-rest-benchmark/rest_harness.py sync-state-db
+python3 experiments/dnd-rest-benchmark/rest_harness.py list-infra-blocks
+```
+
 Published preview:
-<https://htmlpreview.github.io/?https://gist.githubusercontent.com/dorkitude/a842e88a90e822e4ca0f8f98da7d04e1/raw/4359c1e76eb8fa05b60e8ba39069cb304ed569fb/dnd-rest-findings.html>
+<https://htmlpreview.github.io/?https://gist.githubusercontent.com/dorkitude/a842e88a90e822e4ca0f8f98da7d04e1/raw/c083ee9fa0ad55fe3dc9a54746695a63f046eaac/dnd-rest-findings.html>
 
 ## Research Log
 
+- 2026-07-12: Added infrastructure-block classification for agent exits caused
+  by CLI quota/session/auth/rate-limit conditions. Rebuilt the D&D REST
+  dashboard and SQLite experiment-state DB; 27 stored runs are now marked
+  `blocked` instead of ordinary failures.
 - 2026-07-12: Added `rust-stdlib` as an append-only target with Rust
   1.97.0 and stdlib-only HTTP/JSON constraints.
 - 2026-07-12: Ran `rust-stdlib` across `opus`, `sonnet`, `gpt-5.5`,

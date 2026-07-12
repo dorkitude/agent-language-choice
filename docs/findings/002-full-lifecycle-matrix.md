@@ -5,6 +5,14 @@ Data source:
 
 Run set: 2026-07-10 through 2026-07-12 D&D REST lifecycle benchmark.
 
+Correction, 2026-07-12: after inspecting the raw Claude CLI artifacts, many
+Claude cells previously counted as failures are now classified as `blocked`
+infrastructure events because their terminal shots hit Claude session/quota
+limits. See
+[`003-infra-block-classification.md`](003-infra-block-classification.md). The
+75-cell set still contains 41 passes, but the remaining cells split into 13
+confirmed failures and 21 blocked infrastructure cells.
+
 The completed matrix contains 75 cells: 5 models by 15 language/framework targets. Each cell attempted the nine cumulative lifecycle stages:
 
 1. `core`
@@ -25,7 +33,8 @@ Every creative, maintenance, or bug-fix invocation counts as one shot. A clean f
 | --- | ---: |
 | Matrix cells | 75 |
 | Full lifecycle passes | 41 |
-| Failed lifecycle cells | 34 |
+| Confirmed failed lifecycle cells | 13 |
+| Infrastructure-blocked lifecycle cells | 21 |
 | Overall pass rate | 54.7% |
 | Total shots | 635 |
 

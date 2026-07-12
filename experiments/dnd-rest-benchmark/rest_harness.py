@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import signal
 import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import textwrap
@@ -30,6 +32,8 @@ RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "runs"
 LIFECYCLE_RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "lifecycle-runs"
 CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
+EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
+INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit"}
 
 LATEST = {
     "go": "1.26.5",
@@ -847,6 +851,8 @@ def failure_summary(failure: dict[str, Any]) -> str:
     agent = failure.get("agent") or {}
     if agent.get("timed_out"):
         parts.append("agent timed out")
+    elif agent.get("exit_class") in INFRA_EXIT_CLASSES:
+        parts.append(f"agent infrastructure block: {agent.get('exit_class')}")
     elif agent.get("returncode") not in (0, None):
         parts.append(f"agent exited with code {agent.get('returncode')}")
     evaluation = failure.get("evaluation") or {}
@@ -861,6 +867,82 @@ def failure_summary(failure: dict[str, Any]) -> str:
     if failed:
         parts.append("failed test IDs: " + ", ".join(item.get("id", "") for item in failed))
     return "\n\n".join(part for part in parts if part).strip() or "unknown failure"
+
+
+def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: int | None) -> str:
+    if timed_out:
+        return "timeout"
+    text = f"{stdout}\n{stderr}".lower()
+    if (
+        "session limit" in text
+        or "usage limit" in text
+        or "usage credits" in text
+        or "credit balance" in text
+    ):
+        return "quota_limit"
+    if (
+        "please run /login" in text
+        or "invalid authentication credentials" in text
+        or "needs authentication" in text
+    ):
+        return "auth_error"
+    if "rate limit" in text or "too many requests" in text:
+        return "rate_limit"
+    if returncode == 0:
+        return "ok"
+    return "agent_error"
+
+
+def agent_ok(agent: dict[str, Any]) -> bool:
+    return agent.get("exit_class") == "ok" or (
+        "exit_class" not in agent
+        and agent.get("returncode") == 0
+        and not agent.get("timed_out")
+    )
+
+
+def infer_agent_exit_class(agent: dict[str, Any], artifact_dir: Path | None = None) -> str:
+    if agent.get("exit_class"):
+        return str(agent["exit_class"])
+    stdout = ""
+    stderr = ""
+    if artifact_dir:
+        stdout_path = artifact_dir / "agent_stdout.txt"
+        stderr_path = artifact_dir / "agent_stderr.txt"
+        if stdout_path.exists():
+            stdout = stdout_path.read_text(errors="replace")
+        if stderr_path.exists():
+            stderr = stderr_path.read_text(errors="replace")
+    return classify_agent_exit(stdout, stderr, bool(agent.get("timed_out")), agent.get("returncode"))
+
+
+def shot_exit_class(shot: dict[str, Any], run_dir: Path | None = None) -> str:
+    artifact_dir = None
+    if run_dir and shot.get("shot") and shot.get("stage") and shot.get("kind"):
+        artifact_dir = run_dir / "shots" / f"{shot['shot']:02d}_{shot['stage']}_{shot['kind']}"
+    return infer_agent_exit_class(shot.get("agent") or {}, artifact_dir)
+
+
+def run_status(data: dict[str, Any], run_dir: Path | None = None) -> str:
+    if data.get("passed"):
+        return "pass"
+    shots = data.get("shots") or []
+    if shots:
+        terminal = shots[-1]
+        if shot_exit_class(terminal, run_dir) in INFRA_EXIT_CLASSES:
+            return "blocked"
+    agent = data.get("agent") or {}
+    if infer_agent_exit_class(agent, run_dir) in INFRA_EXIT_CLASSES:
+        return "blocked"
+    stage_count = len((data.get("metadata") or {}).get("stages", []))
+    terminal = bool(data.get("failed_stage")) or data.get("completed_stages", 0) == stage_count
+    if not terminal and stage_count:
+        return "partial"
+    return "fail"
+
+
+def infra_blocked_shots(data: dict[str, Any], run_dir: Path | None = None) -> int:
+    return sum(1 for shot in data.get("shots", []) if shot_exit_class(shot, run_dir) in INFRA_EXIT_CLASSES)
 
 
 def materialize(run_dir: Path, target: Target) -> None:
@@ -977,9 +1059,11 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str) -> dict[str,
 
     (run_dir / "agent_stdout.txt").write_text(stdout)
     (run_dir / "agent_stderr.txt").write_text(stderr)
+    exit_class = classify_agent_exit(stdout, stderr, timed_out, returncode)
     return {
         "timed_out": timed_out,
         "returncode": returncode,
+        "exit_class": exit_class,
         "elapsed_seconds": round(time.time() - started, 3),
         "command": command[:8] + ["..."],
     }
@@ -1113,7 +1197,7 @@ def run_one(args: argparse.Namespace) -> int:
     setup_ok = all(item["returncode"] == 0 for item in setup)
     agent = run_agent(args, run_dir, prompt) if setup_ok else {"skipped": True}
     evaluator = build_evaluator()
-    result = evaluate(run_dir, evaluator, free_port(), args.server_timeout) if setup_ok and agent.get("returncode") == 0 and not agent.get("timed_out") else {"passed": False, "error": "setup or agent failed"}
+    result = evaluate(run_dir, evaluator, free_port(), args.server_timeout) if setup_ok and agent_ok(agent) else {"passed": False, "error": "setup or agent failed"}
 
     metadata = {
         "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -1126,6 +1210,7 @@ def run_one(args: argparse.Namespace) -> int:
     }
     final = {"metadata": metadata, "setup_ok": setup_ok, "setup": setup, "agent": agent, "evaluation": result, "passed": bool(result.get("passed"))}
     (run_dir / "result.json").write_text(json.dumps(final, indent=2) + "\n")
+    sync_state_db(argparse.Namespace(db=None, quiet=True))
     print(json.dumps({"run_dir": str(run_dir), "passed": final["passed"]}, indent=2), flush=True)
     return 0 if final["passed"] else 1
 
@@ -1228,8 +1313,7 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             setup = run_setup(run_dir, target, args.setup_timeout)
             copy_if_exists(run_dir / "setup.json", shot_dir / "setup.json")
             setup_ok = all(item["returncode"] == 0 for item in setup)
-            agent_ok = agent.get("returncode") == 0 and not agent.get("timed_out")
-            if setup_ok and agent_ok:
+            if setup_ok and agent_ok(agent):
                 evaluation = evaluate(run_dir, evaluator, free_port(), args.server_timeout, stage.suite)
             else:
                 evaluation = {"passed": False, "error": "setup or agent failed"}
@@ -1276,7 +1360,9 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
 
     final["passed"] = final["completed_stages"] == len(stages) and all(item["passed"] for item in final["stage_results"])
     final["completed_at_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    final["status"] = run_status(final, run_dir)
     (run_dir / "lifecycle-result.json").write_text(json.dumps(final, indent=2) + "\n")
+    sync_state_db(argparse.Namespace(db=None, quiet=True))
     print(json.dumps({"run_dir": str(run_dir), "passed": final["passed"], "completed_stages": final["completed_stages"], "total_shots": final["total_shots"]}, indent=2), flush=True)
     return 0 if final["passed"] else 1
 
@@ -1403,21 +1489,47 @@ def list_results(_: argparse.Namespace) -> int:
         meta = data["metadata"]
         report = data.get("evaluation", {}).get("report") or {}
         passed_tests = f"{report.get('passed_count', 0)}/{report.get('total_count', 0)}"
-        status = "PASS" if data.get("passed") else "FAIL"
+        status = run_status(data, path.parent).upper()
         print(f"{status}\t{meta['provider']}\t{meta['model']}\t{meta['target']}\t{meta['language']}\t{meta['framework']}\t{passed_tests}\t{path.parent}")
     return 0
 
 
 def list_lifecycle_results(_: argparse.Namespace) -> int:
-    print("status\tprovider\tmodel\ttarget\tlanguage\tframework\tcompleted_stages\ttotal_shots\tfailed_stage\trun_dir")
+    print("status\tprovider\tmodel\ttarget\tlanguage\tframework\tcompleted_stages\ttotal_shots\tinfra_blocked_shots\tfailed_stage\trun_dir")
     for path in sorted(LIFECYCLE_RUNS_DIR.glob("*/lifecycle-result.json")):
         data = json.loads(path.read_text())
         meta = data["metadata"]
-        status = "PASS" if data.get("passed") else "FAIL"
+        status = run_status(data, path.parent).upper()
         print(
             f"{status}\t{meta['provider']}\t{meta['model']}\t{meta['target']}\t"
             f"{meta['language']}\t{meta['framework']}\t{data.get('completed_stages', 0)}/{len(meta.get('stages', []))}\t"
-            f"{data.get('total_shots', 0)}\t{data.get('failed_stage', '')}\t{path.parent}"
+            f"{data.get('total_shots', 0)}\t{infra_blocked_shots(data, path.parent)}\t{data.get('failed_stage', '')}\t{path.parent}"
+        )
+    return 0
+
+
+def list_infra_blocks(args: argparse.Namespace) -> int:
+    db = Path(args.db) if args.db else EXPERIMENT_DB
+    if not db.exists():
+        sync_state_db(argparse.Namespace(db=str(db)))
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT runs.run_id, runs.provider, runs.model, runs.target, runs.status,
+                   shots.shot, shots.stage, shots.kind, shots.agent_exit_class,
+                   runs.run_dir
+            FROM shots
+            JOIN runs USING (run_id)
+            WHERE shots.agent_exit_class IN ('quota_limit', 'auth_error', 'rate_limit')
+            ORDER BY runs.created_at_utc, shots.shot
+            """
+        ).fetchall()
+    print("run_id\tprovider\tmodel\ttarget\tstatus\tshot\tstage\tkind\texit_class\trun_dir")
+    for row in rows:
+        print(
+            f"{row['run_id']}\t{row['provider']}\t{row['model']}\t{row['target']}\t{row['status']}\t"
+            f"{row['shot']}\t{row['stage']}\t{row['kind']}\t{row['agent_exit_class']}\t{row['run_dir']}"
         )
     return 0
 
@@ -1427,6 +1539,7 @@ def export_dashboard(args: argparse.Namespace) -> int:
     out = Path(args.out) if args.out else DASHBOARD_DATA
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, indent=2) + "\n")
+    sync_state_db(argparse.Namespace(db=None, quiet=True))
     print(json.dumps({"out": str(out), "flat_runs": len(data["flat_runs"]), "lifecycle_runs": len(data["lifecycle_runs"])}, indent=2))
     return 0
 
@@ -1465,6 +1578,7 @@ def summarize_flat_run(path: Path, max_artifact_chars: int) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "metadata": meta,
         "passed": bool(data.get("passed")),
+        "status": run_status(data, run_dir),
         "setup_ok": bool(data.get("setup_ok")),
         "agent": data.get("agent", {}),
         "test_summary": test_summary(report),
@@ -1486,6 +1600,7 @@ def summarize_lifecycle_run(path: Path, max_artifact_chars: int) -> dict[str, An
     for shot in data.get("shots", []):
         shot_dir = run_dir / "shots" / f"{shot['shot']:02d}_{shot['stage']}_{shot['kind']}"
         report = shot.get("evaluation", {}).get("report") or {}
+        exit_class = shot_exit_class(shot, run_dir)
         shots.append(
             {
                 "shot": shot["shot"],
@@ -1495,7 +1610,8 @@ def summarize_lifecycle_run(path: Path, max_artifact_chars: int) -> dict[str, An
                 "attempt": shot["attempt"],
                 "passed": bool(shot.get("passed")),
                 "setup_ok": bool(shot.get("setup_ok")),
-                "agent": shot.get("agent", {}),
+                "agent_exit_class": exit_class,
+                "agent": {**(shot.get("agent") or {}), "exit_class": exit_class},
                 "test_summary": test_summary(report),
                 "evaluation": compact_evaluation(shot.get("evaluation", {})),
                 "artifacts_dir": str(shot_dir),
@@ -1515,18 +1631,19 @@ def summarize_lifecycle_run(path: Path, max_artifact_chars: int) -> dict[str, An
                 ),
             }
         )
-    terminal = bool(data.get("passed")) or bool(data.get("failed_stage")) or data.get("completed_stages", 0) == stage_count
+    status = data.get("status") or run_status(data, run_dir)
     return {
         "id": run_dir.name,
         "kind": "lifecycle",
         "run_dir": str(run_dir),
         "metadata": meta,
         "passed": bool(data.get("passed")),
-        "status": "pass" if data.get("passed") else ("fail" if data.get("failed_stage") else ("partial" if not terminal else "fail")),
+        "status": status,
         "completed_stages": data.get("completed_stages", 0),
         "stage_count": stage_count,
         "failed_stage": data.get("failed_stage"),
         "total_shots": data.get("total_shots", 0),
+        "infra_blocked_shots": infra_blocked_shots(data, run_dir),
         "stage_results": data.get("stage_results", []),
         "shots": shots,
         "created_at_utc": meta.get("created_at_utc"),
@@ -1575,6 +1692,304 @@ def read_artifacts(run_dir: Path, names: list[str], max_chars: int) -> dict[str,
             "text": text[:max_chars],
         }
     return artifacts
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def artifact_metadata(run_dir: Path, names: list[str]) -> list[dict[str, Any]]:
+    artifacts = []
+    for name in names:
+        path = run_dir / name
+        if not path.exists():
+            continue
+        stat = path.stat()
+        artifacts.append(
+            {
+                "name": name,
+                "path": str(path),
+                "size_bytes": stat.st_size,
+                "sha256": file_sha256(path),
+            }
+        )
+    return artifacts
+
+
+def init_state_db(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        PRAGMA journal_mode = WAL;
+        PRAGMA foreign_keys = ON;
+
+        CREATE TABLE IF NOT EXISTS runs (
+            run_id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL,
+            passed INTEGER NOT NULL,
+            provider TEXT,
+            model TEXT,
+            target TEXT,
+            language TEXT,
+            framework TEXT,
+            stage_count INTEGER,
+            completed_stages INTEGER,
+            total_shots INTEGER,
+            infra_blocked_shots INTEGER DEFAULT 0,
+            failed_stage TEXT,
+            run_dir TEXT NOT NULL,
+            result_path TEXT NOT NULL,
+            json_sha256 TEXT NOT NULL,
+            created_at_utc TEXT,
+            completed_at_utc TEXT,
+            updated_at_utc TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS shots (
+            run_id TEXT NOT NULL,
+            shot INTEGER NOT NULL,
+            stage TEXT,
+            suite TEXT,
+            kind TEXT,
+            attempt INTEGER,
+            status TEXT NOT NULL,
+            passed INTEGER NOT NULL,
+            setup_ok INTEGER NOT NULL,
+            agent_exit_class TEXT NOT NULL,
+            agent_returncode INTEGER,
+            agent_timed_out INTEGER NOT NULL,
+            eval_passed INTEGER NOT NULL,
+            eval_returncode INTEGER,
+            passed_count INTEGER,
+            total_count INTEGER,
+            artifacts_dir TEXT,
+            PRIMARY KEY (run_id, shot),
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS artifacts (
+            run_id TEXT NOT NULL,
+            shot INTEGER NOT NULL DEFAULT 0,
+            name TEXT NOT NULL,
+            path TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            PRIMARY KEY (run_id, shot, name),
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+        CREATE INDEX IF NOT EXISTS idx_runs_model_target ON runs(provider, model, target);
+        CREATE INDEX IF NOT EXISTS idx_shots_exit_class ON shots(agent_exit_class);
+        """
+    )
+
+
+def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
+    data = json.loads(path.read_text())
+    run_dir = path.parent
+    meta = data.get("metadata") or {}
+    status = run_status(data, run_dir)
+    stage_count = len(meta.get("stages", []))
+    completed = int(data.get("completed_stages") or 0)
+    total_shots = int(data.get("total_shots") or (1 if kind == "flat" else 0))
+    infra_count = infra_blocked_shots(data, run_dir)
+    run_id = run_dir.name
+    updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO runs (
+            run_id, kind, status, passed, provider, model, target, language, framework,
+            stage_count, completed_stages, total_shots, infra_blocked_shots,
+            failed_stage, run_dir, result_path, json_sha256, created_at_utc,
+            completed_at_utc, updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(run_id) DO UPDATE SET
+            kind=excluded.kind,
+            status=excluded.status,
+            passed=excluded.passed,
+            provider=excluded.provider,
+            model=excluded.model,
+            target=excluded.target,
+            language=excluded.language,
+            framework=excluded.framework,
+            stage_count=excluded.stage_count,
+            completed_stages=excluded.completed_stages,
+            total_shots=excluded.total_shots,
+            infra_blocked_shots=excluded.infra_blocked_shots,
+            failed_stage=excluded.failed_stage,
+            run_dir=excluded.run_dir,
+            result_path=excluded.result_path,
+            json_sha256=excluded.json_sha256,
+            created_at_utc=excluded.created_at_utc,
+            completed_at_utc=excluded.completed_at_utc,
+            updated_at_utc=excluded.updated_at_utc
+        """,
+        (
+            run_id,
+            kind,
+            status,
+            int(bool(data.get("passed"))),
+            meta.get("provider"),
+            meta.get("model"),
+            meta.get("target"),
+            meta.get("language"),
+            meta.get("framework"),
+            stage_count,
+            completed,
+            total_shots,
+            infra_count,
+            data.get("failed_stage"),
+            str(run_dir),
+            str(path),
+            file_sha256(path),
+            meta.get("created_at_utc"),
+            data.get("completed_at_utc"),
+            updated_at,
+        ),
+    )
+    conn.execute("DELETE FROM shots WHERE run_id = ?", (run_id,))
+    conn.execute("DELETE FROM artifacts WHERE run_id = ?", (run_id,))
+
+    if kind == "flat":
+        agent = data.get("agent") or {}
+        exit_class = infer_agent_exit_class(agent, run_dir)
+        report = data.get("evaluation", {}).get("report") or {}
+        summary = test_summary(report)
+        conn.execute(
+            """
+            INSERT INTO shots (
+                run_id, shot, stage, suite, kind, attempt, status, passed,
+                setup_ok, agent_exit_class, agent_returncode, agent_timed_out,
+                eval_passed, eval_returncode, passed_count, total_count,
+                artifacts_dir
+            )
+            VALUES (?, 0, 'core', 'core', 'flat', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                "pass" if data.get("passed") else ("blocked" if exit_class in INFRA_EXIT_CLASSES else "fail"),
+                int(bool(data.get("passed"))),
+                int(bool(data.get("setup_ok"))),
+                exit_class,
+                agent.get("returncode"),
+                int(bool(agent.get("timed_out"))),
+                int(bool(data.get("evaluation", {}).get("passed"))),
+                data.get("evaluation", {}).get("returncode"),
+                summary["passed_count"],
+                summary["total_count"],
+                str(run_dir),
+            ),
+        )
+        artifact_names = ["PROMPT.md", "agent_stdout.txt", "agent_stderr.txt", "agent_last_message.txt", "server_stdout.txt", "server_stderr.txt", "result.json"]
+        for artifact in artifact_metadata(run_dir, artifact_names):
+            conn.execute(
+                "INSERT INTO artifacts (run_id, shot, name, path, size_bytes, sha256) VALUES (?, 0, ?, ?, ?, ?)",
+                (run_id, artifact["name"], artifact["path"], artifact["size_bytes"], artifact["sha256"]),
+            )
+        return
+
+    for shot in data.get("shots", []):
+        shot_dir = run_dir / "shots" / f"{shot['shot']:02d}_{shot['stage']}_{shot['kind']}"
+        exit_class = shot_exit_class(shot, run_dir)
+        report = shot.get("evaluation", {}).get("report") or {}
+        summary = test_summary(report)
+        shot_status = "pass" if shot.get("passed") else ("blocked" if exit_class in INFRA_EXIT_CLASSES else "fail")
+        agent = shot.get("agent") or {}
+        evaluation = shot.get("evaluation") or {}
+        conn.execute(
+            """
+            INSERT INTO shots (
+                run_id, shot, stage, suite, kind, attempt, status, passed,
+                setup_ok, agent_exit_class, agent_returncode, agent_timed_out,
+                eval_passed, eval_returncode, passed_count, total_count,
+                artifacts_dir
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                int(shot["shot"]),
+                shot.get("stage"),
+                shot.get("suite"),
+                shot.get("kind"),
+                int(shot.get("attempt") or 0),
+                shot_status,
+                int(bool(shot.get("passed"))),
+                int(bool(shot.get("setup_ok"))),
+                exit_class,
+                agent.get("returncode"),
+                int(bool(agent.get("timed_out"))),
+                int(bool(evaluation.get("passed"))),
+                evaluation.get("returncode"),
+                summary["passed_count"],
+                summary["total_count"],
+                str(shot_dir),
+            ),
+        )
+        names = [
+            "PROMPT.md",
+            "agent_stdout.txt",
+            "agent_stderr.txt",
+            "agent_last_message.txt",
+            "server_stdout.txt",
+            "server_stderr.txt",
+            "setup.json",
+            f"dndeval-{shot['suite']}-report.json",
+        ]
+        for artifact in artifact_metadata(shot_dir, names):
+            conn.execute(
+                "INSERT INTO artifacts (run_id, shot, name, path, size_bytes, sha256) VALUES (?, ?, ?, ?, ?, ?)",
+                (run_id, int(shot["shot"]), artifact["name"], artifact["path"], artifact["size_bytes"], artifact["sha256"]),
+            )
+    for artifact in artifact_metadata(run_dir, ["PROMPT.md", "agent_stdout.txt", "agent_stderr.txt", "agent_last_message.txt", "lifecycle-result.json"]):
+        conn.execute(
+            "INSERT INTO artifacts (run_id, shot, name, path, size_bytes, sha256) VALUES (?, 0, ?, ?, ?, ?)",
+            (run_id, artifact["name"], artifact["path"], artifact["size_bytes"], artifact["sha256"]),
+        )
+
+
+def sync_state_db(args: argparse.Namespace) -> int:
+    db = Path(args.db) if getattr(args, "db", None) else EXPERIMENT_DB
+    db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db) as conn:
+        init_state_db(conn)
+        conn.execute("PRAGMA foreign_keys = ON")
+        for path in sorted(RUNS_DIR.glob("*/result.json")):
+            upsert_run(conn, path, "flat")
+        for path in sorted(LIFECYCLE_RUNS_DIR.glob("*/lifecycle-result.json")):
+            upsert_run(conn, path, "lifecycle")
+        conn.commit()
+        counts = conn.execute(
+            """
+            SELECT
+              COUNT(*) AS runs,
+              SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) AS blocked_runs,
+              (SELECT COUNT(*) FROM shots) AS shots,
+              (SELECT COUNT(*) FROM artifacts) AS artifacts
+            FROM runs
+            """
+        ).fetchone()
+    if getattr(args, "quiet", False):
+        return 0
+    print(
+        json.dumps(
+            {
+                "db": str(db),
+                "runs": counts[0] or 0,
+                "blocked_runs": counts[1] or 0,
+                "shots": counts[2] or 0,
+                "artifacts": counts[3] or 0,
+            },
+            indent=2,
+        )
+    )
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -1644,6 +2059,14 @@ def main(argv: list[str]) -> int:
     dashboard.add_argument("--out")
     dashboard.add_argument("--max-artifact-chars", type=int, default=30000)
     dashboard.set_defaults(func=export_dashboard)
+
+    sync_db = sub.add_parser("sync-state-db")
+    sync_db.add_argument("--db")
+    sync_db.set_defaults(func=sync_state_db)
+
+    infra_blocks = sub.add_parser("list-infra-blocks")
+    infra_blocks.add_argument("--db")
+    infra_blocks.set_defaults(func=list_infra_blocks)
 
     args = parser.parse_args(argv)
     return args.func(args)

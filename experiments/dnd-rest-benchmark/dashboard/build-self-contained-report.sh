@@ -51,16 +51,19 @@ def is_full_lifecycle(run):
 
 
 def group_stats(runs, key_fn):
-    groups = collections.defaultdict(lambda: {"total": 0, "pass": 0, "fail": 0, "partial": 0, "shots": 0, "pass_shots": []})
+    groups = collections.defaultdict(lambda: {"total": 0, "pass": 0, "fail": 0, "blocked": 0, "partial": 0, "shots": 0, "infra_blocked_shots": 0, "pass_shots": []})
     for run in runs:
         key = key_fn(run)
         item = groups[key]
         item["total"] += 1
         item["shots"] += int(run.get("total_shots") or 0)
+        item["infra_blocked_shots"] += int(run.get("infra_blocked_shots") or 0)
         st = status(run)
         if st == "pass":
             item["pass"] += 1
             item["pass_shots"].append(int(run.get("total_shots") or 0))
+        elif st == "blocked":
+            item["blocked"] += 1
         elif st == "partial":
             item["partial"] += 1
         else:
@@ -108,8 +111,10 @@ summary = {
         "cells": len(full),
         "passes": len(full_passes),
         "fails": sum(1 for run in full if status(run) == "fail"),
+        "blocked": sum(1 for run in full if status(run) == "blocked"),
         "partials": sum(1 for run in full if status(run) == "partial"),
         "total_shots": sum(int(run.get("total_shots") or 0) for run in full),
+        "infra_blocked_shots": sum(int(run.get("infra_blocked_shots") or 0) for run in full),
         "avg_pass_shots": (
             sum(int(run.get("total_shots") or 0) for run in full_passes) / len(full_passes)
             if full_passes else None
@@ -120,6 +125,7 @@ summary = {
         "cells": len(rust),
         "passes": sum(1 for run in rust if status(run) == "pass"),
         "fails": sum(1 for run in rust if status(run) == "fail"),
+        "blocked": sum(1 for run in rust if status(run) == "blocked"),
         "partials": sum(1 for run in rust if status(run) == "partial"),
         "rows": [
             {
@@ -131,6 +137,7 @@ summary = {
                 "stage_count": run.get("stage_count"),
                 "failed_stage": run.get("failed_stage"),
                 "total_shots": run.get("total_shots") or 0,
+                "infra_blocked_shots": run.get("infra_blocked_shots") or 0,
             }
             for run in sorted(rust, key=model_key)
         ],
@@ -149,6 +156,7 @@ summary = {
         "The lifecycle benchmark is more informative than a first-pass task because shots accumulate as fresh maintenance and bug-fix agents inherit a growing codebase.",
         "The completed result set contains nine-stage cells; the default roadmap now has sixteen stages, which means fifteen fresh maintenance inheritances after the initial build.",
         "Pass rate alone hides important differences. Shot count, failed stage, and bug-fix recovery are first-class measurements in this experiment.",
+        "Claude CLI quota/session/auth/rate-limit exits are classified as blocked infrastructure events, not model failures.",
         "Future matrix runs should use the sixteen-stage default roadmap so the benchmark measures behavior deeper into long-lived codebase maintenance.",
     ],
 }
@@ -301,10 +309,12 @@ html = r'''<!doctype html>
     }
     .cell.pass { border-color: rgba(158, 206, 106, .7); }
     .cell.fail { border-color: rgba(247, 118, 142, .7); }
+    .cell.blocked { border-color: rgba(187, 154, 247, .75); }
     .cell.partial { border-color: rgba(224, 175, 104, .7); }
     .cell.selected { outline: 2px solid var(--blue); }
     .status-pass { color: var(--green); }
     .status-fail { color: var(--red); }
+    .status-blocked { color: var(--purple); }
     .status-partial { color: var(--yellow); }
     .small { color: var(--muted); font-size: 12px; }
     .findings { display: grid; gap: 10px; }
@@ -383,7 +393,7 @@ html = r'''<!doctype html>
         <label><span>Run set</span><select id="runSet"><option value="full">Full lifecycle</option><option value="allLifecycle">All lifecycle</option><option value="flat">Flat first-pass</option></select></label>
         <label><span>Model</span><select id="modelFilter"></select></label>
         <label><span>Target</span><select id="targetFilter"></select></label>
-        <label><span>Status</span><select id="statusFilter"><option value="all">All</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="partial">Partial</option></select></label>
+        <label><span>Status</span><select id="statusFilter"><option value="all">All</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="blocked">Blocked</option><option value="partial">Partial</option></select></label>
         <label><span>Search</span><input id="search" type="search" placeholder="target, model, stage, prompt, response, failure" /></label>
       </div>
     </section>
@@ -472,7 +482,7 @@ html = r'''<!doctype html>
           meta: run.metadata,
           failed_stage: run.failed_stage,
           stage_results: run.stage_results,
-          shots: (run.shots || []).map((shot) => ({stage: shot.stage, kind: shot.kind, artifacts: shot.artifacts, evaluation: shot.evaluation})),
+          shots: (run.shots || []).map((shot) => ({stage: shot.stage, kind: shot.kind, agent_exit_class: shot.agent_exit_class, artifacts: shot.artifacts, evaluation: shot.evaluation})),
         }).toLowerCase().includes(q);
       });
     }
@@ -489,6 +499,8 @@ html = r'''<!doctype html>
         metric("Full cells", s.cells),
         metric("Passes", `${s.passes}/${s.cells}`),
         metric("Fails", s.fails),
+        metric("Blocked", s.blocked || 0),
+        metric("Infra shots", s.infra_blocked_shots || 0),
         metric("Total shots", s.total_shots),
         metric("Default stages", roadmap.stage_count || "n/a"),
         metric("Inheritances", roadmap.maintenance_inheritances || "n/a"),
@@ -523,7 +535,7 @@ html = r'''<!doctype html>
           const selected = state.selected && state.selected.id === run.id ? " selected" : "";
           const passed = run.completed_stages ?? (run.test_summary && run.test_summary.passed_count) ?? 0;
           const total = run.stage_count ?? (run.test_summary && run.test_summary.total_count) ?? "";
-          return `<td><button class="cell ${st}${selected}" data-run="${esc(run.id)}"><strong class="status-${st}">${st.toUpperCase()}</strong><span class="small">${esc(passed)}/${esc(total)} stages, ${esc(run.total_shots || 0)} shots</span></button></td>`;
+          return `<td><button class="cell ${st}${selected}" data-run="${esc(run.id)}"><strong class="status-${st}">${st.toUpperCase()}</strong><span class="small">${esc(passed)}/${esc(total)} stages, ${esc(run.total_shots || 0)} shots, ${esc(run.infra_blocked_shots || 0)} infra</span></button></td>`;
         }).join("");
         return `<tr><td><strong>${esc(target)}</strong></td>${cells}</tr>`;
       }).join("");
@@ -542,9 +554,10 @@ html = r'''<!doctype html>
       const groups = new Map();
       for (const run of runs) {
         const key = keyFn(run);
-        const item = groups.get(key) || { key, total: 0, pass: 0, shots: 0 };
+        const item = groups.get(key) || { key, total: 0, pass: 0, blocked: 0, shots: 0 };
         item.total++;
         if (status(run) === "pass") item.pass++;
+        if (status(run) === "blocked") item.blocked++;
         item.shots += Number(run.total_shots || 0);
         groups.set(key, item);
       }
@@ -557,7 +570,7 @@ html = r'''<!doctype html>
         ["By Target", groupStats(runs, targetKey)],
       ].map(([title, rows]) => `<h3>${esc(title)}</h3>` + rows.map((row) => {
         const pct = row.total ? Math.round((row.pass / row.total) * 100) : 0;
-        return `<div class="barrow"><div class="barlabel"><span>${esc(row.key)}</span><span>${row.pass}/${row.total}, ${row.shots} shots</span></div><div class="bar"><span style="width:${pct}%"></span></div></div>`;
+        return `<div class="barrow"><div class="barlabel"><span>${esc(row.key)}</span><span>${row.pass}/${row.total}, ${row.blocked} blocked, ${row.shots} shots</span></div><div class="bar"><span style="width:${pct}%"></span></div></div>`;
       }).join(""));
       $("analytics").innerHTML = blocks.join("");
     }
@@ -571,9 +584,9 @@ html = r'''<!doctype html>
       }
       $("detail").classList.remove("hidden");
       $("detailTitle").textContent = `${targetKey(run)} | ${modelKey(run)} | ${status(run).toUpperCase()}`;
-      $("detailMeta").textContent = `${run.id} | ${run.completed_stages || 0}/${run.stage_count || 0} stages | ${run.total_shots || 0} shots | failed stage: ${run.failed_stage || "none"}`;
+      $("detailMeta").textContent = `${run.id} | ${run.completed_stages || 0}/${run.stage_count || 0} stages | ${run.total_shots || 0} shots | ${run.infra_blocked_shots || 0} infra-blocked shots | failed stage: ${run.failed_stage || "none"}`;
       const shots = run.shots || [];
-      $("shotList").innerHTML = shots.map((shot, i) => `<button class="shot-btn ${i === state.shot ? "selected" : ""}" data-shot="${i}"><strong>${esc(String(i + 1).padStart(2, "0"))}. ${esc(shot.stage)} ${esc(shot.kind)}</strong><span class="small">${shot.passed ? "pass" : "fail"} | ${esc((shot.test_summary && `${shot.test_summary.passed_count}/${shot.test_summary.total_count}`) || "")}</span></button>`).join("");
+      $("shotList").innerHTML = shots.map((shot, i) => `<button class="shot-btn ${i === state.shot ? "selected" : ""}" data-shot="${i}"><strong>${esc(String(i + 1).padStart(2, "0"))}. ${esc(shot.stage)} ${esc(shot.kind)}</strong><span class="small">${shot.passed ? "pass" : (shot.agent_exit_class || "fail")} | ${esc((shot.test_summary && `${shot.test_summary.passed_count}/${shot.test_summary.total_count}`) || "")}</span></button>`).join("");
       document.querySelectorAll("[data-shot]").forEach((button) => button.addEventListener("click", () => {
         state.shot = Number(button.dataset.shot);
         state.artifact = "";
