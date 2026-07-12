@@ -53,7 +53,7 @@ and
 [`results/dnd-rest-benchmark/dnd-rest-findings.html`](results/dnd-rest-benchmark/dnd-rest-findings.html).
 
 Published preview:
-<https://htmlpreview.github.io/?https://gist.githubusercontent.com/dorkitude/a842e88a90e822e4ca0f8f98da7d04e1/raw/dnd-rest-findings.html>
+<https://htmlpreview.github.io/?https://gist.githubusercontent.com/dorkitude/a842e88a90e822e4ca0f8f98da7d04e1/raw/4359c1e76eb8fa05b60e8ba39069cb304ed569fb/dnd-rest-findings.html>
 
 ## Research Log
 

@@ -163,13 +163,15 @@ out_path.write_text(json.dumps(report, indent=2, sort_keys=True))
 PY
 
 python3 - "$OUT_JSON" "$OUT_HTML" <<'PY'
+import base64
+import gzip
 import json
 import pathlib
 import sys
 
 json_path = pathlib.Path(sys.argv[1])
 html_path = pathlib.Path(sys.argv[2])
-json_text = json_path.read_text().replace("</script>", "<\\/script>")
+json_payload = base64.b64encode(gzip.compress(json_path.read_bytes(), compresslevel=9)).decode("ascii")
 
 html = r'''<!doctype html>
 <html lang="en">
@@ -351,7 +353,7 @@ html = r'''<!doctype html>
   </style>
 </head>
 <body>
-  <script id="report-data" type="application/json">__REPORT_JSON__</script>
+  <script id="report-data-gzip" type="text/plain">__REPORT_JSON_GZIP_BASE64__</script>
   <header>
     <div class="top">
       <div>
@@ -424,11 +426,24 @@ html = r'''<!doctype html>
     </section>
   </main>
   <script>
-    const report = JSON.parse(document.getElementById("report-data").textContent);
-    const dashboard = report.source_dashboard;
+    let report;
+    let dashboard;
     const fullStages = ["core","characters","combat-state","auth-users","sqlite-storage","compendium","campaign-state","phb-rules","dm-tools"];
     const state = { runSet: "full", model: "all", target: "all", status: "all", search: "", selected: null, shot: 0, artifact: "" };
     const $ = (id) => document.getElementById(id);
+
+    async function readEmbeddedReport() {
+      if (!("DecompressionStream" in window)) {
+        throw new Error("This browser does not support DecompressionStream for the embedded gzip report.");
+      }
+      const b64 = document.getElementById("report-data-gzip").textContent.trim();
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+      const text = await new Response(stream).text();
+      return JSON.parse(text);
+    }
 
     function modelKey(run) {
       const m = run.metadata || {};
@@ -597,13 +612,23 @@ html = r'''<!doctype html>
       renderMatrix();
       renderAnalytics();
     });
-    render();
+    async function start() {
+      try {
+        report = await readEmbeddedReport();
+        dashboard = report.source_dashboard;
+        render();
+      } catch (error) {
+        $("subtitle").textContent = `Unable to load embedded report JSON: ${error.message}`;
+        $("findings").innerHTML = `<div class="finding">The report shell loaded, but the embedded compressed JSON could not be decoded in this browser.</div>`;
+      }
+    }
+    start();
   </script>
 </body>
 </html>
 '''
 
-html_path.write_text(html.replace("__REPORT_JSON__", json_text))
+html_path.write_text(html.replace("__REPORT_JSON_GZIP_BASE64__", json_payload))
 PY
 
 printf 'Wrote %s\nWrote %s\n' "$OUT_JSON" "$OUT_HTML"
