@@ -160,6 +160,55 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add DM-facing encounter, loot, and recap helpers over stored campaign data",
     ),
+    LifecycleStage(
+        id="quest-tracker",
+        suite="quest-tracker",
+        spec_path=BENCH_DIR / "challenges" / "quest-tracker.md",
+        kind="maintenance",
+        description="Add campaign quest creation, progress updates, and summaries",
+    ),
+    LifecycleStage(
+        id="npcs-factions",
+        suite="npcs-factions",
+        spec_path=BENCH_DIR / "challenges" / "npcs-factions.md",
+        kind="maintenance",
+        description="Add NPC and faction relationship state APIs",
+    ),
+    LifecycleStage(
+        id="inventory-equipment",
+        suite="inventory-equipment",
+        spec_path=BENCH_DIR / "challenges" / "inventory-equipment.md",
+        kind="maintenance",
+        description="Add party inventory, equipment assignment, and encumbrance summaries",
+    ),
+    LifecycleStage(
+        id="downtime-crafting",
+        suite="downtime-crafting",
+        spec_path=BENCH_DIR / "challenges" / "downtime-crafting.md",
+        kind="maintenance",
+        description="Add downtime crafting projects and deterministic progress accounting",
+    ),
+    LifecycleStage(
+        id="session-scheduling",
+        suite="session-scheduling",
+        spec_path=BENCH_DIR / "challenges" / "session-scheduling.md",
+        kind="maintenance",
+        description="Add campaign session scheduling and attendance APIs",
+    ),
+    LifecycleStage(
+        id="audit-export",
+        suite="audit-export",
+        spec_path=BENCH_DIR / "challenges" / "audit-export.md",
+        kind="maintenance",
+        description="Add deterministic audit log and campaign export APIs",
+    ),
+    LifecycleStage(
+        id="analytics-reporting",
+        suite="analytics-reporting",
+        spec_path=BENCH_DIR / "challenges" / "analytics-reporting.md",
+        kind="maintenance",
+        description="Add campaign analytics and readiness reporting APIs",
+    ),
 ]
 
 

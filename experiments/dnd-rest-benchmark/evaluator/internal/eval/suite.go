@@ -27,6 +27,13 @@ func Suites() []Suite {
 		campaignStateSuite(),
 		phbRulesSuite(),
 		dmToolsSuite(),
+		questTrackerSuite(),
+		npcsFactionsSuite(),
+		inventoryEquipmentSuite(),
+		downtimeCraftingSuite(),
+		sessionSchedulingSuite(),
+		auditExportSuite(),
+		analyticsReportingSuite(),
 	}
 }
 
@@ -262,6 +269,69 @@ func dmToolsSuite() Suite {
 		ID:    "dm-tools",
 		Name:  "D&D REST Engine DM Tools Maintenance",
 		Tests: append(phbRules.Tests, dmToolsTests()...),
+	}
+}
+
+func questTrackerSuite() Suite {
+	dmTools := dmToolsSuite()
+	return Suite{
+		ID:    "quest-tracker",
+		Name:  "D&D REST Engine Quest Tracker Maintenance",
+		Tests: append(dmTools.Tests, questTrackerTests()...),
+	}
+}
+
+func npcsFactionsSuite() Suite {
+	questTracker := questTrackerSuite()
+	return Suite{
+		ID:    "npcs-factions",
+		Name:  "D&D REST Engine NPC/Faction Maintenance",
+		Tests: append(questTracker.Tests, npcsFactionsTests()...),
+	}
+}
+
+func inventoryEquipmentSuite() Suite {
+	npcsFactions := npcsFactionsSuite()
+	return Suite{
+		ID:    "inventory-equipment",
+		Name:  "D&D REST Engine Inventory/Equipment Maintenance",
+		Tests: append(npcsFactions.Tests, inventoryEquipmentTests()...),
+	}
+}
+
+func downtimeCraftingSuite() Suite {
+	inventoryEquipment := inventoryEquipmentSuite()
+	return Suite{
+		ID:    "downtime-crafting",
+		Name:  "D&D REST Engine Downtime/Crafting Maintenance",
+		Tests: append(inventoryEquipment.Tests, downtimeCraftingTests()...),
+	}
+}
+
+func sessionSchedulingSuite() Suite {
+	downtimeCrafting := downtimeCraftingSuite()
+	return Suite{
+		ID:    "session-scheduling",
+		Name:  "D&D REST Engine Session Scheduling Maintenance",
+		Tests: append(downtimeCrafting.Tests, sessionSchedulingTests()...),
+	}
+}
+
+func auditExportSuite() Suite {
+	sessionScheduling := sessionSchedulingSuite()
+	return Suite{
+		ID:    "audit-export",
+		Name:  "D&D REST Engine Audit/Export Maintenance",
+		Tests: append(sessionScheduling.Tests, auditExportTests()...),
+	}
+}
+
+func analyticsReportingSuite() Suite {
+	auditExport := auditExportSuite()
+	return Suite{
+		ID:    "analytics-reporting",
+		Name:  "D&D REST Engine Analytics Reporting Maintenance",
+		Tests: append(auditExport.Tests, analyticsReportingTests()...),
 	}
 }
 
@@ -856,6 +926,342 @@ func dmToolsTests() []Test {
 				"summary":     "Nyx scouts the goblin trail.",
 				"open_threads": []any{
 					"Resolve goblin trail ambush",
+				},
+			},
+		},
+	}
+}
+
+func questTrackerTests() []Test {
+	return []Test{
+		{
+			ID:     "quest-create",
+			Name:   "Create campaign quest",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/quests",
+			Body: map[string]any{
+				"id":     "quest-1",
+				"title":  "Resolve goblin trail ambush",
+				"status": "active",
+				"milestones": []any{
+					"Find the trail",
+					"Confront the ambushers",
+				},
+			},
+			WantStatus: 201,
+			WantJSON: map[string]any{
+				"id":               "quest-1",
+				"title":            "Resolve goblin trail ambush",
+				"status":           "active",
+				"milestones_total": 2,
+				"milestones_done":  0,
+			},
+		},
+		{
+			ID:     "quest-progress",
+			Name:   "Update campaign quest progress",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/quests/quest-1/progress",
+			Body: map[string]any{
+				"completed": []any{"Find the trail"},
+			},
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"id":               "quest-1",
+				"status":           "active",
+				"milestones_total": 2,
+				"milestones_done":  1,
+			},
+		},
+		{
+			ID:         "quest-summary",
+			Name:       "Summarize campaign quests",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/quests/summary",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id": "camp-1",
+				"active":      1,
+				"completed":   0,
+				"blocked":     0,
+			},
+		},
+	}
+}
+
+func npcsFactionsTests() []Test {
+	return []Test{
+		{
+			ID:     "faction-create",
+			Name:   "Create campaign faction",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/factions",
+			Body: map[string]any{
+				"id":     "faction-1",
+				"name":   "Stonehill Inn",
+				"stance": "friendly",
+			},
+			WantStatus: 201,
+			WantJSON: map[string]any{
+				"id":     "faction-1",
+				"name":   "Stonehill Inn",
+				"stance": "friendly",
+			},
+		},
+		{
+			ID:     "npc-create",
+			Name:   "Create campaign NPC",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/npcs",
+			Body: map[string]any{
+				"id":          "npc-1",
+				"name":        "Toblen Stonehill",
+				"faction_id":  "faction-1",
+				"disposition": 2,
+			},
+			WantStatus: 201,
+			WantJSON: map[string]any{
+				"id":          "npc-1",
+				"name":        "Toblen Stonehill",
+				"faction_id":  "faction-1",
+				"disposition": 2,
+			},
+		},
+		{
+			ID:         "relationships-summary",
+			Name:       "Summarize campaign relationships",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/relationships",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id":   "camp-1",
+				"factions":      1,
+				"npcs":          1,
+				"friendly_npcs": 1,
+			},
+		},
+	}
+}
+
+func inventoryEquipmentTests() []Test {
+	return []Test{
+		{
+			ID:     "inventory-add-item",
+			Name:   "Add campaign inventory item",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/inventory",
+			Body: map[string]any{
+				"item_slug": "healing-potion",
+				"quantity":  3,
+				"owner":     "party",
+			},
+			WantStatus: 201,
+			WantJSON: map[string]any{
+				"item_slug": "healing-potion",
+				"quantity":  3,
+				"owner":     "party",
+			},
+		},
+		{
+			ID:     "equipment-assign",
+			Name:   "Assign equipment to campaign character",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/characters/char-1/equipment",
+			Body: map[string]any{
+				"item_slug": "healing-potion",
+				"quantity":  1,
+			},
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"character_id": "char-1",
+				"item_slug":    "healing-potion",
+				"quantity":     1,
+			},
+		},
+		{
+			ID:         "inventory-summary",
+			Name:       "Summarize campaign inventory",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/inventory/summary",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id":               "camp-1",
+				"party_items":               1,
+				"assigned_items":            1,
+				"healing_potions_available": 2,
+			},
+		},
+	}
+}
+
+func downtimeCraftingTests() []Test {
+	return []Test{
+		{
+			ID:     "crafting-create",
+			Name:   "Create downtime crafting project",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/downtime/crafting",
+			Body: map[string]any{
+				"id":            "craft-1",
+				"character_id":  "char-1",
+				"item_slug":     "healing-potion",
+				"days_required": 2,
+				"cost_gp":       25,
+			},
+			WantStatus: 201,
+			WantJSON: map[string]any{
+				"id":             "craft-1",
+				"character_id":   "char-1",
+				"item_slug":      "healing-potion",
+				"days_required":  2,
+				"days_completed": 0,
+				"status":         "active",
+			},
+		},
+		{
+			ID:     "crafting-advance",
+			Name:   "Advance downtime crafting project",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/downtime/crafting/craft-1/advance",
+			Body: map[string]any{
+				"days": 2,
+			},
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"id":             "craft-1",
+				"days_completed": 2,
+				"status":         "complete",
+			},
+		},
+	}
+}
+
+func sessionSchedulingTests() []Test {
+	return []Test{
+		{
+			ID:     "session-schedule",
+			Name:   "Schedule campaign session",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/sessions",
+			Body: map[string]any{
+				"id":               "sess-1",
+				"starts_at":        "2026-07-19T19:00:00Z",
+				"duration_minutes": 180,
+				"agenda": []any{
+					"Goblin trail",
+					"Stonehill Inn fallout",
+				},
+			},
+			WantStatus: 201,
+			WantJSON: map[string]any{
+				"id":               "sess-1",
+				"starts_at":        "2026-07-19T19:00:00Z",
+				"duration_minutes": 180,
+				"agenda_count":     2,
+			},
+		},
+		{
+			ID:     "session-attendance",
+			Name:   "Record campaign session attendance",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/sessions/sess-1/attendance",
+			Body: map[string]any{
+				"present": []any{"char-1"},
+				"absent":  []any{},
+			},
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"session_id":    "sess-1",
+				"present_count": 1,
+				"absent_count":  0,
+			},
+		},
+		{
+			ID:         "session-next",
+			Name:       "Read next campaign session",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/sessions/next",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"id":           "sess-1",
+				"starts_at":    "2026-07-19T19:00:00Z",
+				"agenda_count": 2,
+			},
+		},
+	}
+}
+
+func auditExportTests() []Test {
+	return []Test{
+		{
+			ID:         "campaign-audit",
+			Name:       "Read deterministic campaign audit",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/audit",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id": "camp-1",
+				"events":      1,
+				"quests":      1,
+				"npcs":        1,
+				"sessions":    1,
+			},
+		},
+		{
+			ID:         "campaign-export",
+			Name:       "Export deterministic campaign summary",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/export",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id":     "camp-1",
+				"name":            "Lost Mine",
+				"characters":      1,
+				"quests":          1,
+				"npcs":            1,
+				"inventory_items": 1,
+				"sessions":        1,
+				"schema_version":  1,
+			},
+		},
+	}
+}
+
+func analyticsReportingTests() []Test {
+	return []Test{
+		{
+			ID:         "analytics-summary",
+			Name:       "Read deterministic campaign analytics summary",
+			Method:     "GET",
+			Path:       "/v1/campaigns/camp-1/analytics/summary",
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id":        "camp-1",
+				"readiness_score":    85,
+				"open_quests":        1,
+				"friendly_npcs":      1,
+				"scheduled_sessions": 1,
+				"inventory_items":    1,
+			},
+		},
+		{
+			ID:     "analytics-risk-report",
+			Name:   "Read deterministic maintenance risk report",
+			Method: "POST",
+			Path:   "/v1/campaigns/camp-1/analytics/risk-report",
+			Body: map[string]any{
+				"include_zeroes": true,
+			},
+			WantStatus: 200,
+			WantJSON: map[string]any{
+				"campaign_id": "camp-1",
+				"risk_level":  "low",
+				"missing":     []any{},
+				"signals": map[string]any{
+					"has_dm":           true,
+					"has_characters":   true,
+					"has_next_session": true,
+					"has_active_quest": true,
 				},
 			},
 		},

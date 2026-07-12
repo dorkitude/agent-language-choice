@@ -155,13 +155,25 @@ Result: `rust-stdlib` passed for `opus` and `gpt-5.5`, both in 11 shots. It fail
 
 ## Interpretation
 
-This full lifecycle suite still does not support a broad claim that Go is easier for coding agents than TypeScript. `typescript-vite` remains stronger than `go-stdlib` on pass count, and `gpt-5.5` completed every TypeScript target. The original Go-over-Vite signal remains model-specific: `kimi-k2p7-code` passed Go while failing Vite at `combat-state`.
+The main result is that pass rate alone is incomplete. A perfect nine-stage
+lifecycle would take 9 shots, but many successful cells took 11 to 15 shots.
+The benchmark therefore needs to treat shot burden, failed stage, and
+bug-fix-recovery behavior as first-class outcomes.
 
-The stronger empirical contrast is now Ruby/Rails and Rust/Go as different kinds of explicitness stress tests. Ruby/Rails continues to be a sharp foil for convention-heavy and dynamically resolved semantics: `ruby-rails` passed 2/5 and both passes required 14 shots; `ruby-sinatra` passed 2/5 and failed at three different later stages. Rust adds an explicit compiled target, but stdlib-only HTTP/JSON makes it ergonomically hard: strong proprietary models passed, while Kimi and GLM failed at combat-state.
+The model effect is large. `gpt-5.5` is strongest overall at 13/15 completed
+cells. The other models show different failure distributions by target and
+stage. Those differences should be analyzed as model/target/stage interactions
+rather than collapsed into a single language ranking.
 
-The cost side strongly supports the codebase-growth thesis. A perfect lifecycle would take 9 shots, but many successful cells took 11 to 15 shots. Pass rate alone is therefore incomplete; shot burden and failed stage are first-class results.
+The stage effect is also visible. Early failures often occur at `core`, while
+later failures cluster around stateful or bundled maintenance stages such as
+`combat-state`, `auth-users`, `campaign-state`, `phb-rules`, and `dm-tools`.
+That supports extending the benchmark beyond short greenfield tasks.
 
-The model effect remains large. `gpt-5.5` is strongest overall at 13/15. The open-weight models are competitive but show Rust-specific weakness. The Claude CLI cells are uneven: Opus passed Rust but failed many other targets, and Sonnet failed most cells. That should be investigated as a harness/model-interface confound before drawing language-design conclusions from Claude failures.
+The default roadmap has since been extended from nine stages to sixteen stages:
+one initial creative build plus fifteen fresh maintenance inheritances. Future
+matrix runs should use that longer roadmap to measure how models behave as the
+inherited codebase continues to grow.
 
 ## Follow-Up Questions
 

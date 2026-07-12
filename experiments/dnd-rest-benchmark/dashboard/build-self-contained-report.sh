@@ -99,9 +99,7 @@ flat = data.get("flat_runs") or []
 full = [run for run in lifecycle if is_full_lifecycle(run)]
 full_passes = [run for run in full if status(run) == "pass"]
 rust = [run for run in full if target_key(run) == "rust-stdlib"]
-ruby = [run for run in full if target_key(run).startswith("ruby-")]
-typescript = [run for run in full if target_key(run).startswith("typescript-")]
-go = [run for run in full if target_key(run) == "go-stdlib"]
+default_stages = [stage.get("id") for stage in data.get("stages", []) if stage.get("id")]
 
 summary = {
     "generated_at_utc": dt.datetime.now(dt.UTC).isoformat(),
@@ -117,7 +115,8 @@ summary = {
             if full_passes else None
         ),
     },
-    "append_rust": {
+    "latest_target_append": {
+        "target": "rust-stdlib",
         "cells": len(rust),
         "passes": sum(1 for run in rust if status(run) == "pass"),
         "fails": sum(1 for run in rust if status(run) == "fail"),
@@ -136,20 +135,21 @@ summary = {
             for run in sorted(rust, key=model_key)
         ],
     },
-    "contrast_counts": {
-        "go_stdlib": {"cells": len(go), "passes": sum(1 for run in go if status(run) == "pass")},
-        "rust_stdlib": {"cells": len(rust), "passes": sum(1 for run in rust if status(run) == "pass")},
-        "ruby": {"cells": len(ruby), "passes": sum(1 for run in ruby if status(run) == "pass")},
-        "typescript": {"cells": len(typescript), "passes": sum(1 for run in typescript if status(run) == "pass")},
+    "default_roadmap": {
+        "stages": default_stages,
+        "stage_count": len(default_stages),
+        "maintenance_inheritances": max(len(default_stages) - 1, 0),
+        "max_shots_with_one_fix": len(default_stages) * 2,
+        "final_suite": default_stages[-1] if default_stages else None,
     },
     "by_model": group_stats(full, model_key),
     "by_target": group_stats(full, target_key),
     "failures": failure_summary(full),
     "findings": [
         "The lifecycle benchmark is more informative than a first-pass task because shots accumulate as fresh maintenance and bug-fix agents inherit a growing codebase.",
-        "Ruby/Rails is the sharper contrast case than TypeScript in the current data: TypeScript did not consistently behave as the weak target, while Ruby framework targets concentrated failures and high-shot passes.",
-        "Go remains the clearest explicit compiled baseline. Rust was added append-only as a second compiler-backed, explicit target, but with stdlib-only HTTP and JSON constraints to expose maintenance burden.",
+        "The completed result set contains nine-stage cells; the default roadmap now has sixteen stages, which means fifteen fresh maintenance inheritances after the initial build.",
         "Pass rate alone hides important differences. Shot count, failed stage, and bug-fix recovery are first-class measurements in this experiment.",
+        "Future matrix runs should use the sixteen-stage default roadmap so the benchmark measures behavior deeper into long-lived codebase maintenance.",
     ],
 }
 
@@ -468,14 +468,15 @@ html = r'''<!doctype html>
     function metric(label, value) { return `<div class="metric"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`; }
     function renderMetrics() {
       const s = report.summary.full_lifecycle;
+      const roadmap = report.summary.default_roadmap || {};
       $("subtitle").textContent = `Generated ${new Date(report.summary.generated_at_utc).toLocaleString()} from source JSON ${new Date(report.summary.source_generated_at_utc).toLocaleString()}`;
       $("metrics").innerHTML = [
         metric("Full cells", s.cells),
         metric("Passes", `${s.passes}/${s.cells}`),
         metric("Fails", s.fails),
-        metric("Partials", s.partials),
         metric("Total shots", s.total_shots),
-        metric("Avg pass shots", s.avg_pass_shots == null ? "n/a" : s.avg_pass_shots.toFixed(1)),
+        metric("Default stages", roadmap.stage_count || "n/a"),
+        metric("Inheritances", roadmap.maintenance_inheritances || "n/a"),
       ].join("");
       $("findings").innerHTML = report.summary.findings.map((text) => `<div class="finding">${esc(text)}</div>`).join("");
     }

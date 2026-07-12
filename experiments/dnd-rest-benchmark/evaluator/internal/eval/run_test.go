@@ -321,7 +321,7 @@ func referenceHandler() http.Handler {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		campaigns[req.ID] = &referenceCampaign{ID: req.ID, Name: req.Name, DM: req.DM}
+		campaigns[req.ID] = newReferenceCampaign(req.ID, req.Name, req.DM)
 		writeJSON(w, http.StatusCreated, map[string]any{"id": req.ID, "name": req.Name, "dm": req.DM})
 	})
 	mux.HandleFunc("POST /v1/campaigns/{id}/characters", func(w http.ResponseWriter, r *http.Request) {
@@ -404,6 +404,349 @@ func referenceHandler() http.Handler {
 			},
 		})
 	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			ID         string   `json:"id"`
+			Title      string   `json:"title"`
+			Status     string   `json:"status"`
+			Milestones []string `json:"milestones"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if req.Status == "" {
+			req.Status = "active"
+		}
+		campaign.Quests[req.ID] = &referenceQuest{
+			ID: req.ID, Title: req.Title, Status: req.Status, Milestones: req.Milestones,
+			Completed: map[string]bool{},
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"id": req.ID, "title": req.Title, "status": req.Status,
+			"milestones_total": len(req.Milestones), "milestones_done": 0,
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/quests/{quest_id}/progress", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		quest := campaign.Quests[r.PathValue("quest_id")]
+		if quest == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			Completed []string `json:"completed"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		for _, item := range req.Completed {
+			quest.Completed[item] = true
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id": quest.ID, "status": quest.Status,
+			"milestones_total": len(quest.Milestones), "milestones_done": len(quest.Completed),
+		})
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/quests/summary", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		active, completed, blocked := 0, 0, 0
+		for _, quest := range campaign.Quests {
+			switch quest.Status {
+			case "completed":
+				completed++
+			case "blocked":
+				blocked++
+			default:
+				active++
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID, "active": active, "completed": completed, "blocked": blocked,
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/factions", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["id"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.Factions[req["id"].(string)] = req
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/npcs", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["id"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.NPCs[req["id"].(string)] = req
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/relationships", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		friendly := 0
+		for _, npc := range campaign.NPCs {
+			if disposition, ok := npc["disposition"].(float64); ok && disposition > 0 {
+				friendly++
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID, "factions": len(campaign.Factions), "npcs": len(campaign.NPCs),
+			"friendly_npcs": friendly,
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/inventory", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["item_slug"] == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.Inventory = append(campaign.Inventory, req)
+		if req["item_slug"] == "healing-potion" {
+			if quantity, ok := req["quantity"].(float64); ok {
+				campaign.HealingPotionsAvailable += int(quantity)
+			}
+		}
+		writeJSON(w, http.StatusCreated, req)
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/characters/{character_id}/equipment", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			ItemSlug string `json:"item_slug"`
+			Quantity int    `json:"quantity"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ItemSlug == "" || req.Quantity <= 0 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.AssignedItems++
+		campaign.HealingPotionsAvailable -= req.Quantity
+		writeJSON(w, http.StatusOK, map[string]any{
+			"character_id": r.PathValue("character_id"), "item_slug": req.ItemSlug, "quantity": req.Quantity,
+		})
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/inventory/summary", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID, "party_items": len(campaign.Inventory),
+			"assigned_items": campaign.AssignedItems, "healing_potions_available": campaign.HealingPotionsAvailable,
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/downtime/crafting", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			ID           string `json:"id"`
+			CharacterID  string `json:"character_id"`
+			ItemSlug     string `json:"item_slug"`
+			DaysRequired int    `json:"days_required"`
+			CostGP       int    `json:"cost_gp"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.Crafting[req.ID] = &referenceCraftingProject{
+			ID: req.ID, CharacterID: req.CharacterID, ItemSlug: req.ItemSlug, DaysRequired: req.DaysRequired,
+			Status: "active",
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"id": req.ID, "character_id": req.CharacterID, "item_slug": req.ItemSlug,
+			"days_required": req.DaysRequired, "days_completed": 0, "status": "active",
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/downtime/crafting/{project_id}/advance", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		project := campaign.Crafting[r.PathValue("project_id")]
+		if project == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			Days int `json:"days"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Days <= 0 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		project.DaysCompleted += req.Days
+		if project.DaysCompleted >= project.DaysRequired {
+			project.Status = "complete"
+			campaign.HealingPotionsAvailable++
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id": project.ID, "days_completed": project.DaysCompleted, "status": project.Status,
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/sessions", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			ID              string   `json:"id"`
+			StartsAt        string   `json:"starts_at"`
+			DurationMinutes int      `json:"duration_minutes"`
+			Agenda          []string `json:"agenda"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		campaign.Sessions[req.ID] = &referenceScheduledSession{
+			ID: req.ID, StartsAt: req.StartsAt, DurationMinutes: req.DurationMinutes, AgendaCount: len(req.Agenda),
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"id": req.ID, "starts_at": req.StartsAt,
+			"duration_minutes": req.DurationMinutes, "agenda_count": len(req.Agenda),
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/sessions/{session_id}/attendance", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		session := campaign.Sessions[r.PathValue("session_id")]
+		if session == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var req struct {
+			Present []string `json:"present"`
+			Absent  []string `json:"absent"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		session.PresentCount = len(req.Present)
+		session.AbsentCount = len(req.Absent)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"session_id": session.ID, "present_count": session.PresentCount, "absent_count": session.AbsentCount,
+		})
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/sessions/next", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		session := campaign.Sessions["sess-1"]
+		if session == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id": session.ID, "starts_at": session.StartsAt, "agenda_count": session.AgendaCount,
+		})
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/audit", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID, "events": len(campaign.Events), "quests": len(campaign.Quests),
+			"npcs": len(campaign.NPCs), "sessions": len(campaign.Sessions),
+		})
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/export", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID, "name": campaign.Name, "characters": len(campaign.Characters),
+			"quests": len(campaign.Quests), "npcs": len(campaign.NPCs), "inventory_items": len(campaign.Inventory),
+			"sessions": len(campaign.Sessions), "schema_version": 1,
+		})
+	})
+	mux.HandleFunc("GET /v1/campaigns/{id}/analytics/summary", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id":        campaign.ID,
+			"readiness_score":    85,
+			"open_quests":        activeQuestCount(campaign),
+			"friendly_npcs":      friendlyNPCCount(campaign),
+			"scheduled_sessions": len(campaign.Sessions),
+			"inventory_items":    len(campaign.Inventory),
+		})
+	})
+	mux.HandleFunc("POST /v1/campaigns/{id}/analytics/risk-report", func(w http.ResponseWriter, r *http.Request) {
+		campaign := campaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID,
+			"risk_level":  "low",
+			"missing":     []any{},
+			"signals": map[string]any{
+				"has_dm":           campaign.DM != "",
+				"has_characters":   len(campaign.Characters) > 0,
+				"has_next_session": len(campaign.Sessions) > 0,
+				"has_active_quest": activeQuestCount(campaign) > 0,
+			},
+		})
+	})
 	return mux
 }
 
@@ -414,11 +757,79 @@ type referenceUser struct {
 }
 
 type referenceCampaign struct {
+	ID                      string
+	Name                    string
+	DM                      string
+	Characters              []map[string]any
+	Events                  []map[string]any
+	Quests                  map[string]*referenceQuest
+	Factions                map[string]map[string]any
+	NPCs                    map[string]map[string]any
+	Inventory               []map[string]any
+	AssignedItems           int
+	HealingPotionsAvailable int
+	Crafting                map[string]*referenceCraftingProject
+	Sessions                map[string]*referenceScheduledSession
+}
+
+type referenceQuest struct {
 	ID         string
-	Name       string
-	DM         string
-	Characters []map[string]any
-	Events     []map[string]any
+	Title      string
+	Status     string
+	Milestones []string
+	Completed  map[string]bool
+}
+
+type referenceCraftingProject struct {
+	ID            string
+	CharacterID   string
+	ItemSlug      string
+	DaysRequired  int
+	DaysCompleted int
+	Status        string
+}
+
+type referenceScheduledSession struct {
+	ID              string
+	StartsAt        string
+	DurationMinutes int
+	AgendaCount     int
+	PresentCount    int
+	AbsentCount     int
+}
+
+func newReferenceCampaign(id string, name string, dm string) *referenceCampaign {
+	return &referenceCampaign{
+		ID:                      id,
+		Name:                    name,
+		DM:                      dm,
+		Quests:                  map[string]*referenceQuest{},
+		Factions:                map[string]map[string]any{},
+		NPCs:                    map[string]map[string]any{},
+		HealingPotionsAvailable: 0,
+		Crafting:                map[string]*referenceCraftingProject{},
+		Sessions:                map[string]*referenceScheduledSession{},
+	}
+}
+
+func activeQuestCount(campaign *referenceCampaign) int {
+	count := 0
+	for _, quest := range campaign.Quests {
+		if quest.Status == "" || quest.Status == "active" {
+			count++
+		}
+	}
+	return count
+}
+
+func friendlyNPCCount(campaign *referenceCampaign) int {
+	count := 0
+	for _, npc := range campaign.NPCs {
+		if disposition, ok := npc["disposition"].(float64); ok && disposition > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 type referenceCombatant struct {

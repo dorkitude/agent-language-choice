@@ -70,20 +70,16 @@ Failure stage counts:
 
 ## Early Interpretation
 
-The first matrix does not yet show Go dominating TypeScript across the board.
-`go-stdlib`, `typescript-node`, and `typescript-vite` all passed 5/5 cells, and
-`typescript-vite` did so with fewer average shots than `go-stdlib` on this
-three-stage suite. That is useful rather than fatal: the current tasks may not
-yet apply enough codebase-growth, persistence, dependency-churn, or implicitness
-pressure to expose the hypothesized advantage.
+The first matrix was too short to support strong language-design claims. It is
+most useful as a smoke test for the harness and as evidence that shot count
+matters: several successful cells needed repair attempts even across only
+three stages.
 
-The new roadmap stages intentionally increase those pressures. SQLite storage,
-campaign state, compendium data, and bundled DM features should make codebase
-maintenance, framework conventions, schema drift, and hidden dependency
-behavior more visible.
+The later roadmap stages intentionally increase codebase-growth pressure:
+storage, campaign state, compendium data, bundled DM features, quest tracking,
+relationships, inventory, downtime, scheduling, export, and analytics. These
+should make maintenance behavior, schema drift, hidden coupling, and exact JSON
+contract discipline more visible.
 
-Ruby Rails was surprisingly strong on pass rate, but retry-heavy. Ruby stdlib
-and Sinatra were weaker. PHP targets varied substantially by framework. The
-combat-state stage is the current stress point, especially around multi-request
-state and exact JSON response shape.
-
+The combat-state stage is the current stress point, especially around
+multi-request state and exact JSON response shape.

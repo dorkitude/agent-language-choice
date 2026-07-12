@@ -2,16 +2,10 @@
 
 REST API benchmark suite for the agent language-choice study.
 
-This suite is designed to stress language/framework properties while keeping
-evaluation language-agnostic: the evaluator only talks HTTP.
-
-The initial framing used Go versus TypeScript as the headline contrast. The
-first full lifecycle matrix showed that TypeScript, especially Vite, was not
-the strongest weak case. The current primary contrast is explicit,
-compiler-backed, locally inspectable targets such as Go and Rust versus
-Ruby/Rails-style convention, dynamic dispatch, and framework-mediated
-semantics. TypeScript remains a secondary contrast for ecosystem churn and
-dependency-surface effects.
+This suite is designed to measure language/framework target behavior while
+keeping evaluation language-agnostic: the evaluator only talks HTTP. The
+benchmark records pass/fail stage, shot count, deterministic evaluator output,
+and artifacts for each model/target cell.
 
 ## Implementation Contract
 
@@ -77,6 +71,10 @@ The lifecycle harness simulates a long-lived codebase:
 Each agent invocation counts as one shot. Stage suites are cumulative, so a
 maintenance agent must preserve all previous behavior.
 
+Completed results to date used stages `core` through `dm-tools`. The default
+roadmap now has 16 stages total: one initial creative build plus 15 fresh
+maintenance inheritances.
+
 Current lifecycle stages:
 
 - `core`: initial D&D REST API creation, evaluated with suite `core`.
@@ -96,14 +94,27 @@ Current lifecycle stages:
   cumulative suite `phb-rules`.
 - `dm-tools`: adds DM encounter, loot, and recap helpers, evaluated with
   cumulative suite `dm-tools`.
+- `quest-tracker`: adds campaign quest tracking, evaluated with cumulative
+  suite `quest-tracker`.
+- `npcs-factions`: adds NPC and faction relationship state, evaluated with
+  cumulative suite `npcs-factions`.
+- `inventory-equipment`: adds inventory and equipment assignment, evaluated
+  with cumulative suite `inventory-equipment`.
+- `downtime-crafting`: adds crafting projects and progress accounting,
+  evaluated with cumulative suite `downtime-crafting`.
+- `session-scheduling`: adds session scheduling and attendance, evaluated with
+  cumulative suite `session-scheduling`.
+- `audit-export`: adds deterministic audit/export summaries, evaluated with
+  cumulative suite `audit-export`.
+- `analytics-reporting`: adds campaign analytics/risk reporting, evaluated
+  with cumulative suite `analytics-reporting`.
 
 The indexed roadmap, prompt contract, and stage-by-stage notes are in
 [`../../docs/roadmap/`](../../docs/roadmap/). Findings from completed runs are
 in [`../../docs/findings/`](../../docs/findings/).
 
-Current target set includes Go, Rust, TypeScript, Python, Java, Ruby, and PHP
-variants. Rust is stdlib-only: agents must use `rustc` and `std::net` without
-HTTP crates.
+Current target set includes multiple language/framework variants. Each target
+is evaluated against the same black-box suites.
 
 Plan a lifecycle run:
 

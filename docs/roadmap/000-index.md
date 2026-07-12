@@ -5,6 +5,11 @@ stage is a backlog item applied to the same codebase by a fresh agent. The
 evaluator suite for each stage is cumulative, so passing a later stage requires
 preserving every earlier behavior.
 
+The completed result set to date used stages 001-009. The default roadmap now
+has 16 total stages: one initial creative build plus 15 fresh maintenance
+inheritance steps. With one allowed bug-fix shot per stage, each model/target
+cell can consume up to 32 shots.
+
 ## Lifecycle Model
 
 1. A creative agent builds stage 1 from starter files.
@@ -27,7 +32,14 @@ preserving every earlier behavior.
 | [007-campaign-state.md](007-campaign-state.md) | Campaign state APIs | Completed in full lifecycle matrix | `campaign-state` |
 | [008-phb-rules.md](008-phb-rules.md) | Selected PHB rules | Completed in full lifecycle matrix | `phb-rules` |
 | [009-dm-tools.md](009-dm-tools.md) | DM-facing helpers | Completed in full lifecycle matrix | `dm-tools` |
-| [010-prompt-template.md](010-prompt-template.md) | Agent prompt contract | Active | n/a |
+| [010-quest-tracker.md](010-quest-tracker.md) | Quest tracker | Specified; evaluator added | `quest-tracker` |
+| [011-npcs-factions.md](011-npcs-factions.md) | NPCs and factions | Specified; evaluator added | `npcs-factions` |
+| [012-inventory-equipment.md](012-inventory-equipment.md) | Inventory and equipment | Specified; evaluator added | `inventory-equipment` |
+| [013-downtime-crafting.md](013-downtime-crafting.md) | Downtime crafting | Specified; evaluator added | `downtime-crafting` |
+| [014-session-scheduling.md](014-session-scheduling.md) | Session scheduling | Specified; evaluator added | `session-scheduling` |
+| [015-audit-export.md](015-audit-export.md) | Audit and export | Specified; evaluator added | `audit-export` |
+| [016-analytics-reporting.md](016-analytics-reporting.md) | Analytics reporting | Specified; evaluator added | `analytics-reporting` |
+| [017-prompt-template.md](017-prompt-template.md) | Agent prompt contract | Active | n/a |
 
 ## Harness Hooks
 

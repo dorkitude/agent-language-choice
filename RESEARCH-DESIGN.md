@@ -5,9 +5,8 @@ citations not yet finalized).
 
 ## Research question
 
-Why do LLM coding agents appear to perform better in some programming languages
-and frameworks (e.g. Go/Rust stdlib targets) than others (e.g. Ruby/Rails), and
-which *language design dimensions* explain the difference?
+Which language, framework, and ecosystem design dimensions predict LLM coding
+agent success as a codebase grows through repeated maintenance tasks?
 
 We do not claim any language is "better." We treat languages as points in a
 design space and test whether position along specific design dimensions
@@ -39,18 +38,17 @@ convergence.
 
 **Hypothesis:** High API churn makes the model's training data stale relative
 to the live ecosystem. The agent emits idioms/APIs that were correct at
-training time but no longer resolve — version-mismatch errors, deprecated
-APIs, hallucinated packages. Critically, breaking changes that land *after a
+training time but no longer resolve: version-mismatch errors, deprecated APIs,
+or hallucinated packages. Critically, breaking changes that land *after a
 model's training cutoff* are invisible to the model by construction; the more
 volatile the ecosystem, the larger the gap between the model's knowledge and
-the environment it must operate in (the TS/npm ecosystem routinely ships such
-breaking changes; Go's compatibility promise makes them rare).
+the environment it must operate in.
 
 - Proxy: dependency-network evolution stats per ecosystem (release cadence,
   breaking-change frequency, median package age at use); deps required per
   solved benchmark task.
 - Candidate citations: Decan, Mens & Grosjean, EMSE 2019 (dependency network
-  evolution across npm/PyPI/RubyGems/etc.); Kula et al. on outdated
+  evolution across package ecosystems); Kula et al. on outdated
   dependencies; Abdalkareem et al. on trivial npm packages; recent
   hallucinated-package ("slopsquatting") security reports.
 
@@ -83,14 +81,11 @@ languages assume a human reader, not a stochastic writer.
 **Hypothesis:** In explicit languages, the meaning of a code region is
 determinable from local context, and crucially, *from the import chain*: what
 a name refers to is traceable through explicit imports. Implicit constructs
-break this: monkey-patching and global-namespace pollution (Ruby core
-extensions à la ActiveSupport), convention-over-configuration frameworks
-(Rails autoloading — constants resolve with no visible require/import),
-decorators/metaclasses, implicit conversions, DI magic, TS structural-typing
-edge cases. These require whole-program (or whole-framework) inference the
-agent may not perform within its context window. Ruby is the sharpest case:
-convention-based dispatch plus namespace pollution means the semantics of a
-file are not self-evident from its imports.
+break this: monkey-patching, global-namespace pollution,
+convention-over-configuration frameworks, autoloading, decorators/metaclasses,
+implicit conversions, dependency-injection magic, and structural-typing edge
+cases. These require whole-program or whole-framework inference the agent may
+not perform within its context window.
 
 - Proxy: qualitative rubric initially (language feature checklist: dynamic
   dispatch surprises, metaprogramming prevalence, implicit conversions);
@@ -118,33 +113,19 @@ versions of the same framework — see D2).
 
 ### Confound C1. Training-corpus prevalence (must control)
 
-Python/TS/JS dominate public code corpora. MultiPL-E (Cassano et al. 2023) and
-MBXP (Athiwaratkun et al. 2023) show LLM performance correlates with language
-resource level. Corpus prevalence predicts TS ≥ Go — so if Go wins anyway, the
-design-dimension story *strengthens*. Include corpus prevalence (e.g. The
-Stack / GitHub language shares) as a covariate in all analyses.
+Public code corpora are not evenly distributed across languages and frameworks.
+MultiPL-E (Cassano et al. 2023) and MBXP (Athiwaratkun et al. 2023) show LLM
+performance correlates with language resource level. Include corpus prevalence
+(e.g. The Stack / GitHub language shares) as a covariate in all analyses.
 
-## Languages under test
+## Targets under test
 
-Go, Rust, TypeScript, Python, Java, Ruby, PHP. Rust is included because it is
-compiled and strict like Go, but has a steeper type/borrow model and no stdlib
-HTTP abstraction. That makes it useful for separating D1 compiler-signal
-quality from D3 stdlib coverage and D4/D5 ergonomic explicitness.
-
-Preliminary placement (to be replaced with cited/measured values — this table
-is our hypothesis, not a result):
-
-| Dimension | Go | Rust | TypeScript | Python | Java | Ruby | PHP |
-|---|---|---|---|---|---|---|---|
-| D1 compile/type signal | high | very high | mid-high (tsc, but `any`/config-dependent) | low (opt. hints) | high | low | low-mid |
-| D2 ecosystem stability | high | high-mid | low (npm churn) | mid | high | mid | mid |
-| D3 stdlib coverage | high | mid (no HTTP server abstraction) | low (Node stdlib thin) | high | high | mid | mid-high |
-| D4 verbosity/redundancy | high | high | mid | low | high | low | mid |
-| D5 explicitness | high | very high | mid | low (metaclasses etc.) | mid-high | low (monkey-patching/Rails conventions) | mid |
-| D6 idiom uniformity | high (gofmt) | mid-high (rustfmt, but many architectural idioms) | low | mid (PEP8, but many frameworks) | mid | mid | low |
-| C1 corpus prevalence | mid | mid | high | high | high | mid | mid-high |
-
-Each cell needs either a citation or a measurement before the paper.
+The harness defines multiple language/framework targets. Treat each target as
+a point in a measured design space rather than as a pre-labeled good or bad
+case. Before paper use, each target should receive measured or cited values for
+the dimensions above: compiler/type feedback, dependency volatility, standard
+library coverage, verbosity, explicitness, idiom uniformity, and corpus
+prevalence.
 
 ## Benchmark design
 
@@ -163,15 +144,10 @@ API, concurrency (rate limiter, worker pool), third-party-dependency-required
 task (deliberately probes D2), refactor/extend-existing-code task (probes D5 —
 requires seeding per-language starter repos, held structurally parallel).
 
-REST/API tasks began as a stressor for the Go vs TypeScript contrast: Go's
-standard library includes production-usable HTTP server and JSON support, while
-TypeScript without npm packages must use lower-level Node HTTP APIs, manual
-routing/body parsing, and a separate compile/runtime path. The first lifecycle
-matrix showed Ruby/Rails is the stronger empirical foil for implicitness and
-framework-mediated semantics. Rust adds a compiled/strict comparison point with
-strong compiler feedback but weaker stdlib HTTP coverage. To keep all of this
-like-for-like, evaluate REST tasks only through a central black-box HTTP
-evaluator.
+REST/API tasks are evaluated only through a central black-box HTTP evaluator.
+This keeps scoring independent of implementation language and lets the same
+feature roadmap exercise toolchain feedback, dependency choices, routing,
+JSON handling, persistence, and cumulative maintenance behavior.
 
 Pre-existing repo debugging should be treated as a separate benchmark stratum,
 not mixed directly with greenfield code generation. It is not necessarily
