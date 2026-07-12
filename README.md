@@ -69,6 +69,33 @@ Published preview:
 - 2026-07-12: Extended the default lifecycle roadmap to 16 stages, giving each
   cell 15 fresh maintenance inheritances after the initial build. Added
   deterministic evaluator suites through `analytics-reporting`.
+- 2026-07-11: Added the full nine-stage D&D lifecycle matrix: 75 cells across
+  five models and 15 targets, 41 full lifecycle passes, 34 failed cells, and
+  635 total shots. `gpt-5.5` led at 13/15 completed cells.
+- 2026-07-11: Promoted shot burden, failed stage, and bug-fix recovery from
+  bookkeeping into first-class outcomes after many successful cells required
+  11-15 shots rather than the clean nine-shot minimum.
+- 2026-07-11: Added the MIT license, removed private credential fallback
+  references, and tightened the research design notes for public release.
+- 2026-07-10: Expanded the D&D REST benchmark roadmap and early lifecycle
+  results. The stored 70-cell run set covered `core`, `characters`, and
+  `combat-state`, with 54 passing cells, 16 failing cells, and 281 total shots.
+- 2026-07-10: Aligned challenge specs and evaluator behavior for later roadmap
+  stages, including auth, campaign state, PHB rules, DM tools, and compendium
+  scoring details.
+- 2026-07-09: Ran the initial D&D REST matrix: 5 models by 10
+  language/framework targets, 39/50 passing. Opus went 10/10, Sonnet and GLM
+  went 9/10, and TypeScript/Next.js failures were mostly startup/health
+  failures.
+- 2026-07-09: Extended the matrix to 14 targets by adding Flask, Django, Slim,
+  and Symfony. The extended matrix reached 57/70 passing; Flask and Django both
+  went 5/5, while Kimi showed a recurring negative dice modifier failure mode.
+- 2026-07-08: Started the agent language choice project and wrote the initial
+  benchmark design around language design dimensions, ecosystem/tooling
+  controls, and cumulative codebase-growth pressure.
+- 2026-07-08: Built the first codegen benchmark harness and smoke pilot. All
+  eight pilot runs passed across `kv_patch` and `ledger_debug`; TypeScript took
+  materially longer than Go on the shared `kv_patch` task.
 
 ## Folders
 
