@@ -5,7 +5,7 @@ Research project started 2026-07-08.
 ## Overview
 
 Testing code-generation capability of LLM coding agents across multiple
-language/framework targets, using OSS models via Fireworks, Claude models via
+language/framework targets, using OSS models via Pi (GPUs hosted on Fireworks), Claude models via
 `claude -p`, and OpenAI models via Codex CLI.
 Goal: explain performance differences via language *design dimensions*
 (compilation/verification signal, ecosystem churn, stdlib coverage,
