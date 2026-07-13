@@ -1,0 +1,13 @@
+The fix works. Advance 5 now returns `"conditions":{"fighter":[]}` instead of `{}` — the active combatant whose condition just expired is retained with an empty array, exactly what `combat-advance-expired-removed` expects. All the intermediate outputs match the prior passing tests too. 🎉
+
+`run.sh` is already correct (`tsc && node dist/server.js`, foreground, uses `PORT`, binds `127.0.0.1`), so no changes needed there.
+
+## Summary, Chef 🐣
+
+**Root cause:** `conditionsView` only emitted a combatant's key when its condition array was non-empty. When the active combatant's last condition decremented to `0` on its own turn, the condition was removed and the combatant vanished from the `conditions` map (`{}`), but the evaluator expects the just-acted combatant to remain with an empty array (`{"fighter": []}`).
+
+**Fix (surgical, 3 lines):**
+- `conditionsView(session, forceInclude?)` — include a combatant if it has conditions **or** its name matches `forceInclude`.
+- In `handleAdvanceTurn`, capture `hadConditions` *before* the decrement filter, then force-include the active combatant only when it started the turn with conditions.
+
+This is minimal and preserves every prior-stage behavior: combatants that never had conditions still don't appear, so no spurious keys are added to the passing tests.

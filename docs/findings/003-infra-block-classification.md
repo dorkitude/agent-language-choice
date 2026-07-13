@@ -5,7 +5,7 @@ Data sources:
 - [`results/dnd-rest-benchmark/experiment-state.sqlite3`](../../results/dnd-rest-benchmark/experiment-state.sqlite3)
 - [`results/dnd-rest-benchmark/dashboard-data.json`](../../results/dnd-rest-benchmark/dashboard-data.json)
 
-Date: 2026-07-12.
+Date: 2026-07-12. Updated after Claude reruns on 2026-07-13.
 
 ## Finding
 
@@ -23,23 +23,24 @@ Across all stored D&D REST benchmark artifacts:
 
 | Status | Runs |
 | --- | ---: |
-| `pass` | 152 |
-| `fail` | 36 |
+| `pass` | 170 |
+| `fail` | 39 |
 | `blocked` | 27 |
 
-For the 75-cell nine-stage lifecycle matrix:
+Shot-level agent exit classes:
 
-| Model | Pass | Fail | Blocked |
-| --- | ---: | ---: | ---: |
-| `claude/opus` | 5 | 0 | 10 |
-| `claude/sonnet` | 2 | 2 | 11 |
-| `codex/gpt-5.5` | 13 | 2 | 0 |
-| `pi/glm-5p2` | 10 | 5 | 0 |
-| `pi/kimi-k2p7-code` | 11 | 4 | 0 |
+| Agent exit class | Shots |
+| --- | ---: |
+| `ok` | 1146 |
+| `quota_limit` | 53 |
+| `timeout` | 13 |
 
-This means the earlier apparent Claude underperformance should not be treated
-as a clean model-quality result. Many cells require reruns under confirmed
-available Claude quota before inclusion in comparative model analysis.
+The latest 75-cell nine-stage lifecycle matrix now uses rerun Claude cells
+where quota and model selection were confirmed. That current comparative result
+is summarized in
+[`002-full-lifecycle-matrix.md`](002-full-lifecycle-matrix.md): Opus is 15/15
+and Sonnet is 10/15. The older blocked Claude artifacts remain in the state DB
+for auditability, but they are no longer interpreted as model-quality failures.
 
 ## Query
 

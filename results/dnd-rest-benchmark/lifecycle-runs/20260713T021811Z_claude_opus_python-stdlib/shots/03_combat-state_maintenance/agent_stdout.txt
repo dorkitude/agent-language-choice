@@ -1,0 +1,20 @@
+Everything works exactly to spec. ✨
+
+Kyle, here's what I did, Chef:
+
+**Combat stage added** to `server.py` (Python 3.14 stdlib only) — all three endpoints verified against the spec examples:
+
+- 🆕 `POST /v1/combat/sessions` — sorts initiative by `score desc → dex desc → name asc`, starts at `round=1, turn_index=0`
+- ✨ `POST /v1/combat/sessions/{id}/conditions` — attaches conditions to a named combatant
+- ⏭️ `POST /v1/combat/sessions/{id}/advance` — advances turn, bumps `round` on wrap, decrements only the *active* combatant's conditions, drops them at `0`
+
+Verified behavior:
+- Sort order matches spec (rogue 17 → mage 16 → fighter 14) 🎲
+- Blessed condition ticked `2→1→removed` only on fighter's turns, never while inactive
+- `round` incremented on wrap back to `turn_index 0`
+- Error codes: duplicate id `400`, unknown target `400`, bad duration `400`, unknown session `404`
+- Core suite preserved (`/v1/initiative/order` still `200`) ✅
+
+**Design notes:** combat routes carry a client-supplied id segment, so they're matched via regex/prefix dispatch (`dispatch_combat`) rather than the static `ROUTES` table — the existing endpoints route exactly as before. Errors flow through a small `ApiError` so each case gets its intended status. State lives in the in-memory `COMBAT_SESSIONS` dict, per the spec.
+
+`./run.sh` is unchanged and already starts the server in the foreground on `127.0.0.1:$PORT`. Ready to go! 🐉

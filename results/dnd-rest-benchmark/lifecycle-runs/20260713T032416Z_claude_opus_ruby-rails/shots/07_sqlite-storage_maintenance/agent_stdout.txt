@@ -1,0 +1,21 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+I inherited the single-file Rails API (`app.rb`) and added **Stage 4: SQLite Game Storage** while preserving every prior endpoint.
+
+**What changed:**
+
+🗄️ **New `Store` module** — opens `game.db` in the project dir via the `sqlite3` gem (added to Gemfile, `2.9.5`), guarded by a mutex for thread-safe Puma access. Creates `users` + `combat_sessions` tables and initializes schema **on server startup**.
+
+🔀 **Moved durable state behind SQLite** (was in-memory hashes):
+- **Auth** (`register`/`login`) → `users` table
+- **Combat sessions** (`create`/`add_condition`/`advance`) → `combat_sessions` table, sessions serialized as JSON with symbol-key round-tripping to keep behavior byte-identical
+
+🆕 **Two new endpoints:**
+- `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- `POST /v1/storage/reset` → drops/recreates tables, clears benchmark data, keeps the process healthy → `{"ok":true,"schema_version":1}`
+
+**Verified end-to-end:** status, register, login, duplicate-409, combat create/condition/advance, then reset → login now returns 401 (data cleared) while status still reports initialized. ✅
+
+`run.sh` was already correct (foreground `rackup` on `127.0.0.1` using `$PORT`) — left untouched. Server is **not** running now, and the test `game.db` was cleaned up so it initializes fresh on the evaluator's boot.

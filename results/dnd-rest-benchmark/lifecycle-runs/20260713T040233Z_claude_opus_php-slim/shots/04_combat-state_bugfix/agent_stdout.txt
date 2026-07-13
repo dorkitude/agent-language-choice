@@ -1,0 +1,9 @@
+All five advances now match the expected outputs — critically, advance 5 yields `"conditions":{"fighter":[]}` instead of `{}`. 🎉
+
+**Root cause, Chef:** when a combatant's last condition expired, the advance handler did `unset($session['conditions'][$activeName])` and `session_conditions_map()` filtered on `!empty()`, so the combatant's key vanished entirely. The evaluator expects the key to persist with an empty array (`{"fighter":[]}`).
+
+**Fix (two minimal edits in `index.php`):**
+- Advance handler: replaced the `unset`-on-empty branch with an unconditional `$session['conditions'][$activeName] = $updated;` — keeps the key, now holding `[]`.
+- `session_conditions_map()`: switched the guard from `!empty(...)` to `isset(...)` so a combatant that ever received a condition stays in the map even after all conditions expire.
+
+`php -l` passes, `run.sh` is unchanged (foreground `php -S 127.0.0.1:$PORT index.php`), and all prior-stage behavior is preserved. Server is stopped. ✅

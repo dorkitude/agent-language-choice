@@ -1,0 +1,16 @@
+All test server processes are cleaned up, and no server is currently running (per the contract — `run.sh` will start it fresh when invoked).
+
+## Summary
+
+The bug was in `_handle_advance_turn` in `server.py`: the `conditions` dict in the advance-turn response only included a combatant's key when their condition list was non-empty. When the active combatant's last condition expired and got removed, its key vanished entirely from the response — but the evaluator expects the active combatant's key to always be present (even as an empty list), since conditions were just processed for them.
+
+Fix (server.py:424-427): include the active combatant's entry in `conditions` unconditionally, in addition to any other combatant that still has active conditions:
+
+```python
+conditions = {}
+for e in order:
+    if e["conditions"] or e is active_entry:
+        conditions[e["name"]] = [dict(c) for c in e["conditions"]]
+```
+
+Verified manually against the exact failing scenario (blessed condition with `duration_rounds: 1` expiring on fighter's next turn) — `fighter` now correctly appears as `"fighter": []` instead of being omitted. `./run.sh` is unchanged and ready to go. 🎲

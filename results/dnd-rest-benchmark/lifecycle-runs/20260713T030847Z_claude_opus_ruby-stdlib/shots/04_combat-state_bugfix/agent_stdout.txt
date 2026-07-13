@@ -1,0 +1,9 @@
+The fix works. The final advance now returns `"conditions":{"fighter":[]}` — the `fighter` key stays present (with an empty array) after its condition expires, which is exactly what the failing `combat-advance-expired-removed` test wanted. All prior steps are unchanged, and `rogue`/`mage` correctly never appear (they never received a condition).
+
+Summary of the fix (`server.rb`):
+- 🐛 Root cause: `combat_conditions` dropped any combatant whose condition list became empty, so once `fighter`'s `blessed` expired the key vanished.
+- ✅ `combat_conditions` now keeps a combatant's key whenever an entry exists (`next if conds.nil?` instead of also skipping empties).
+- 🔧 Switched the conditions store from an auto-vivifying `Hash.new { … }` to a plain `{}`, so only combatants that actually received a condition get a key — `advance` touching the active combatant no longer silently creates empty entries for `rogue`/`mage`.
+- `handle_add_condition` uses `(session[:conditions][target] ||= []) <<`, and `handle_advance` guards on `if conds`.
+
+`run.sh` is unchanged and already starts the server in the foreground on `127.0.0.1:$PORT`. Ready to go, Chef! 🎲✨

@@ -1,0 +1,16 @@
+Done, Chef! 🎲✨ Stage 4 SQLite storage is in and `./run.sh` is ready.
+
+What I changed:
+
+**`index.php`**
+- Added a durable storage layer using PDO + `pdo_sqlite` → `game.db` in the project dir, with `CREATE TABLE IF NOT EXISTS` schema init (`users`, `combat_sessions`, `meta`) and `schema_version = 1` seeded into `meta`. 🗄️
+- Migrated the **users** and **combat sessions** stores off PID-keyed temp files onto SQLite (same `*_load`/`*_save` interfaces, so every prior endpoint behaves identically).
+- Added the two new endpoints:
+  - `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+  - `POST /v1/storage/reset` → drops + recreates schema → `{"ok":true,"schema_version":1}`
+- Added a `PHP_SAPI === 'cli'` guard so the file can be `require`d at startup to init the schema without dispatching a request.
+
+**`run.sh`**
+- `cd`s to its own dir, clears any stale `game.db*` (so each server process starts with an empty store, matching prior per-process behavior), runs `php index.php` to initialize schema on startup, then serves in the foreground on `127.0.0.1:$PORT`. 🚀
+
+Verified end-to-end: health, storage status, register/login, combat create/advance, reset (which correctly wipes users + sessions → 401 on re-login), dice stats, and 404 all pass. `game.db` is created and initialized on startup. Cleaned up test artifacts afterward.

@@ -1,0 +1,22 @@
+Done, Chef! 🎲✨
+
+## Summary
+
+Added **Maintenance Stage 2: Stateful Combat** to the php-slim D&D API, preserving all prior endpoints.
+
+**Three new endpoints in `index.php`:**
+- `POST /v1/combat/sessions` — creates a session, computes `score = roll + dex`, sorts by score↓ → dex↓ → name↑, starts at `round=1, turn_index=0`.
+- `POST /v1/combat/sessions/{id}/conditions` — attaches a condition to a named combatant (validates target exists, positive integer duration).
+- `POST /v1/combat/sessions/{id}/advance` — advances turn, wraps + increments round, decrements only the **newly-active** combatant's conditions and drops any hitting 0.
+
+**Root cause worth flagging** 🔍: PHP's built-in server (`php -S`) re-executes `index.php` on *every* request, so plain in-memory globals reset between calls — sessions vanished immediately. Fix: persist combat state to a temp file keyed by the server process PID (`sys_get_temp_dir()/dnd_combat_<pid>.json`). A fresh server = new PID = clean state, satisfying "state only needs to last for the lifetime of the server process."
+
+**Verified** against the spec's exact example sequence:
+- Initiative order → `rogue(17), mage(16), fighter(14)` ✓
+- Conditions decrement only on the active combatant's turn ✓
+- Round increments on wrap ✓
+- Condition removed at 0 remaining, then `conditions: {}` ✓
+- Error codes: `400` malformed / bad target / dup id / non-positive duration, `404` unknown session ✓
+- `/health` and all core/character endpoints still respond ✓
+
+`run.sh` is unchanged — already starts the server in the foreground on `127.0.0.1:$PORT`. Not started; ready for the evaluator.

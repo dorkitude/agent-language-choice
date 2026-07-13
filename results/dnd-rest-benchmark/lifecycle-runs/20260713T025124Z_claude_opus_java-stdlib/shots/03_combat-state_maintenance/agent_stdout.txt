@@ -1,0 +1,17 @@
+Done, Chef! 🎲✨
+
+The maintenance stage is complete. `run.sh` is unchanged and ready — it compiles `Main.java` and runs the server in the foreground on `127.0.0.1:$PORT`.
+
+**What I added** (`Main.java`, one new `/v1/combat/sessions` context that dispatches by path):
+
+- 🆕 `POST /v1/combat/sessions` — creates an in-memory session, initiative = `roll + dex`, sorted score↓ then dex↓ then name↑, starting at `round 1, turn_index 0`. Rejects duplicate session ids / combatant names with `400`.
+- 🩹 `POST /v1/combat/sessions/{id}/conditions` — attaches a condition to a named combatant; validates positive-integer `duration_rounds`; returns that combatant's condition list.
+- ⏭️ `POST /v1/combat/sessions/{id}/advance` — advances `turn_index`, wraps to `0` and bumps `round`, decrements only the newly-active combatant's conditions, and drops any that hit `0`.
+
+**Verified behavior:**
+- Response shapes match the spec exactly (including `active`/`order` briefs and the `conditions` map).
+- Condition on `fighter` decremented `2 → 1 → removed` only on fighter's turns; inactive combatants never decremented.
+- `400` for malformed input (dup id, unknown target, bad duration), `404` for unknown session ids.
+- All prior core + character endpoints still respond correctly.
+
+One housekeeping note: there were **stale `java Main` servers from earlier benchmark runs** squatting on ports (that's why my first two test runs showed phantom state). I killed them and confirmed no server is running now — so nothing is bound before the evaluator starts. 🧹

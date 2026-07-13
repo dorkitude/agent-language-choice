@@ -1,0 +1,18 @@
+Done, Chef! 🎉
+
+I added deterministic username/password APIs to `index.php` while preserving every existing endpoint:
+
+**`POST /v1/auth/register`** 📝
+- Validates `username` (2–32 chars, `^[a-z0-9_-]{2,32}$`), `password` (≥8 chars), and `role` (`dm`|`player`) → `400` on any malformed input
+- Duplicate username → `409`
+- Returns `{"username","role"}` — never echoes the password
+
+**`POST /v1/auth/login`** 🔑
+- Wrong/unknown creds → `401`
+- Success → `{"username","token":"session-<username>"}`
+
+**Design choices:**
+- 🔒 **Real hashing** via PHP's built-in `password_hash`/`password_verify` (bcrypt), isolated behind `hash_password`/`verify_password` helpers so a production hash can swap in.
+- 💾 Persisted per server PID to a temp file (`dnd_users_<pid>.json`), matching the existing combat-state pattern — necessary since PHP's built-in server re-executes the script per request.
+
+Verified live: register→200, login→200 with `session-dm`, duplicate→409, bad creds→401, bad role/short password→400, and `/health` still returns `{"ok":true}`. `run.sh` was already correct (foreground, `127.0.0.1`, `$PORT`) so it's untouched and ready. ✅

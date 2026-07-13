@@ -1,0 +1,16 @@
+Done, Chef! 🎲⚔️
+
+## Summary
+
+I inherited the existing `index.php` D&D REST API (a single-file router on PHP 8.5.8 + built-in server) and added **Maintenance Stage 2: Stateful Combat** — three new endpoints, zero Composer packages, all prior endpoints untouched.
+
+**What I added:**
+- `POST /v1/combat/sessions` — creates a session, computes `score = roll + dex`, sorts by score↓, dex↓, name↑
+- `POST /v1/combat/sessions/{id}/conditions` — attaches a duration-tracked condition to a named combatant
+- `POST /v1/combat/sessions/{id}/advance` — advances `turn_index`, wraps + increments `round`, decrements the *active* combatant's conditions and drops any that hit 0
+
+**The one real gotcha:** PHP's built-in server re-executes `index.php` fresh per request, so plain globals don't survive between calls. I persisted state in a temp file keyed by the server's **PID** (`sys_get_temp_dir()/dnd_combat_<pid>.json`, `flock`-guarded) — state lasts exactly the server-process lifetime, and a fresh server (new PID) starts clean, matching the spec's "in-memory, process-lifetime" contract.
+
+**Validation:** 400 for malformed input / duplicate ids / unknown targets / non-positive durations, 404 for unknown session ids.
+
+I verified end-to-end with a live server (`php -l` clean too): create → add-condition → four advances showed the blessed condition ticking 2→1→removed only on fighter's turns, `round` bumping on wrap, and `/v1/initiative/order` still working. `run.sh` was already correct (foreground, `127.0.0.1:$PORT`) so I left it as-is. Ready. 🚀

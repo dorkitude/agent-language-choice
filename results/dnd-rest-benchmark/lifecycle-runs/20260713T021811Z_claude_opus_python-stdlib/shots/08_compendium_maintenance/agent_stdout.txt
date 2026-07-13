@@ -1,0 +1,16 @@
+Everything works perfectly, Chef! 🎲✨
+
+All the new compendium endpoints pass, and existing endpoints (health, dice, etc.) are preserved:
+
+- ✅ `POST /v1/compendium/monsters` → `201`, response omits `tags` per spec
+- ✅ `GET /v1/compendium/monsters/{slug}` → `200`, includes `tags`
+- ✅ `POST /v1/compendium/items` → `201`
+- ✅ `GET /v1/compendium/items/{slug}` → `200`
+- ✅ `400` malformed input, `404` unknown record, `409` duplicate slug
+
+What I did:
+- Added SQLite-backed `MONSTERS`/`ITEMS` working sets, persisted write-through via the existing `kv` table (namespaces `monsters`/`items`), loaded on startup in `storage_load` and cleared in `storage_reset` — consistent with how users/combat sessions already work. 🗃️
+- Slug validation (`^[a-z0-9]+(?:-[a-z0-9]+)*$`), type checks reusing the existing `_is_int` helper, and `ApiError` for status mapping.
+- Wired POST via a new `COMPENDIUM_ROUTES` table and GET via regex path matchers, without touching any prior-stage routing branches.
+
+`./run.sh` is unchanged (still runs `python3 server.py` in the foreground, listening on `127.0.0.1:$PORT`) and ready. Stdlib only, no new dependencies. 🐍

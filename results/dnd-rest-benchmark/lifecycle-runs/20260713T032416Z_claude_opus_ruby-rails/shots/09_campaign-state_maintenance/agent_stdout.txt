@@ -1,0 +1,21 @@
+✨ Done, Chef! Stage 6 Campaign State APIs are implemented and verified.
+
+## What I added to `app.rb`
+
+- **Schema** (`Store.init_schema!`): three new SQLite tables — `campaigns`, `campaign_characters`, `campaign_events` (with `seq` columns to preserve insertion order and composite PKs scoping ids per-campaign). Also added them to `reset!`.
+- **`Campaign` module**: `create_campaign`, `add_character`, `add_event`, `campaign_state` with `Duplicate` (→409) and `NotFound` (→404) errors.
+- **Routes + controller actions** for all four endpoints.
+
+## Smoke test results (server shut down after)
+- `POST /v1/campaigns` → echoes `{id, name, dm}` ✅
+- duplicate campaign → **409** ✅
+- `POST .../characters` → `{id, name, level, class}` ✅
+- `POST .../events` → `{id, kind}` ✅
+- `GET .../state` → full state with ordered `characters` + `log_count` ✅
+- unknown campaign (char add / state) → **404** ✅, malformed → **400** ✅
+- existing endpoint (`/v1/dice/stats`) still intact ✅
+
+## Key subtlety I caught 🔍
+The route `/v1/campaigns/:id/characters` puts the **campaign id** in `params[:id]`, which collides with the character's `id` in the JSON body. I read the body via `request.request_parameters` for character/event attrs so both ids survive — otherwise every character would have inherited the campaign's id.
+
+`run.sh` was already correct (foreground `rackup` on `127.0.0.1:$PORT`), so no changes needed there. I also cleaned the test rows back out of `game.db`. Ready to go! 🎲

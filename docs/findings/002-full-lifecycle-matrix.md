@@ -1,19 +1,17 @@
 # Full Lifecycle Matrix
 
-Data source:
-[`results/dnd-rest-benchmark/dashboard-data.json`](../../results/dnd-rest-benchmark/dashboard-data.json)
+Data sources:
 
-Run set: 2026-07-10 through 2026-07-12 D&D REST lifecycle benchmark.
+- [`results/dnd-rest-benchmark/dashboard-data.json`](../../results/dnd-rest-benchmark/dashboard-data.json)
+- [`results/dnd-rest-benchmark/experiment-state.sqlite3`](../../results/dnd-rest-benchmark/experiment-state.sqlite3)
+- [`results/dnd-rest-benchmark/dnd-rest-findings.html`](../../results/dnd-rest-benchmark/dnd-rest-findings.html)
 
-Correction, 2026-07-12: after inspecting the raw Claude CLI artifacts, many
-Claude cells previously counted as failures are now classified as `blocked`
-infrastructure events because their terminal shots hit Claude session/quota
-limits. See
-[`003-infra-block-classification.md`](003-infra-block-classification.md). The
-75-cell set still contains 41 passes, but the remaining cells split into 13
-confirmed failures and 21 blocked infrastructure cells.
+Run set: latest terminal nine-stage D&D REST lifecycle result per
+model/target cell, after rerunning Claude cells with confirmed working model
+selection on 2026-07-12/13.
 
-The completed matrix contains 75 cells: 5 models by 15 language/framework targets. Each cell attempted the nine cumulative lifecycle stages:
+The completed matrix contains 75 cells: 5 models by 15 language/framework
+targets. Each cell attempted these cumulative stages:
 
 1. `core`
 2. `characters`
@@ -25,169 +23,106 @@ The completed matrix contains 75 cells: 5 models by 15 language/framework target
 8. `phb-rules`
 9. `dm-tools`
 
-Every creative, maintenance, or bug-fix invocation counts as one shot. A clean full lifecycle pass therefore requires 9 shots. Extra shots are deterministic bug-fix attempts after evaluator failures.
+Every creative, maintenance, or bug-fix invocation counts as one shot. A clean
+full lifecycle pass therefore requires 9 shots. Extra shots are deterministic
+bug-fix attempts after evaluator failures.
 
 ## Overall
 
 | Metric | Value |
 | --- | ---: |
 | Matrix cells | 75 |
-| Full lifecycle passes | 41 |
-| Confirmed failed lifecycle cells | 13 |
-| Infrastructure-blocked lifecycle cells | 21 |
-| Overall pass rate | 54.7% |
-| Total shots | 635 |
+| Full lifecycle passes | 59 |
+| Deterministic failed lifecycle cells | 16 |
+| Overall pass rate | 78.7% |
+| Completed stages | 575/675 |
+| Total shots | 784 |
+| Minimum shots if all cells were clean passes | 675 |
+| Extra shots beyond clean-pass minimum | 109 |
 
 ## By Model
 
 | Model | Pass rate | Failed stages | Avg shots/cell | Avg shots/pass |
 | --- | ---: | --- | ---: | ---: |
+| `claude/opus` | 15/15 | none | 11.27 | 11.27 |
 | `codex/gpt-5.5` | 13/15 | `combat-state` x2 | 10.80 | 11.85 |
-| `pi/kimi-k2p7-code` | 11/15 | `auth-users`, `combat-state` x3 | 10.80 | 12.91 |
+| `pi/kimi-k2p7-code` | 11/15 | `combat-state` x3, `auth-users` | 10.80 | 12.91 |
+| `claude/sonnet` | 10/15 | `combat-state` x2, `dm-tools`, `compendium`, `campaign-state` | 10.60 | 12.00 |
 | `pi/glm-5p2` | 10/15 | `combat-state` x4, `core` | 8.80 | 11.30 |
-| `claude/opus` | 5/15 | `auth-users` x2, `compendium`, `core` x6, `dm-tools` | 6.80 | 11.40 |
-| `claude/sonnet` | 2/15 | `campaign-state`, `core` x10, `dm-tools`, `phb-rules` | 5.13 | 11.50 |
 
 ## By Target
 
 | Target | Pass rate | Avg shots/cell | Avg shots/pass | Failed stages |
 | --- | ---: | ---: | ---: | --- |
+| `go-stdlib` | 5/5 | 11.60 | 11.60 | none |
+| `java-stdlib` | 5/5 | 12.00 | 12.00 | none |
+| `python-flask` | 5/5 | 12.00 | 12.00 | none |
+| `typescript-node` | 5/5 | 12.00 | 12.00 | none |
+| `php-slim` | 4/5 | 10.00 | 11.50 | `combat-state` |
 | `php-symfony` | 4/5 | 9.80 | 11.25 | `combat-state` |
 | `python-django` | 4/5 | 11.60 | 11.25 | `dm-tools` |
+| `python-stdlib` | 4/5 | 10.80 | 12.50 | `combat-state` |
+| `ruby-rails` | 4/5 | 10.60 | 12.75 | `core` |
+| `ruby-stdlib` | 4/5 | 11.00 | 11.50 | `compendium` |
 | `typescript-vite` | 4/5 | 10.60 | 12.00 | `combat-state` |
-| `go-stdlib` | 3/5 | 10.20 | 12.33 | `core`, `dm-tools` |
-| `java-stdlib` | 3/5 | 9.00 | 12.33 | `auth-users`, `core` |
-| `python-flask` | 3/5 | 8.20 | 12.33 | `core` x2 |
-| `ruby-stdlib` | 3/5 | 7.80 | 11.67 | `core` x2 |
-| `typescript-node` | 3/5 | 8.00 | 12.00 | `core` x2 |
-| `php-slim` | 2/5 | 6.20 | 11.50 | `combat-state`, `core` x2 |
-| `php-stdlib` | 2/5 | 6.20 | 11.50 | `combat-state`, `core` x2 |
-| `python-stdlib` | 2/5 | 6.60 | 12.50 | `combat-state`, `core` x2 |
-| `ruby-rails` | 2/5 | 8.20 | 14.00 | `compendium`, `core` x2 |
-| `ruby-sinatra` | 2/5 | 8.80 | 11.50 | `auth-users`, `campaign-state`, `combat-state` |
-| `rust-stdlib` | 2/5 | 8.40 | 11.00 | `combat-state` x2, `phb-rules` |
-| `typescript-nextjs` | 2/5 | 7.40 | 12.50 | `auth-users`, `combat-state`, `core` |
+| `php-stdlib` | 3/5 | 8.40 | 11.33 | `combat-state` x2 |
+| `rust-stdlib` | 3/5 | 8.60 | 11.67 | `combat-state` x2 |
+| `typescript-nextjs` | 3/5 | 9.00 | 12.33 | `combat-state` x2 |
+| `ruby-sinatra` | 2/5 | 8.80 | 11.50 | `campaign-state`, `auth-users`, `combat-state` |
 
-## Model x Target Outcomes
+## Claude Rerun Correction
 
-| Model | Target | Outcome | Shots | Failed stage |
-| --- | --- | --- | ---: | --- |
-| `glm-5p2` | `go-stdlib` | PASS | 13 |  |
-| `glm-5p2` | `java-stdlib` | PASS | 11 |  |
-| `glm-5p2` | `php-slim` | PASS | 11 |  |
-| `glm-5p2` | `php-stdlib` | PASS | 10 |  |
-| `glm-5p2` | `php-symfony` | PASS | 11 |  |
-| `glm-5p2` | `python-django` | PASS | 11 |  |
-| `glm-5p2` | `python-flask` | PASS | 11 |  |
-| `glm-5p2` | `python-stdlib` | FAIL | 4 | `combat-state` |
-| `glm-5p2` | `ruby-rails` | FAIL | 2 | `core` |
-| `glm-5p2` | `ruby-sinatra` | FAIL | 5 | `combat-state` |
-| `glm-5p2` | `ruby-stdlib` | PASS | 12 |  |
-| `glm-5p2` | `rust-stdlib` | FAIL | 4 | `combat-state` |
-| `glm-5p2` | `typescript-nextjs` | FAIL | 4 | `combat-state` |
-| `glm-5p2` | `typescript-node` | PASS | 11 |  |
-| `glm-5p2` | `typescript-vite` | PASS | 12 |  |
-| `gpt-5.5` | `go-stdlib` | PASS | 12 |  |
-| `gpt-5.5` | `java-stdlib` | PASS | 11 |  |
-| `gpt-5.5` | `php-slim` | FAIL | 4 | `combat-state` |
-| `gpt-5.5` | `php-stdlib` | FAIL | 4 | `combat-state` |
-| `gpt-5.5` | `php-symfony` | PASS | 12 |  |
-| `gpt-5.5` | `python-django` | PASS | 11 |  |
-| `gpt-5.5` | `python-flask` | PASS | 12 |  |
-| `gpt-5.5` | `python-stdlib` | PASS | 12 |  |
-| `gpt-5.5` | `ruby-rails` | PASS | 14 |  |
-| `gpt-5.5` | `ruby-sinatra` | PASS | 12 |  |
-| `gpt-5.5` | `ruby-stdlib` | PASS | 11 |  |
-| `gpt-5.5` | `rust-stdlib` | PASS | 11 |  |
-| `gpt-5.5` | `typescript-nextjs` | PASS | 13 |  |
-| `gpt-5.5` | `typescript-node` | PASS | 12 |  |
-| `gpt-5.5` | `typescript-vite` | PASS | 11 |  |
-| `kimi-k2p7-code` | `go-stdlib` | PASS | 12 |  |
-| `kimi-k2p7-code` | `java-stdlib` | PASS | 15 |  |
-| `kimi-k2p7-code` | `php-slim` | PASS | 12 |  |
-| `kimi-k2p7-code` | `php-stdlib` | PASS | 13 |  |
-| `kimi-k2p7-code` | `php-symfony` | FAIL | 4 | `combat-state` |
-| `kimi-k2p7-code` | `python-django` | PASS | 12 |  |
-| `kimi-k2p7-code` | `python-flask` | PASS | 14 |  |
-| `kimi-k2p7-code` | `python-stdlib` | PASS | 13 |  |
-| `kimi-k2p7-code` | `ruby-rails` | PASS | 14 |  |
-| `kimi-k2p7-code` | `ruby-sinatra` | FAIL | 7 | `auth-users` |
-| `kimi-k2p7-code` | `ruby-stdlib` | PASS | 12 |  |
-| `kimi-k2p7-code` | `rust-stdlib` | FAIL | 4 | `combat-state` |
-| `kimi-k2p7-code` | `typescript-nextjs` | PASS | 12 |  |
-| `kimi-k2p7-code` | `typescript-node` | PASS | 13 |  |
-| `kimi-k2p7-code` | `typescript-vite` | FAIL | 5 | `combat-state` |
-| `opus` | `go-stdlib` | FAIL | 12 | `dm-tools` |
-| `opus` | `java-stdlib` | FAIL | 6 | `auth-users` |
-| `opus` | `php-slim` | FAIL | 2 | `core` |
-| `opus` | `php-stdlib` | FAIL | 2 | `core` |
-| `opus` | `php-symfony` | PASS | 11 |  |
-| `opus` | `python-django` | PASS | 11 |  |
-| `opus` | `python-flask` | FAIL | 2 | `core` |
-| `opus` | `python-stdlib` | FAIL | 2 | `core` |
-| `opus` | `ruby-rails` | FAIL | 9 | `compendium` |
-| `opus` | `ruby-sinatra` | PASS | 11 |  |
-| `opus` | `ruby-stdlib` | FAIL | 2 | `core` |
-| `opus` | `rust-stdlib` | PASS | 11 |  |
-| `opus` | `typescript-nextjs` | FAIL | 6 | `auth-users` |
-| `opus` | `typescript-node` | FAIL | 2 | `core` |
-| `opus` | `typescript-vite` | PASS | 13 |  |
-| `sonnet` | `go-stdlib` | FAIL | 2 | `core` |
-| `sonnet` | `java-stdlib` | FAIL | 2 | `core` |
-| `sonnet` | `php-slim` | FAIL | 2 | `core` |
-| `sonnet` | `php-stdlib` | FAIL | 2 | `core` |
-| `sonnet` | `php-symfony` | PASS | 11 |  |
-| `sonnet` | `python-django` | FAIL | 13 | `dm-tools` |
-| `sonnet` | `python-flask` | FAIL | 2 | `core` |
-| `sonnet` | `python-stdlib` | FAIL | 2 | `core` |
-| `sonnet` | `ruby-rails` | FAIL | 2 | `core` |
-| `sonnet` | `ruby-sinatra` | FAIL | 9 | `campaign-state` |
-| `sonnet` | `ruby-stdlib` | FAIL | 2 | `core` |
-| `sonnet` | `rust-stdlib` | FAIL | 12 | `phb-rules` |
-| `sonnet` | `typescript-nextjs` | FAIL | 2 | `core` |
-| `sonnet` | `typescript-node` | FAIL | 2 | `core` |
-| `sonnet` | `typescript-vite` | PASS | 12 |  |
+Earlier Claude results were confounded by CLI session/quota/auth blocks and by
+ambiguous model alias behavior. Those shots remain preserved in the artifact
+tree and classified separately in
+[`003-infra-block-classification.md`](003-infra-block-classification.md), but
+they are not treated as comparative model failures in the latest matrix above.
 
-## Rust Append Run
+After verifying `claude -p --model` behavior and rerunning:
 
-Rust was added append-only after the 14-target baseline. It was intentionally constrained to Rust 1.97.0 with standard-library-only HTTP and JSON handling. That makes it a strong compiler-signal comparator, but not an ergonomic web-framework comparator.
+| Model | Latest result | Shots | Note |
+| --- | ---: | ---: | --- |
+| `claude/opus` | 15/15 | 169 | Green on every target, but never clean-nine-shot; every pass required at least one repair or maintenance overhead shot. |
+| `claude/sonnet` | 10/15 | 159 | Strong on many targets but retained deterministic failures on five cells. |
 
-| Model | Outcome | Shots | Failed stage | Completed stages |
-| --- | --- | ---: | --- | ---: |
-| `glm-5p2` | FAIL | 4 | `combat-state` | 2/9 |
-| `gpt-5.5` | PASS | 11 |  | 9/9 |
-| `kimi-k2p7-code` | FAIL | 4 | `combat-state` | 2/9 |
-| `opus` | PASS | 11 |  | 9/9 |
-| `sonnet` | FAIL | 12 | `phb-rules` | 7/9 |
+## Failure Patterns
 
-Result: `rust-stdlib` passed for `opus` and `gpt-5.5`, both in 11 shots. It failed for `sonnet` at `phb-rules` after 12 shots, and failed for both open-weight models at `combat-state` after 4 shots.
+`combat-state` is the dominant deterministic failure stage across non-passing
+cells. The most common exact issue is response-shape drift after a condition
+expires: implementations return an empty `conditions` object instead of keeping
+the target key with an empty array, e.g. `"fighter": []`.
+
+`auth-users` failures are usually exact-status failures, especially returning
+`200` where the evaluator requires `201` for user registration.
+
+Late maintenance failures are more varied. Examples include missing or empty
+`open_threads` in `dm-tools`, campaign state regressions in inherited apps, and
+compendium persistence/lookup mismatches.
 
 ## Interpretation
 
-The main result is that pass rate alone is incomplete. A perfect nine-stage
-lifecycle would take 9 shots, but many successful cells took 11 to 15 shots.
-The benchmark therefore needs to treat shot burden, failed stage, and
-bug-fix-recovery behavior as first-class outcomes.
+The main empirical result is that pass rate alone is incomplete. The strongest
+model, latest Opus, passed every cell but took 169 shots across 15 cells: 34
+extra shots beyond the clean 135-shot minimum. Successful cells routinely took
+11-15 shots, so shot burden and stage of first failure should be primary
+outcomes alongside pass/fail.
 
-The model effect is large. `gpt-5.5` is strongest overall at 13/15 completed
-cells. The other models show different failure distributions by target and
-stage. Those differences should be analyzed as model/target/stage interactions
-rather than collapsed into a single language ranking.
+The target effect is visible but not reducible to a single language ranking.
+Four targets were green across every model (`go-stdlib`, `java-stdlib`,
+`python-flask`, `typescript-node`), while several framework/runtime targets
+showed one or more stage-specific failures. The next analysis step is to code
+design dimensions quantitatively and test whether those dimensions explain
+shot burden and failure stage after controlling for model and task effects.
 
-The stage effect is also visible. Early failures often occur at `core`, while
-later failures cluster around stateful or bundled maintenance stages such as
-`combat-state`, `auth-users`, `campaign-state`, `phb-rules`, and `dm-tools`.
-That supports extending the benchmark beyond short greenfield tasks.
-
-The default roadmap has since been extended from nine stages to sixteen stages:
-one initial creative build plus fifteen fresh maintenance inheritances. Future
-matrix runs should use that longer roadmap to measure how models behave as the
-inherited codebase continues to grow.
+The benchmark should now move from nine-stage comparison to the longer
+16-stage roadmap: one initial creative build plus 15 fresh maintenance
+inheritances. That longer run is the better instrument for studying what
+happens as inherited codebases grow.
 
 ## Follow-Up Questions
 
-- Inspect failure artifacts for Claude early `core` failures to determine whether they are prompt/harness issues or genuine implementation failures.
 - Add normalized retry metrics by stage, not only by cell.
 - Add per-stage wall-clock time and token/cost estimates where providers expose them.
-- Add tasks that more directly stress API churn, hidden imports, dependency version mismatch, and implicit framework behavior.
-- Re-run selected cells with more fix shots to separate "cannot solve" from "needs more repair attempts."
+- Quantify target covariates: dependency count, package age/churn, formatter/linter canonicalization, framework count per task category, and corpus prevalence.
+- Run the 16-stage lifecycle after this nine-stage baseline is frozen.
+- Add seeded debugging/refactor strata without mixing them directly into the greenfield lifecycle score.

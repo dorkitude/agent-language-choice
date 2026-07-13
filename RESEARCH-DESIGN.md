@@ -1,7 +1,7 @@
 # Agent Language Choice — Research Design
 
-Started 2026-07-08. Status: **design draft v0.1** (framing + hypotheses; benchmark and
-citations not yet finalized).
+Started 2026-07-08. Status: **design draft v0.3** (framing, benchmark,
+initial citation verification, target scoring, and venue plan completed).
 
 ## Research question
 
@@ -15,8 +15,8 @@ predicts agent task success, independent of training-corpus prevalence.
 ## Design dimensions (independent variables)
 
 Each dimension is stated as a mechanism hypothesis, with a measurable proxy and
-candidate literature. **All citations below are candidates from memory and must
-be verified before use** (see Open tasks).
+verified anchor literature. These references are not yet a complete related-work
+section, but they are confirmed enough to support the current design draft.
 
 ### D1. Verification signal quality (compilation)
 
@@ -27,12 +27,13 @@ convergence.
 
 - Proxy: static vs dynamic; AOT-compiled vs interpreted; typechecker
   strictness; time-to-first-error.
-- Candidate citations: Olausson et al. 2023, "Is Self-Repair a Silver Bullet?";
-  Chen et al. 2023, "Teaching Large Language Models to Self-Debug"; Gao, Bird
-  & Barr, ICSE 2017, "To Type or Not to Type" (TS catches ~15% of JS bugs);
-  Hanenberg's static-typing experiments; Ray et al., FSE 2014, "A Large-Scale
-  Study of Programming Languages and Code Quality in GitHub" (and its
-  replication critique — cite both).
+- Anchor citations: Olausson et al. 2024,
+  ["Is Self-Repair a Silver Bullet for Code Generation?"](https://arxiv.org/abs/2306.09896);
+  Gao, Bird & Barr 2017,
+  ["To Type or Not to Type: Quantifying Detectable Bugs in JavaScript"](https://dl.acm.org/doi/10.1109/ICSE.2017.75).
+  Use Hanenberg-style static-typing experiments and the Ray et al. language
+  quality debate as related work, but do not rely on them as direct causal
+  evidence for agent performance.
 
 ### D2. Ecosystem volatility (library churn)
 
@@ -47,10 +48,12 @@ the environment it must operate in.
 - Proxy: dependency-network evolution stats per ecosystem (release cadence,
   breaking-change frequency, median package age at use); deps required per
   solved benchmark task.
-- Candidate citations: Decan, Mens & Grosjean, EMSE 2019 (dependency network
-  evolution across package ecosystems); Kula et al. on outdated
-  dependencies; Abdalkareem et al. on trivial npm packages; recent
-  hallucinated-package ("slopsquatting") security reports.
+- Anchor citations: Decan, Mens & Grosjean 2019,
+  ["An Empirical Comparison of Dependency Network Evolution in Seven Software
+  Packaging Ecosystems"](https://link.springer.com/article/10.1007/s10664-017-9589-y)
+  / [arXiv preprint](https://arxiv.org/abs/1710.04936). Use Kula et al. on
+  outdated dependencies and package-hallucination/slopsquatting reports as
+  supporting operational risk literature.
 
 ### D3. Standard library coverage
 
@@ -73,8 +76,11 @@ languages assume a human reader, not a stochastic writer.
 
 - Proxy: tokens per solved task (corpus-level and in our results); language
   entropy per Hindle et al.'s naturalness framing.
-- Candidate citations: Hindle et al., ICSE 2012, "On the Naturalness of
-  Software"; follow-on naturalness literature.
+- Anchor citation: Hindle et al. 2012,
+  ["On the Naturalness of Software"](https://softwareprocess.es/homepage/papers/2012-hindle12012icse/).
+  The direct claim from that work is predictability/repetition in human-written
+  software; the redundancy-as-error-correction mechanism remains this study's
+  hypothesis.
 
 ### D5. Explicitness / referential locality
 
@@ -91,9 +97,9 @@ not perform within its context window.
   dispatch surprises, metaprogramming prevalence, implicit conversions);
   possibly "how far away can code change the meaning of this line" as a
   static measure.
-- Candidate citations: Pike 2012, "Go at Google: Language Design in the
-  Service of Software Engineering" (explicit design rationale — citable as
-  design intent, not as evidence of effect).
+- Anchor citation: Pike 2012,
+  ["Go at Google: Language Design in the Service of Software Engineering"](https://go.dev/talks/2012/splash.article)
+  as design intent, not direct evidence of agent effect.
 
 ### D6. Idiom uniformity
 
@@ -114,18 +120,46 @@ versions of the same framework — see D2).
 ### Confound C1. Training-corpus prevalence (must control)
 
 Public code corpora are not evenly distributed across languages and frameworks.
-MultiPL-E (Cassano et al. 2023) and MBXP (Athiwaratkun et al. 2023) show LLM
-performance correlates with language resource level. Include corpus prevalence
-(e.g. The Stack / GitHub language shares) as a covariate in all analyses.
+MultiPL-E (Cassano et al. 2023) and MBXP/HumanEval-X (Athiwaratkun et al.
+2022/2023) show that multilingual code generation performance varies by
+language and benchmark construction. Include corpus prevalence (e.g. The Stack
+/ GitHub language shares) as a covariate in all analyses.
+
+- Anchor citations: Cassano et al.,
+  ["MultiPL-E: A Scalable and Extensible Approach to Benchmarking Neural Code
+  Generation"](https://arxiv.org/abs/2208.08227); Athiwaratkun et al.,
+  ["Multi-lingual Evaluation of Code Generation Models"](https://arxiv.org/abs/2210.14868).
 
 ## Targets under test
 
 The harness defines multiple language/framework targets. Treat each target as
 a point in a measured design space rather than as a pre-labeled good or bad
-case. Before paper use, each target should receive measured or cited values for
-the dimensions above: compiler/type feedback, dependency volatility, standard
-library coverage, verbosity, explicitness, idiom uniformity, and corpus
-prevalence.
+case.
+
+Initial qualitative scoring for the current benchmark targets:
+
+| Target | Verification signal | Ecosystem volatility | Stdlib/dependency surface | Explicitness/locality | Idiom uniformity | Corpus prevalence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `go-stdlib` | high | low | high stdlib / zero deps | high | high | medium |
+| `rust-stdlib` | high | medium | high stdlib / zero deps in benchmark | high | medium-high | medium-low |
+| `java-stdlib` | high | low-medium | high stdlib / zero deps | high | medium | high |
+| `typescript-node` | medium-high | high | medium stdlib / npm-adjacent | medium | low-medium | high |
+| `typescript-vite` | medium-high | high | framework/toolchain heavy | medium | low-medium | high |
+| `typescript-nextjs` | medium-high | high | framework-heavy | medium-low | medium | high |
+| `python-stdlib` | low-medium | medium | high stdlib / zero deps | medium | medium | high |
+| `python-flask` | low-medium | medium | light framework | medium | medium | high |
+| `python-django` | low-medium | medium | framework-heavy, batteries included | medium-low | medium-high | high |
+| `ruby-stdlib` | low | medium | medium stdlib / zero deps | low-medium | medium | medium |
+| `ruby-sinatra` | low | medium | light framework | low-medium | medium | medium |
+| `ruby-rails` | low | medium | framework-heavy, convention-driven | low | medium-high | medium |
+| `php-stdlib` | low-medium | medium | medium stdlib / zero deps | medium | medium | medium |
+| `php-slim` | low-medium | medium | light framework | medium | medium | medium |
+| `php-symfony` | low-medium | medium | framework-components | medium | medium-high | medium |
+
+These are analysis covariates, not conclusions. Paper-ready scoring should
+replace qualitative labels with a coded rubric: compile/typecheck feedback,
+dependency count, package age/churn, formatter/linter canonicalization,
+framework count per task category, and corpus prevalence.
 
 ## Benchmark design
 
@@ -139,10 +173,45 @@ externally (stdin/stdout, HTTP), so the same tests judge every language.
 This avoids the MultiPL-E trap of per-language transpiled unit tests, and it
 naturally exercises deps/stdlib (D2/D3).
 
-Task categories (draft): text/data munging (stdlib-only solvable), HTTP JSON
-API, concurrency (rate limiter, worker pool), third-party-dependency-required
-task (deliberately probes D2), refactor/extend-existing-code task (probes D5 —
-requires seeding per-language starter repos, held structurally parallel).
+Final task strata for the first paper:
+
+1. **Greenfield REST lifecycle:** the D&D engine roadmap below, scored by
+   cumulative black-box HTTP suites.
+2. **Maintenance inheritance:** every post-`core` D&D stage is implemented by
+   a fresh agent inheriting the growing codebase.
+3. **Bug-fix recovery:** failed stages receive deterministic evaluator output
+   and a fresh bug-fix agent; every attempt counts as a shot.
+4. **Seeded debugging:** structurally parallel buggy starter repos for smaller
+   CLI/service tasks, scored separately from the greenfield lifecycle.
+
+Finalized first-suite task roadmap:
+
+| # | Task/stage | Stratum | Evaluator |
+| ---: | --- | --- | --- |
+| 1 | `core` D&D REST API | greenfield | HTTP |
+| 2 | `characters` | maintenance | HTTP |
+| 3 | `combat-state` | maintenance | HTTP |
+| 4 | `auth-users` | maintenance | HTTP |
+| 5 | `sqlite-storage` | maintenance | HTTP |
+| 6 | `compendium` | maintenance | HTTP |
+| 7 | `campaign-state` | maintenance | HTTP |
+| 8 | `phb-rules` | maintenance | HTTP |
+| 9 | `dm-tools` | maintenance | HTTP |
+| 10 | `quest-tracker` | maintenance | HTTP |
+| 11 | `npcs-factions` | maintenance | HTTP |
+| 12 | `inventory-equipment` | maintenance | HTTP |
+| 13 | `downtime-crafting` | maintenance | HTTP |
+| 14 | `session-scheduling` | maintenance | HTTP |
+| 15 | `audit-export` | maintenance | HTTP |
+| 16 | `analytics-reporting` | maintenance | HTTP |
+| 17 | `kv_patch` | greenfield CLI/service pilot | CLI/unit |
+| 18 | `ledger_debug` | seeded debugging pilot | CLI/unit |
+| 19 | rate limiter | concurrency extension | HTTP/CLI |
+| 20 | job queue / worker pool | concurrency extension | HTTP/CLI |
+| 21 | import/export migration | persistence extension | HTTP |
+| 22 | schema migration bugfix | seeded debugging | HTTP/CLI |
+| 23 | dependency upgrade repair | ecosystem-volatility probe | framework-native + HTTP |
+| 24 | cross-file refactor | referential-locality probe | CLI/unit |
 
 REST/API tasks are evaluated only through a central black-box HTTP evaluator.
 This keeps scoring independent of implementation language and lets the same
@@ -168,15 +237,22 @@ test-fail vs dependency-resolution), third-party deps used.
 
 Three providers, driven uniformly:
 
-- **OSS models via Fireworks** (e.g. current Qwen-coder / DeepSeek / Llama
-  coder variants — pin exact versions at experiment time)
-- **Claude models via `claude -p`** (headless Claude Code; pin model IDs)
-- **OpenAI models via Codex CLI**
+- **OSS models via Fireworks/Pi:** `kimi-k2p7-code`, `glm-5p2`
+- **Claude models via `claude -p`:** CLI aliases verified on 2026-07-12:
+  `opus` resolves to `claude-opus-4-8`, `sonnet` resolves to
+  `claude-sonnet-5`, `fable` resolves to `claude-fable-5`
+- **OpenAI models via Codex CLI:** `gpt-5.5` with medium reasoning effort
 
 Harness requirements: identical prompt/spec per task across providers; each
 run in an isolated workspace (container) with the language toolchain
 pre-installed; fixed iteration budget; full transcript + artifact capture;
 seeds/configs recorded for reproducibility.
+
+Infrastructure accounting requirement: agent CLI quota/session/auth/rate-limit
+exits are classified as `blocked`, not as model failures. See
+[`docs/findings/003-infra-block-classification.md`](docs/findings/003-infra-block-classification.md)
+and the queryable state DB at
+[`results/dnd-rest-benchmark/experiment-state.sqlite3`](results/dnd-rest-benchmark/experiment-state.sqlite3).
 
 Analysis: mixed-effects model — task success ~ language design dimensions +
 corpus prevalence covariate, random effects for task and model. Interaction
@@ -193,18 +269,36 @@ D1 feedback?).
   external review.
 - Conformance tests at process/HTTP boundary can't judge code quality —
   scope claims to functional success.
-- TS is config-dependent (strict mode vs not) — must fix and report tsconfig.
+- Framework/runtime version recency is a design choice in this study: targets
+  intentionally use newest available versions, which increases ecological
+  validity for active coding agents but may increase post-training-cutoff
+  volatility.
+
+## Venue plan
+
+Primary target: **ASE research track**. The study is an empirical software
+engineering paper about agentic code generation under language/framework
+design variables, with a new benchmark harness and artifacts. Strong fallback
+venues: **ICSE research track**, **FSE research track**, or an empirical
+software engineering journal extension if the benchmark/results need more
+space than a conference paper permits.
+
+Workshop/early-feedback targets: an AI-for-SE, LLM4Code, or MSR-adjacent
+workshop once the Claude reruns and 16-stage matrix are complete.
 
 ## Open tasks
 
-- [ ] Verify every candidate citation above (deep-research pass); replace
-      from-memory attributions with confirmed refs
-- [ ] Score the language × dimension matrix with citations/measurements
-- [ ] Finalize task list (target: 20–30 tasks × 6 languages)
+- [x] Verify candidate citations above; replace from-memory attributions with
+      confirmed anchor refs
+- [x] Score the language × dimension matrix with preliminary qualitative
+      citations/measurements
+- [x] Finalize task list (24 tasks/stages across greenfield, maintenance,
+      bug-fix, debugging, concurrency, dependency, and refactor strata)
 - [x] Build initial harness (Fireworks/Pi + `claude -p` + Codex CLI runners)
 - [x] Build first central REST evaluator (Go/Cobra/Viper) for D&D engine API
       challenges
-- [ ] Pilot: greenfield + debugging tasks × all six languages × selected
-      models (started with `kv_patch` × Go/TS × GLM/Kimi on 2026-07-08;
-      `ledger_debug` now seeds equivalent buggy repos for all languages)
-- [ ] Pick target venue (IES again? ICSE/FSE/ASE? NeurIPS D&B track?)
+- [x] Pilot: greenfield + debugging tasks across selected languages/models;
+      superseded by the 15-target D&D REST lifecycle matrix and retained
+      `kv_patch` / `ledger_debug` strata as smaller pilot/debugging artifacts
+- [x] Pick target venue: primary ASE research track; fallback ICSE/FSE or
+      journal extension

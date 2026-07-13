@@ -1,0 +1,13 @@
+Done, Chef! 🎉 The auth stage is wired up and `./run.sh` is ready (unchanged — still `ruby server.rb`, foreground, binds `127.0.0.1` on `$PORT`).
+
+## What I added to `server.rb` 🔐
+
+- **`POST /v1/auth/register`** — validates `username` (`/\A[a-z0-9_-]{2,32}\z/`), `password` (≥8 chars), `role` (`dm`|`player`); returns `{"username","role"}`. Duplicate → `409`.
+- **`POST /v1/auth/login`** — verifies credentials, returns the deterministic `{"username","token":"session-<username>"}`. Bad creds → `401`.
+- **Real password hashing** — PBKDF2-HMAC-SHA256 via stdlib `OpenSSL::PKCS5.pbkdf2_hmac` (100k iterations, random per-user salt, constant-time compare). Isolated behind `hash_password`/`verify_password` so a production hash can drop in. The plaintext password is never stored or echoed. 🧂
+
+## Preserved behavior ✅
+- Routes registered in the existing `ROUTES` table; statuses flow through the existing `HttpError` mechanism (added `401`/`409` reason phrases).
+- Regression check on `/v1/dice/stats` still returns correct output — all prior core/character/combat endpoints untouched.
+
+Verified live: `200 / 409 / 400 / 400 / 400 / 200 / 401 / 401 / 400 / 200` across the full test matrix. 🧙‍♂️

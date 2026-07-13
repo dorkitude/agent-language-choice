@@ -1,0 +1,16 @@
+The fix is complete, Chef! 🎉
+
+## What was wrong
+
+The failing test `combat-advance-expired-removed` expected the `conditions` map to still contain the `"fighter"` key (as an empty array) after fighter's condition expired — but the code was deleting the key entirely, yielding `"conditions":{}`.
+
+## The fix
+
+Two minimal changes in `index.php`:
+
+1. **Advance handler** (line ~534): stopped `unset()`-ing the combatant's key when their condition list became empty — now it just assigns the (possibly empty) `$kept` array, so the key persists. 🗝️
+2. **`combat_conditions_view`**: switched from `!empty($conds)` to `array_key_exists($name, ...)` so combatants who *have* carried a condition still appear with `[]` even after expiry.
+
+## Verified end-to-end
+
+Ran the full advance sequence — at the turn where fighter's `blessed` expires, the response is now `"conditions":{"fighter":[]}` instead of `{}`. ✅ `php -l` is clean, and `run.sh` is untouched (still `php -S 127.0.0.1:"$PORT" index.php` in the foreground). Prior behavior (active conditions still decrement and display correctly) is preserved.

@@ -42,10 +42,24 @@ central Go evaluator for D&D engine API challenges.
 The staged D&D lifecycle roadmap, prompt contract, and future backlog are in
 [`docs/roadmap/`](docs/roadmap/). Results and early interpretation are in
 [`docs/findings/`](docs/findings/).
+Paper-development materials generated from the Research Lifecycle Guide are in
+[`docs/paper/`](docs/paper/).
 
 The completed 5-model by 15-target D&D REST lifecycle matrix is summarized in
 [`docs/findings/002-full-lifecycle-matrix.md`](docs/findings/002-full-lifecycle-matrix.md).
-That completed matrix used nine cumulative stages.
+That completed matrix used nine cumulative stages and latest terminal results
+after the 2026-07-12/13 Claude reruns.
+
+## Current Findings
+
+| Finding | Current result | Underlying files |
+| --- | ---: | --- |
+| Nine-stage lifecycle matrix | 75 cells, 59 full passes, 16 deterministic failures, 784 total shots | [`docs/findings/002-full-lifecycle-matrix.md`](docs/findings/002-full-lifecycle-matrix.md), [`results/dnd-rest-benchmark/dashboard-data.json`](results/dnd-rest-benchmark/dashboard-data.json) |
+| Best current model result | `claude/opus`: 15/15 cells, 169 shots | [`docs/findings/002-full-lifecycle-matrix.md`](docs/findings/002-full-lifecycle-matrix.md) |
+| Other model results | `gpt-5.5`: 13/15; `kimi-k2p7-code`: 11/15; `sonnet`: 10/15; `glm-5p2`: 10/15 | [`results/dnd-rest-benchmark/dnd-rest-findings.html`](results/dnd-rest-benchmark/dnd-rest-findings.html) |
+| Main deterministic failure cluster | `combat-state` exact response-shape drift | [`docs/findings/002-full-lifecycle-matrix.md`](docs/findings/002-full-lifecycle-matrix.md) |
+| Infrastructure accounting | 27 stored runs classified as blocked, not model failures | [`docs/findings/003-infra-block-classification.md`](docs/findings/003-infra-block-classification.md), [`results/dnd-rest-benchmark/experiment-state.sqlite3`](results/dnd-rest-benchmark/experiment-state.sqlite3) |
+| Research design status | Citation verification, qualitative target scoring, 24-stage roadmap, and venue plan complete | [`RESEARCH-DESIGN.md`](RESEARCH-DESIGN.md) |
 
 The default D&D REST roadmap now has 16 total stages: one initial creative
 build plus 15 fresh maintenance inheritances. The final suite,
@@ -72,10 +86,14 @@ python3 experiments/dnd-rest-benchmark/rest_harness.py list-infra-blocks
 ```
 
 Published preview:
-<https://htmlpreview.github.io/?https://gist.githubusercontent.com/dorkitude/a842e88a90e822e4ca0f8f98da7d04e1/raw/c083ee9fa0ad55fe3dc9a54746695a63f046eaac/dnd-rest-findings.html>
+<https://htmlpreview.github.io/?https://gist.githubusercontent.com/dorkitude/a842e88a90e822e4ca0f8f98da7d04e1/raw/bf2523c4e3d6dd01018a0626f98abfa9594af6ea/dnd-rest-findings.html>
 
 ## Research Log
 
+- 2026-07-13: Reran latest Claude cells after verifying `claude -p --model`
+  selection and quota availability. Latest Opus is now 15/15 on the nine-stage
+  lifecycle matrix in 169 shots; latest Sonnet is 10/15 in 159 shots. Updated
+  SQLite state, dashboard JSON, self-contained HTML, and findings docs.
 - 2026-07-12: Added infrastructure-block classification for agent exits caused
   by CLI quota/session/auth/rate-limit conditions. Rebuilt the D&D REST
   dashboard and SQLite experiment-state DB; 27 stored runs are now marked

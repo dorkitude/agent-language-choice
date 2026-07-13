@@ -1,0 +1,14 @@
+The fix works. At advance 5 (fighter's round-2 turn), the condition decrements to 0 and is removed, but the response now shows `"conditions":{"fighter":[]}` — the `fighter` key persists as an empty array, which is exactly what the evaluator's `combat-advance-expired-removed` test requires. 🎉
+
+## What was wrong 🐛
+
+`session_conditions()` only emitted a combatant's key when it had **non-empty** conditions (`if conds:`). So once fighter's `blessed` condition expired and was removed, the `fighter` key vanished entirely, giving `"conditions":{}` — and the evaluator looked for the key `"fighter"` and didn't find it.
+
+## The fix ✨
+
+I track which combatants have *ever* had a condition via a per-session `condition_targets` set:
+- Seeded as an empty `set()` at session creation.
+- A `target` is added whenever a condition is attached.
+- `session_conditions()` now emits a key for every combatant in that set — including an empty `[]` once all their conditions have expired.
+
+Three tight edits, no other behavior touched. `run.sh` is unchanged and still starts the server in the foreground on `127.0.0.1:$PORT`. All prior endpoints are preserved. Ready to re-run, Chef! 🎲

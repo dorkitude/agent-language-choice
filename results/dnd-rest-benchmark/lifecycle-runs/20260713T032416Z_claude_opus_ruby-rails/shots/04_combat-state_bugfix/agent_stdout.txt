@@ -1,0 +1,10 @@
+Fixed! 🐛✨
+
+**Root cause:** In `advance_turn`, the code built the `conditions` map by skipping any combatant with an empty conditions list (`next if c[:conditions].empty?`). When the fighter's `blessed` condition decremented to 0 and got removed, the fighter dropped out of the map entirely — so the response was `"conditions":{}` instead of `"conditions":{"fighter":[]}`. The evaluator expects a combatant that *has been tracked* to keep its key (with an empty array) once its conditions expire.
+
+**Fix:** Track a `had_conditions` flag per combatant (set when a condition is added) and include those combatants in the map regardless of whether their current list is empty:
+- Added `had_conditions: false` at session creation
+- Set it `true` in `add_condition`
+- Changed the advance filter from `next if c[:conditions].empty?` → `next unless c[:had_conditions]`
+
+Verified end-to-end against the exact test sequence: the final advance now returns `"conditions":{"fighter":[]}`, matching the expected shape, while all prior behavior (decrement, wrap-round, non-active combatants not decrementing) is preserved. `./run.sh` is unchanged and ready. 🎲

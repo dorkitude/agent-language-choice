@@ -1,0 +1,20 @@
+Done, Chef! 🎲✨
+
+## Maintenance Stage 4: SQLite Game Storage — complete
+
+**What I built** (in `storage.go`, wired into `main.go`):
+
+- **`GET /v1/storage/status`** → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- **`POST /v1/storage/reset`** → clears benchmark durable data, recreates schema, keeps the process healthy → `{"ok":true,"schema_version":1}`
+- Schema (`meta`, `game_world`, `game_state`) is initialized on server startup, writing a **real `game.db`** file.
+
+**The interesting bit** 🧩 — the target guidance forbids third-party packages, and Go's stdlib ships **no SQLite driver**. So rather than fake it, I wrote a tiny, self-contained encoder for the [SQLite on-disk file format](https://www.sqlite.org/fileformat2.html): DB header, varint/record encoding, the `sqlite_schema` b-tree on page 1, and empty leaf root pages per table. The output is a genuine, openable database — verified with the real `sqlite3` CLI:
+
+```
+sqlite> PRAGMA integrity_check;  → ok
+sqlite> .tables                  → game_state  game_world  meta
+```
+
+**Preservation check** ✅ — all prior-stage endpoints still respond correctly (health, dice, combat sessions, auth register/login all tested cumulatively). Invalid requests return non-2xx (e.g. `POST` to the status route → `405`).
+
+`run.sh` is unchanged (`go run .`), listens on `127.0.0.1:$PORT`, and starts in the foreground. Build is clean (`go vet` + `go build` pass, `gofmt` clean). I did **not** start the server as part of finishing. Ready to go! 🚀

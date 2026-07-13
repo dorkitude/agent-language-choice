@@ -1,0 +1,21 @@
+Everything's wired up and verified, Chef! 🎲✨
+
+## What I did — Maintenance Stage 4: SQLite Game Storage
+
+Added a durable SQLite layer to the existing Ruby-stdlib D&D API while preserving every prior endpoint exactly.
+
+**Approach** — Ruby stdlib has no SQLite binding, so I used the system `/usr/bin/sqlite3` CLI via stdlib `Open3` (no gems, honoring the stdlib-only constraint). The in-memory stores stay authoritative for runtime behavior, with **best-effort write-through** to `game.db` so a storage hiccup can never break the API contract.
+
+**New pieces:**
+- 🗄️ `SqliteStore` module — creates `game.db` and initializes schema (`meta`, `users`, `combat_sessions`) on startup; records `schema_version = 1`. SQL string literals are single-quote-escaped against injection.
+- 📊 `GET /v1/storage/status` → `{"driver":"sqlite","schema_version":1,"initialized":true}`
+- ♻️ `POST /v1/storage/reset` → drops + recreates schema, clears in-memory stores → `{"ok":true,"schema_version":1}`
+- Write-through added to `register`, combat session create/conditions/advance.
+
+**Verified via smoke test:**
+- Storage status/reset ✅
+- Users + combat sessions actually land in `game.db` (confirmed via `sqlite3` dump) ✅
+- Prior endpoints intact (dice, combat, auth, health) ✅
+- Invalid request → `400` ✅
+
+`./run.sh` is unchanged and ready — it starts `ruby server.rb` in the foreground, listening on `127.0.0.1:$PORT`. I did not leave the server running, and removed the test `game.db` so the evaluator gets a clean first startup. 🚀
