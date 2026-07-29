@@ -696,6 +696,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Migrate legacy schema version 1 snapshots to version 2 deterministically",
     ),
+    LifecycleStage(
+        id="086-pagination-search",
+        suite="086-pagination-search",
+        spec_path=BENCH_DIR / "challenges" / "086-pagination-search.md",
+        kind="maintenance",
+        description="Add stable campaign search-record pagination and filtering",
+    ),
 ]
 
 

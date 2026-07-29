@@ -809,7 +809,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1549,6 +1549,82 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, campaign.MigratedState.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/search-records", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			RecordID string `json:"record_id"`
+			Text     string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RecordID == "" || req.Text == "" || campaign.SearchRecordIndex[req.RecordID] || campaign.SearchTextIndex[req.Text] {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		record := referenceSearchRecord{RecordID: req.RecordID, Text: req.Text}
+		campaign.SearchRecords = append(campaign.SearchRecords, record)
+		campaign.SearchRecordIndex[record.RecordID] = true
+		campaign.SearchTextIndex[record.Text] = true
+		writeJSON(w, http.StatusCreated, record.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/search-records", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		values := r.URL.Query()
+		if len(values["q"]) > 1 || len(values["limit"]) > 1 || len(values["cursor"]) > 1 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		q := values.Get("q")
+		limit := 2
+		if raw := values.Get("limit"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed < 1 || parsed > 3 {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			limit = parsed
+		}
+		cursor := 0
+		if raw := values.Get("cursor"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed < 0 {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			cursor = parsed
+		}
+		filtered := make([]referenceSearchRecord, 0, len(campaign.SearchRecords))
+		needle := strings.ToLower(q)
+		for _, record := range campaign.SearchRecords {
+			if needle == "" || strings.Contains(strings.ToLower(record.Text), needle) {
+				filtered = append(filtered, record)
+			}
+		}
+		end := cursor + limit
+		if cursor > len(filtered) {
+			cursor = len(filtered)
+		}
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		records := make([]any, 0, end-cursor)
+		for _, record := range filtered[cursor:end] {
+			records = append(records, record.json())
+		}
+		var nextCursor any
+		if end < len(filtered) {
+			nextCursor = end
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"records": records, "next_cursor": nextCursor})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -4542,6 +4618,9 @@ type referencePlayCampaign struct {
 	Exports                []referenceCampaignExport
 	ImportedState          *referenceCampaignImport
 	MigratedState          *referenceCampaignMigration
+	SearchRecords          []referenceSearchRecord
+	SearchRecordIndex      map[string]bool
+	SearchTextIndex        map[string]bool
 	DeathSaves             int
 	DeathStable            bool
 }
@@ -4670,6 +4749,15 @@ type referenceCampaignMigration struct {
 
 func (migration referenceCampaignMigration) json() map[string]any {
 	return map[string]any{"schema_version": migration.SchemaVersion, "story": migration.Story, "campaign_name": migration.CampaignName}
+}
+
+type referenceSearchRecord struct {
+	RecordID string
+	Text     string
+}
+
+func (record referenceSearchRecord) json() map[string]any {
+	return map[string]any{"record_id": record.RecordID, "text": record.Text}
 }
 
 type referenceNote struct {

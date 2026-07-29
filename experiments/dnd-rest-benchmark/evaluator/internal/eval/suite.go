@@ -106,6 +106,7 @@ func Suites() []Suite {
 		versionedExportSuite(),
 		importValidationSuite(),
 		schemaMigrationSuite(),
+		paginationSearchSuite(),
 	}
 }
 
