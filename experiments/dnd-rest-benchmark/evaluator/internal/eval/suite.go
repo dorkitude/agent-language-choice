@@ -111,6 +111,7 @@ func Suites() []Suite {
 		serviceMetricsSuite(),
 		readinessHealthSuite(),
 		backupRestoreSuite(),
+		deterministicReplaySuite(),
 	}
 }
 

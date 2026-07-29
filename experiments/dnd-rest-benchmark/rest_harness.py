@@ -731,6 +731,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Create owner-only immutable campaign backups and restore snapshots",
     ),
+    LifecycleStage(
+        id="091-deterministic-replay",
+        suite="091-deterministic-replay",
+        spec_path=BENCH_DIR / "challenges" / "091-deterministic-replay.md",
+        kind="maintenance",
+        description="Replay ordered campaign events to an exact deterministic public state",
+    ),
 ]
 
 

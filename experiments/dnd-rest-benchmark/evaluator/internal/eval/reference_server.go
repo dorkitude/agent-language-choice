@@ -821,7 +821,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}, RateEventIndex: map[string]bool{}, RateCounts: map[string]int{}, BackupIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}, RateEventIndex: map[string]bool{}, RateCounts: map[string]int{}, BackupIndex: map[string]int{}, ReplayEventIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1759,6 +1759,54 @@ func ReferenceHandler() http.Handler {
 		campaign.Story = backup.Story
 		campaign.Status = backup.Status
 		writeJSON(w, http.StatusOK, backup.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/replay-events", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		eventID, ok := requiredString(raw, "event_id")
+		if !ok {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		kind, ok := requiredString(raw, "kind")
+		if !ok || kind != "append" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		text, ok := requiredString(raw, "text")
+		if !ok {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if campaign.ReplayEventIndex[eventID] {
+			http.Error(w, "duplicate event", http.StatusConflict)
+			return
+		}
+		event := referenceReplayEvent{EventID: eventID, Kind: kind, Text: text, Sequence: len(campaign.ReplayEvents) + 1}
+		campaign.ReplayEvents = append(campaign.ReplayEvents, event)
+		campaign.ReplayEventIndex[eventID] = true
+		writeJSON(w, http.StatusCreated, event.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/replay", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.replayStateJSON())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/replay/check", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.replayStateJSON())
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -4763,6 +4811,8 @@ type referencePlayCampaign struct {
 	MetricProjectionEvents   int
 	Backups                  []referenceCampaignBackup
 	BackupIndex              map[string]int
+	ReplayEvents             []referenceReplayEvent
+	ReplayEventIndex         map[string]bool
 	DeathSaves               int
 	DeathStable              bool
 }
@@ -4910,6 +4960,17 @@ type referenceCampaignBackup struct {
 
 func (backup referenceCampaignBackup) json() map[string]any {
 	return map[string]any{"backup_id": backup.BackupID, "story": backup.Story, "status": backup.Status}
+}
+
+type referenceReplayEvent struct {
+	EventID  string
+	Kind     string
+	Text     string
+	Sequence int
+}
+
+func (event referenceReplayEvent) json() map[string]any {
+	return map[string]any{"event_id": event.EventID, "kind": event.Kind, "text": event.Text, "sequence": event.Sequence}
 }
 
 type referenceCampaignMigration struct {
@@ -6072,6 +6133,23 @@ func (campaign *referencePlayCampaign) eventJSON() []map[string]any {
 		result = append(result, event.json())
 	}
 	return result
+}
+
+func (campaign *referencePlayCampaign) replayStateJSON() map[string]any {
+	var story strings.Builder
+	eventIDs := make([]any, 0, len(campaign.ReplayEvents))
+	digestIDs := make([]string, 0, len(campaign.ReplayEvents))
+	for _, event := range campaign.ReplayEvents {
+		story.WriteString(event.Text)
+		eventIDs = append(eventIDs, event.EventID)
+		digestIDs = append(digestIDs, event.EventID)
+	}
+	replayStory := story.String()
+	return map[string]any{
+		"story":     replayStory,
+		"event_ids": eventIDs,
+		"digest":    strings.Join(digestIDs, ",") + "|" + replayStory,
+	}
 }
 
 type referenceCampaign struct {
