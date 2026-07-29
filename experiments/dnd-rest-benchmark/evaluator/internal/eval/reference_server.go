@@ -1780,6 +1780,41 @@ func ReferenceHandler() http.Handler {
 		delete(c.Concentration, characterID)
 		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "concentration": nil})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/concentration/damage", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			Damage int `json:"damage"`
+			Roll   int `json:"roll"`
+		}
+		concentration := c.Concentration[characterID]
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.Damage < 1 || concentration == nil {
+			http.Error(w, "invalid concentration damage check", http.StatusBadRequest)
+			return
+		}
+		dc := (q.Damage + 1) / 2
+		if dc < 10 {
+			dc = 10
+		}
+		maintained := q.Roll >= dc
+		if !maintained {
+			delete(c.Concentration, characterID)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"character_id":  characterID,
+			"dc":            dc,
+			"roll":          q.Roll,
+			"maintained":    maintained,
+			"concentration": concentrationJSON(c, characterID),
+		})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {

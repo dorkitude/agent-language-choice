@@ -472,6 +472,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Replace, clear, and expire active concentration",
     ),
+    LifecycleStage(
+        id="054-concentration-damage",
+        suite="054-concentration-damage",
+        spec_path=BENCH_DIR / "challenges" / "054-concentration-damage.md",
+        kind="maintenance",
+        description="Resolve deterministic concentration checks after damage",
+    ),
 ]
 
 
