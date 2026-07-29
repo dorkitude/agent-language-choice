@@ -521,6 +521,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add bounded faction reputation and role-filtered history",
     ),
+    LifecycleStage(
+        id="061-npc-dialogue",
+        suite="061-npc-dialogue",
+        spec_path=BENCH_DIR / "challenges" / "061-npc-dialogue.md",
+        kind="maintenance",
+        description="Append NPC dialogue with player-safe visibility filtering",
+    ),
 ]
 
 

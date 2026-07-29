@@ -2186,6 +2186,60 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, npc.playerJSON())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/npcs/{npc_id}/dialogue", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		npc := c.NPCs[r.PathValue("npc_id")]
+		if npc == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var q struct {
+			DialogueID string `json:"dialogue_id"`
+			Speaker    string `json:"speaker"`
+			Text       string `json:"text"`
+			Visibility string `json:"visibility"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !nonEmptyString(q.DialogueID) || !nonEmptyString(q.Speaker) || !nonEmptyString(q.Text) || (q.Visibility != "public" && q.Visibility != "private") {
+			http.Error(w, "invalid dialogue", http.StatusBadRequest)
+			return
+		}
+		for _, entry := range npc.Dialogue {
+			if entry.DialogueID == q.DialogueID {
+				http.Error(w, "duplicate dialogue", http.StatusConflict)
+				return
+			}
+		}
+		entry := referenceNPCDialogueEntry{DialogueID: q.DialogueID, Speaker: q.Speaker, Text: q.Text, Visibility: q.Visibility}
+		npc.Dialogue = append(npc.Dialogue, entry)
+		writeJSON(w, http.StatusCreated, entry.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/npcs/{npc_id}/dialogue", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		npcID := r.PathValue("npc_id")
+		npc := c.NPCs[npcID]
+		if npc == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		entries := make([]any, 0, len(npc.Dialogue))
+		for _, entry := range npc.Dialogue {
+			if a.Username != c.Owner && entry.Visibility != "public" {
+				continue
+			}
+			entries = append(entries, entry.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"npc_id": npcID, "entries": entries})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/factions", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
 		if !ok {
@@ -2592,6 +2646,7 @@ type referencePlayNPC struct {
 	Name         string
 	Agenda       string
 	PublicStatus string
+	Dialogue     []referenceNPCDialogueEntry
 }
 
 type referencePlayFaction struct {
@@ -2608,6 +2663,13 @@ type referenceReputationEntry struct {
 	Reason      string
 }
 
+type referenceNPCDialogueEntry struct {
+	DialogueID string
+	Speaker    string
+	Text       string
+	Visibility string
+}
+
 func (faction *referencePlayFaction) json() map[string]any {
 	return map[string]any{
 		"faction_id": faction.FactionID,
@@ -2622,6 +2684,15 @@ func (entry referenceReputationEntry) json() map[string]any {
 		"reputation":   entry.Reputation,
 		"delta":        entry.Delta,
 		"reason":       entry.Reason,
+	}
+}
+
+func (entry referenceNPCDialogueEntry) json() map[string]any {
+	return map[string]any{
+		"dialogue_id": entry.DialogueID,
+		"speaker":     entry.Speaker,
+		"text":        entry.Text,
+		"visibility":  entry.Visibility,
 	}
 }
 

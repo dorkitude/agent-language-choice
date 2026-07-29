@@ -81,6 +81,7 @@ func Suites() []Suite {
 		lootDistributionSuite(),
 		npcAgendasSuite(),
 		factionReputationSuite(),
+		npcDialogueSuite(),
 	}
 }
 
