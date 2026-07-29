@@ -1509,6 +1509,47 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, campaign.ImportedState.json())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/migrations", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			SchemaVersion int    `json:"schema_version"`
+			Story         string `json:"story"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SchemaVersion != 1 || req.Story == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		migrated := referenceCampaignMigration{SchemaVersion: 2, Story: req.Story, CampaignName: campaign.Name}
+		status := http.StatusCreated
+		if campaign.MigratedState != nil && campaign.MigratedState.Story == migrated.Story && campaign.MigratedState.CampaignName == migrated.CampaignName {
+			status = http.StatusOK
+		} else {
+			campaign.MigratedState = &migrated
+		}
+		writeJSON(w, status, migrated.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/migration-state", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		if campaign.MigratedState == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.MigratedState.json())
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -4500,6 +4541,7 @@ type referencePlayCampaign struct {
 	TransactionalTransfers []referenceTransactionalTransfer
 	Exports                []referenceCampaignExport
 	ImportedState          *referenceCampaignImport
+	MigratedState          *referenceCampaignMigration
 	DeathSaves             int
 	DeathStable            bool
 }
@@ -4618,6 +4660,16 @@ type referenceCampaignImport struct {
 
 func (imported referenceCampaignImport) json() map[string]any {
 	return map[string]any{"version": imported.Version, "story": imported.Story, "status": imported.Status}
+}
+
+type referenceCampaignMigration struct {
+	SchemaVersion int
+	Story         string
+	CampaignName  string
+}
+
+func (migration referenceCampaignMigration) json() map[string]any {
+	return map[string]any{"schema_version": migration.SchemaVersion, "story": migration.Story, "campaign_name": migration.CampaignName}
 }
 
 type referenceNote struct {

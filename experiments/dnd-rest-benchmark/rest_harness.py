@@ -689,6 +689,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Import only valid compatible campaign snapshots atomically",
     ),
+    LifecycleStage(
+        id="085-schema-migration",
+        suite="085-schema-migration",
+        spec_path=BENCH_DIR / "challenges" / "085-schema-migration.md",
+        kind="maintenance",
+        description="Migrate legacy schema version 1 snapshots to version 2 deterministically",
+    ),
 ]
 
 

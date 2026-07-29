@@ -105,6 +105,7 @@ func Suites() []Suite {
 		transactionRecoverySuite(),
 		versionedExportSuite(),
 		importValidationSuite(),
+		schemaMigrationSuite(),
 	}
 }
 
