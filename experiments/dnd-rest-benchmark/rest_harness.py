@@ -1351,24 +1351,23 @@ def build_lifecycle_prompt(
     stage: LifecycleStage,
     shot_kind: str,
     failure: dict[str, Any] | None = None,
+    failure_record: str | None = None,
 ) -> str:
     spec = stage.spec_path.read_text()
     versions = "\n".join(f"- {key}: {value}" for key, value in sorted(LATEST.items()))
     failure_text = ""
-    if failure:
+    if failure_record:
         failure_text = textwrap.dedent(
             f"""
 
-            Previous deterministic failure report:
-
-            ```text
-            {failure_summary(failure)}
-            ```
-
-            Fix the implementation so the same evaluator suite passes. Do not
-            remove previously implemented behavior while fixing this failure.
+            The previous evaluator attempt did not pass. Before editing, inspect
+            `{failure_record}` and the raw logs it references. Fix the
+            implementation so the same evaluator suite passes without removing
+            previously implemented behavior.
             """
         )
+    elif failure:
+        failure_text = "\nPrevious evaluator attempt did not pass. Inspect the existing run artifacts before editing.\n"
 
     if shot_kind == "creative":
         role = "Create the first implementation from the seeded starter files."
@@ -1872,6 +1871,7 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
     }
 
     previous_failure: dict[str, Any] | None = None
+    previous_failure_record: str | None = None
     shot_number = 0
     for stage_index, stage in enumerate(stages):
         stage_passed = False
@@ -1884,10 +1884,17 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             elif attempt == 0:
                 shot_kind = "maintenance"
                 previous_failure = None
+                previous_failure_record = None
             else:
                 shot_kind = "bugfix"
 
-            prompt = build_lifecycle_prompt(target, stage, shot_kind, previous_failure)
+            prompt = build_lifecycle_prompt(
+                target,
+                stage,
+                shot_kind,
+                previous_failure,
+                previous_failure_record,
+            )
             shot_dir = run_dir / "shots" / f"{shot_number:02d}_{stage.id}_{shot_kind}"
             shot_dir.mkdir(parents=True, exist_ok=True)
             (shot_dir / "PROMPT.md").write_text(f"```text\n{prompt}\n```\n")
@@ -1922,6 +1929,12 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
                 "passed": bool(evaluation.get("passed")),
                 "artifacts": str(shot_dir),
             }
+            shot["evaluation_record"] = write_lifecycle_evaluation_record(
+                run_dir,
+                stage_index,
+                attempt + 1,
+                shot,
+            )
             final["shots"].append(shot)
             stage_shots.append(shot)
             final["total_shots"] = shot_number
@@ -1931,6 +1944,7 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
                 stage_passed = True
                 break
             previous_failure = shot
+            previous_failure_record = str(shot["evaluation_record"])
 
         final["stage_results"].append(
             {
@@ -1959,6 +1973,53 @@ def copy_if_exists(src: Path, dst: Path) -> None:
     if src.exists():
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
+
+
+def write_lifecycle_evaluation_record(
+    run_dir: Path,
+    stage_index: int,
+    attempt: int,
+    shot: dict[str, Any],
+) -> str:
+    """Persist one self-contained evaluation record for an agent-facing fix turn."""
+    record_stem = f"{stage_index + 1:03d}-{attempt:02d}"
+    evaluations_dir = run_dir / "evaluations"
+    logs_dir = evaluations_dir / record_stem
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    source_dir = Path(str(shot["artifacts"]))
+    copied_logs: dict[str, str] = {}
+    for filename in (
+        "agent_stdout.txt",
+        "agent_stderr.txt",
+        "agent_last_message.txt",
+        "setup.json",
+        "server_stdout.txt",
+        "server_stderr.txt",
+        f"dndeval-{shot['suite']}-report.json",
+    ):
+        src = source_dir / filename
+        dst = logs_dir / filename
+        if src.exists():
+            copy_if_exists(src, dst)
+            copied_logs[filename] = str(dst.relative_to(run_dir))
+
+    record = {
+        "stage": shot["stage"],
+        "suite": shot["suite"],
+        "shot": shot["shot"],
+        "attempt": shot["attempt"],
+        "kind": shot["kind"],
+        "passed": shot["passed"],
+        "setup_ok": shot["setup_ok"],
+        "setup": shot["setup"],
+        "agent": shot["agent"],
+        "evaluation": shot["evaluation"],
+        "logs": copied_logs,
+    }
+    record_path = evaluations_dir / f"{record_stem}.json"
+    record_path.write_text(json.dumps(record, indent=2) + "\n")
+    return str(record_path.relative_to(run_dir))
 
 
 def lifecycle_matrix(args: argparse.Namespace) -> int:
