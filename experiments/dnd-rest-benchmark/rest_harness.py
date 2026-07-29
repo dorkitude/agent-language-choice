@@ -556,6 +556,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Award configured quest XP and items once on completion",
     ),
+    LifecycleStage(
+        id="066-world-events",
+        suite="066-world-events",
+        spec_path=BENCH_DIR / "challenges" / "066-world-events.md",
+        kind="maintenance",
+        description="Schedule and resolve campaign-level world events in turn order",
+    ),
 ]
 
 

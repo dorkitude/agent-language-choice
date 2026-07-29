@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2571,6 +2571,107 @@ func ReferenceHandler() http.Handler {
 			"items":    intMapJSON(quest.Rewards.Items),
 		})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/world-events", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid world event", http.StatusBadRequest)
+			return
+		}
+		eventID, ok := requiredString(raw, "event_id")
+		if !ok {
+			http.Error(w, "invalid world event", http.StatusBadRequest)
+			return
+		}
+		title, ok := requiredString(raw, "title")
+		if !ok {
+			http.Error(w, "invalid world event", http.StatusBadRequest)
+			return
+		}
+		text, ok := requiredString(raw, "text")
+		if !ok {
+			http.Error(w, "invalid world event", http.StatusBadRequest)
+			return
+		}
+		turnNumber, ok := requiredInt(raw, "turn_number")
+		if !ok || turnNumber < c.TurnNumber {
+			http.Error(w, "invalid world event", http.StatusBadRequest)
+			return
+		}
+		if c.WorldEventIndex == nil {
+			c.WorldEventIndex = map[string]int{}
+		}
+		if _, exists := c.WorldEventIndex[eventID]; exists {
+			http.Error(w, "duplicate world event", http.StatusConflict)
+			return
+		}
+		event := referenceWorldEvent{EventID: eventID, TurnNumber: turnNumber, Title: title, Text: text, CreatedIndex: len(c.WorldEvents)}
+		c.WorldEventIndex[eventID] = len(c.WorldEvents)
+		c.WorldEvents = append(c.WorldEvents, event)
+		writeJSON(w, http.StatusCreated, event.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/world-events/{event_id}/resolve", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		index, exists := c.WorldEventIndex[r.PathValue("event_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid world event resolution", http.StatusBadRequest)
+			return
+		}
+		text, ok := requiredString(raw, "text")
+		if !ok {
+			http.Error(w, "invalid world event resolution", http.StatusBadRequest)
+			return
+		}
+		event := &c.WorldEvents[index]
+		if event.Resolution != nil {
+			http.Error(w, "world event already resolved", http.StatusConflict)
+			return
+		}
+		if event.TurnNumber != c.TurnNumber {
+			http.Error(w, "world event turn not reached", http.StatusConflict)
+			return
+		}
+		event.Resolution = &referenceWorldEventResolution{TurnNumber: c.TurnNumber, Text: text}
+		writeJSON(w, http.StatusCreated, event.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/world-events", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		events := make([]referenceWorldEvent, len(c.WorldEvents))
+		copy(events, c.WorldEvents)
+		sort.SliceStable(events, func(i, j int) bool {
+			if events[i].TurnNumber != events[j].TurnNumber {
+				return events[i].TurnNumber < events[j].TurnNumber
+			}
+			return events[i].CreatedIndex < events[j].CreatedIndex
+		})
+		payload := make([]any, 0, len(events))
+		for _, event := range events {
+			payload = append(payload, event.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"events": payload})
+	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := playCampaign(w, r)
 		if !ok {
@@ -2994,6 +3095,8 @@ type referencePlayCampaign struct {
 	PlayQuestIndex    map[string]int
 	QuestRewardXP     map[string]int
 	QuestRewardItems  map[string]map[string]int
+	WorldEvents       []referenceWorldEvent
+	WorldEventIndex   map[string]int
 	DeathSaves        int
 	DeathStable       bool
 }
@@ -3064,6 +3167,20 @@ type referenceQuestRewards struct {
 	Items map[string]int
 }
 
+type referenceWorldEvent struct {
+	EventID      string
+	TurnNumber   int
+	Title        string
+	Text         string
+	CreatedIndex int
+	Resolution   *referenceWorldEventResolution
+}
+
+type referenceWorldEventResolution struct {
+	TurnNumber int
+	Text       string
+}
+
 func (faction *referencePlayFaction) json() map[string]any {
 	return map[string]any{
 		"faction_id": faction.FactionID,
@@ -3126,6 +3243,24 @@ func (quest referencePlayQuest) json() map[string]any {
 		payload["rewards"] = map[string]any{
 			"xp":    quest.Rewards.XP,
 			"items": intMapJSON(quest.Rewards.Items),
+		}
+	}
+	return payload
+}
+
+func (event referenceWorldEvent) json() map[string]any {
+	payload := map[string]any{
+		"event_id":    event.EventID,
+		"turn_number": event.TurnNumber,
+		"title":       event.Title,
+		"text":        event.Text,
+		"status":      "scheduled",
+	}
+	if event.Resolution != nil {
+		payload["status"] = "resolved"
+		payload["resolution"] = map[string]any{
+			"turn_number": event.Resolution.TurnNumber,
+			"text":        event.Resolution.Text,
 		}
 	}
 	return payload
@@ -3243,6 +3378,14 @@ func requiredString(raw map[string]json.RawMessage, key string) (string, bool) {
 	var value string
 	if payload, exists := raw[key]; !exists || json.Unmarshal(payload, &value) != nil || !nonEmptyString(value) {
 		return "", false
+	}
+	return value, true
+}
+
+func requiredInt(raw map[string]json.RawMessage, key string) (int, bool) {
+	var value int
+	if payload, exists := raw[key]; !exists || json.Unmarshal(payload, &value) != nil || !jsonInteger(payload) {
+		return 0, false
 	}
 	return value, true
 }
