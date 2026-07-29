@@ -120,6 +120,7 @@ func Suites() []Suite {
 		agentOnboardingSuite(),
 		spectatorViewSuite(),
 		loadSafeEventFeedSuite(),
+		capstoneCampaignReplaySuite(),
 	}
 }
 

@@ -794,6 +794,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add append-only campaign event feed with load-safe cursor pagination",
     ),
+    LifecycleStage(
+        id="100-capstone-campaign-replay",
+        suite="100-capstone-campaign-replay",
+        spec_path=BENCH_DIR / "challenges" / "100-capstone-campaign-replay.md",
+        kind="maintenance",
+        description="Prove the full campaign lifecycle with deterministic export, replay, and feed checks",
+    ),
 ]
 
 
