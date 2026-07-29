@@ -500,6 +500,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Transfer deterministic character currency atomically",
     ),
+    LifecycleStage(
+        id="058-loot-distribution",
+        suite="058-loot-distribution",
+        spec_path=BENCH_DIR / "challenges" / "058-loot-distribution.md",
+        kind="maintenance",
+        description="Distribute loot by immutable party vote and DM assignment",
+    ),
 ]
 
 

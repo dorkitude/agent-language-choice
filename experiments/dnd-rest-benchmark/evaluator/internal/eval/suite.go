@@ -76,6 +76,7 @@ func Suites() []Suite {
 		equipmentAndAttunementSuite(),
 		consumablesSuite(),
 		currencyAndTradeSuite(),
+		lootDistributionSuite(),
 	}
 }
 

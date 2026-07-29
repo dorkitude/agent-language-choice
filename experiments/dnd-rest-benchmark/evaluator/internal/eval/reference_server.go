@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2003,6 +2003,120 @@ func ReferenceHandler() http.Handler {
 			"transfer_id":       c.TransferSeq,
 		})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/loot", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			LootID   string `json:"loot_id"`
+			ItemID   string `json:"item_id"`
+			Quantity int    `json:"quantity"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.LootID == "" || !validInventoryItem(q.ItemID) || q.Quantity < 1 {
+			http.Error(w, "invalid loot", http.StatusBadRequest)
+			return
+		}
+		if c.Loot[q.LootID] != nil {
+			http.Error(w, "duplicate loot", http.StatusConflict)
+			return
+		}
+		loot := &referenceLoot{LootID: q.LootID, ItemID: q.ItemID, Quantity: q.Quantity, Status: "open", Voters: map[string]string{}}
+		c.Loot[q.LootID] = loot
+		writeJSON(w, http.StatusCreated, loot.summaryJSON())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/loot/{loot_id}", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		loot := c.Loot[r.PathValue("loot_id")]
+		if loot == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, loot.recordJSON())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/loot/{loot_id}/votes", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "player" || !c.hasMember(a.Username) {
+			http.Error(w, "campaign player required", http.StatusForbidden)
+			return
+		}
+		loot := c.Loot[r.PathValue("loot_id")]
+		if loot == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if loot.Status != "open" {
+			http.Error(w, "loot voting closed", http.StatusConflict)
+			return
+		}
+		var q struct {
+			RecipientCharacterID string `json:"recipient_character_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !c.hasCharacter(q.RecipientCharacterID) {
+			http.Error(w, "invalid recipient", http.StatusBadRequest)
+			return
+		}
+		if _, voted := loot.Voters[a.Username]; voted {
+			http.Error(w, "vote already cast", http.StatusConflict)
+			return
+		}
+		loot.Voters[a.Username] = q.RecipientCharacterID
+		counts := loot.voteCounts()
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"loot_id":                loot.LootID,
+			"voter":                  a.Username,
+			"recipient_character_id": q.RecipientCharacterID,
+			"votes_for_recipient":    counts[q.RecipientCharacterID],
+		})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/loot/{loot_id}/assign", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		loot := c.Loot[r.PathValue("loot_id")]
+		if loot == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if loot.Status != "open" {
+			http.Error(w, "loot already assigned", http.StatusConflict)
+			return
+		}
+		recipientID, votes, clearWinner := loot.winningRecipient()
+		if !clearWinner {
+			http.Error(w, "unambiguous highest vote required", http.StatusConflict)
+			return
+		}
+		if c.Inventory[recipientID] == nil {
+			c.Inventory[recipientID] = map[string]int{}
+		}
+		c.Inventory[recipientID][loot.ItemID] += loot.Quantity
+		loot.Status = "assigned"
+		loot.RecipientCharacterID = recipientID
+		writeJSON(w, http.StatusOK, map[string]any{
+			"loot_id":                loot.LootID,
+			"recipient_character_id": recipientID,
+			"item_id":                loot.ItemID,
+			"quantity":               loot.Quantity,
+			"votes":                  votes,
+			"status":                 loot.Status,
+		})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -2306,8 +2420,62 @@ type referencePlayCampaign struct {
 	AttunedItems   map[string]map[string]bool
 	Currency       map[string]int
 	TransferSeq    int
+	Loot           map[string]*referenceLoot
 	DeathSaves     int
 	DeathStable    bool
+}
+
+type referenceLoot struct {
+	LootID               string
+	ItemID               string
+	Quantity             int
+	Status               string
+	RecipientCharacterID string
+	Voters               map[string]string
+}
+
+func (loot *referenceLoot) summaryJSON() map[string]any {
+	return map[string]any{
+		"loot_id":  loot.LootID,
+		"item_id":  loot.ItemID,
+		"quantity": loot.Quantity,
+		"status":   loot.Status,
+	}
+}
+
+func (loot *referenceLoot) recordJSON() map[string]any {
+	payload := loot.summaryJSON()
+	payload["recipient_character_id"] = nil
+	if loot.RecipientCharacterID != "" {
+		payload["recipient_character_id"] = loot.RecipientCharacterID
+	}
+	payload["votes"] = loot.voteCounts()
+	return payload
+}
+
+func (loot *referenceLoot) voteCounts() map[string]int {
+	counts := map[string]int{}
+	for _, recipientID := range loot.Voters {
+		counts[recipientID]++
+	}
+	return counts
+}
+
+func (loot *referenceLoot) winningRecipient() (string, int, bool) {
+	recipientID := ""
+	highest := 0
+	tied := false
+	for candidate, votes := range loot.voteCounts() {
+		switch {
+		case votes > highest:
+			recipientID = candidate
+			highest = votes
+			tied = false
+		case votes == highest:
+			tied = true
+		}
+	}
+	return recipientID, highest, highest > 0 && !tied
 }
 
 type referenceConcentration struct {
