@@ -61,10 +61,34 @@ after the 2026-07-12/13 Claude reruns.
 | Infrastructure accounting | 27 stored runs classified as blocked, not model failures | [`docs/findings/003-infra-block-classification.md`](docs/findings/003-infra-block-classification.md), [`results/dnd-rest-benchmark/experiment-state.sqlite3`](results/dnd-rest-benchmark/experiment-state.sqlite3) |
 | Research design status | Citation verification, qualitative target scoring, 24-stage roadmap, and venue plan complete | [`RESEARCH-DESIGN.md`](RESEARCH-DESIGN.md) |
 
-The default D&D REST roadmap now has 30 total stages: one initial creative
-build plus 29 fresh maintenance inheritances. The first post-baseline batch
-adds authenticated DM/player campaign play through stage 30; it has not yet
-been run in the model matrix.
+The default D&D REST roadmap now has 100 total cumulative stages: one initial
+creative build followed by 99 maintenance inheritances. The stage-100 capstone
+proves an authenticated DM/player campaign lifecycle through turns, combat,
+private-state redaction, versioned export, deterministic replay, and a
+load-safe event feed.
+
+## Full 100-Stage Matrix
+
+The next matrix is three-dimensional: **5 models × 15 language/framework
+targets × 100 tickets = 7,500 ticket-cells**. Operationally, it consists of
+75 independent model×target lifecycle cells. A lifecycle cell owns one evolving
+subproject and advances strictly in order from stage 001 through 100; a stage is
+evaluated over external REST before the next stage is attempted.
+
+The harness can run this unattended, one lifecycle cell at a time:
+
+```sh
+python3 experiments/dnd-rest-benchmark/rest_harness.py run-lifecycle-matrix \
+  --models gpt-5.5-medium \
+  --targets go-stdlib \
+  --max-fix-shots 1 \
+  --continue-on-fail
+```
+
+Every attempt records a structured evaluation file in its generated
+subproject, such as `evaluations/001-01.json`, alongside copied evaluator,
+server, setup, and agent logs. If a stage fails, its next bug-fix prompt directs
+the agent to inspect that record rather than embedding a truncated failure log.
 
 A self-contained HTML findings report can be generated from embedded JSON with:
 
