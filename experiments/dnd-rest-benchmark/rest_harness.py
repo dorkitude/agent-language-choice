@@ -703,6 +703,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add stable campaign search-record pagination and filtering",
     ),
+    LifecycleStage(
+        id="087-rate-limits",
+        suite="087-rate-limits",
+        spec_path=BENCH_DIR / "challenges" / "087-rate-limits.md",
+        kind="maintenance",
+        description="Add deterministic per-identity campaign rate limits",
+    ),
 ]
 
 
