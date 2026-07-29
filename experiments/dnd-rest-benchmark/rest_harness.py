@@ -752,6 +752,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add campaign moderation reports with DM-only resolution",
     ),
+    LifecycleStage(
+        id="094-safety-boundaries",
+        suite="094-safety-boundaries",
+        spec_path=BENCH_DIR / "challenges" / "094-safety-boundaries.md",
+        kind="maintenance",
+        description="Add campaign safety boundaries and accepted safety event checks",
+    ),
 ]
 
 

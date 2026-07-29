@@ -114,6 +114,7 @@ func Suites() []Suite {
 		deterministicReplaySuite(),
 		rngLedgerSuite(),
 		moderationWorkflowSuite(),
+		safetyBoundariesSuite(),
 	}
 }
 
