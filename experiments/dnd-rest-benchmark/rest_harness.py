@@ -486,6 +486,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Equip legal inventory items and enforce attunement limits",
     ),
+    LifecycleStage(
+        id="056-consumables",
+        suite="056-consumables",
+        spec_path=BENCH_DIR / "challenges" / "056-consumables.md",
+        kind="maintenance",
+        description="Consume held items and apply deterministic effects",
+    ),
 ]
 
 

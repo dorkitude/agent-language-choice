@@ -74,6 +74,7 @@ func Suites() []Suite {
 		concentrationSuite(),
 		inventoryStacksSuite(),
 		equipmentAndAttunementSuite(),
+		consumablesSuite(),
 	}
 }
 

@@ -1922,6 +1922,39 @@ func ReferenceHandler() http.Handler {
 		response["max_attunements"] = 1
 		writeJSON(w, http.StatusOK, response)
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/inventory/items/{item_id}/consume", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		itemID := r.PathValue("item_id")
+		if itemID != "healing-potion" {
+			http.Error(w, "item is not consumable", http.StatusBadRequest)
+			return
+		}
+		held := c.Inventory[characterID][itemID]
+		if held < 1 {
+			http.Error(w, "insufficient inventory quantity", http.StatusConflict)
+			return
+		}
+		totalQuantity := held - 1
+		c.Inventory[characterID][itemID] = totalQuantity
+		if totalQuantity == 0 {
+			delete(c.Inventory[characterID], itemID)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"character_id":      characterID,
+			"item_id":           itemID,
+			"quantity_consumed": 1,
+			"total_quantity":    totalQuantity,
+			"effect":            map[string]any{"type": "healing", "hp_restored": 5},
+		})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
