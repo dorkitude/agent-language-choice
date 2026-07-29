@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -845,6 +845,7 @@ func ReferenceHandler() http.Handler {
 		member := referencePlayMember{Username: actor.Username, CharacterID: req.CharacterID, Name: req.Name, Class: req.Class}
 		campaign.Members[actor.Username] = member
 		campaign.CharacterOwner[req.CharacterID] = actor.Username
+		campaign.Currency[req.CharacterID] = 10
 		campaign.Order = append(campaign.Order, actor.Username)
 		writeJSON(w, http.StatusCreated, member.json())
 	})
@@ -1955,6 +1956,53 @@ func ReferenceHandler() http.Handler {
 			"effect":            map[string]any{"type": "healing", "hp_restored": 5},
 		})
 	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/currency", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "gold": c.Currency[characterID]})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/currency/transfers", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		fromCharacterID := r.PathValue("character_id")
+		if c.CharacterOwner[fromCharacterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			ToCharacterID string `json:"to_character_id"`
+			Gold          int    `json:"gold"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.Gold <= 0 || q.ToCharacterID == fromCharacterID || !c.hasCharacter(q.ToCharacterID) {
+			http.Error(w, "invalid currency transfer", http.StatusBadRequest)
+			return
+		}
+		fromGold := c.Currency[fromCharacterID]
+		if q.Gold > fromGold {
+			http.Error(w, "insufficient funds", http.StatusConflict)
+			return
+		}
+		c.TransferSeq++
+		c.Currency[fromCharacterID] = fromGold - q.Gold
+		c.Currency[q.ToCharacterID] += q.Gold
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"from_character_id": fromCharacterID,
+			"to_character_id":   q.ToCharacterID,
+			"gold":              q.Gold,
+			"from_gold":         c.Currency[fromCharacterID],
+			"to_gold":           c.Currency[q.ToCharacterID],
+			"transfer_id":       c.TransferSeq,
+		})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -2256,6 +2304,8 @@ type referencePlayCampaign struct {
 	Inventory      map[string]map[string]int
 	Equipment      map[string]map[string]referenceEquipmentItem
 	AttunedItems   map[string]map[string]bool
+	Currency       map[string]int
+	TransferSeq    int
 	DeathSaves     int
 	DeathStable    bool
 }

@@ -493,6 +493,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Consume held items and apply deterministic effects",
     ),
+    LifecycleStage(
+        id="057-currency-and-trade",
+        suite="057-currency-and-trade",
+        spec_path=BENCH_DIR / "challenges" / "057-currency-and-trade.md",
+        kind="maintenance",
+        description="Transfer deterministic character currency atomically",
+    ),
 ]
 
 
