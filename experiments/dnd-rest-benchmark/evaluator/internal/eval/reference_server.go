@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -910,6 +910,71 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, campaign.SessionZero.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/content", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		content, ok := decodeReferenceContent(w, r, true)
+		if !ok {
+			return
+		}
+		if _, exists := campaign.ContentIndex[content.ContentID]; exists {
+			http.Error(w, "duplicate content", http.StatusConflict)
+			return
+		}
+		campaign.ContentIndex[content.ContentID] = len(campaign.Content)
+		campaign.Content = append(campaign.Content, content)
+		writeJSON(w, http.StatusCreated, content.json())
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/content/{content_id}/tags", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		index, exists := campaign.ContentIndex[r.PathValue("content_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		tags, ok := decodeReferenceContentTags(w, r, false)
+		if !ok {
+			return
+		}
+		campaign.Content[index].Tags = tags
+		writeJSON(w, http.StatusOK, campaign.Content[index].json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/content", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		excludeValues, hasExcludeTag := r.URL.Query()["exclude_tag"]
+		excludeTag := ""
+		if hasExcludeTag {
+			excludeTag = excludeValues[0]
+			if !nonEmptyString(excludeTag) {
+				http.Error(w, "invalid exclude_tag", http.StatusBadRequest)
+				return
+			}
+		}
+		content := make([]any, 0, len(campaign.Content))
+		for _, record := range campaign.Content {
+			if actor.Username != campaign.Owner && hasExcludeTag && record.hasTag(excludeTag) {
+				continue
+			}
+			content = append(content, record.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"content": content})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/narrations", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -3724,6 +3789,8 @@ type referencePlayCampaign struct {
 	DowntimeActivityIndex map[string]int
 	DowntimeAllocations   map[string]map[string]*referenceDowntimeAllocation
 	SessionZero           *referenceSessionZeroSettings
+	Content               []referenceContent
+	ContentIndex          map[string]int
 	DeathSaves            int
 	DeathStable           bool
 }
@@ -3867,6 +3934,13 @@ type referenceSessionZeroSettings struct {
 	Rules   string
 	Tone    string
 	Consent []string
+}
+
+type referenceContent struct {
+	ContentID string
+	Kind      string
+	Text      string
+	Tags      []string
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -4241,6 +4315,86 @@ func (settings referenceSessionZeroSettings) json() map[string]any {
 		"tone":    settings.Tone,
 		"consent": consent,
 	}
+}
+
+func (content referenceContent) json() map[string]any {
+	tags := make([]any, 0, len(content.Tags))
+	for _, tag := range content.Tags {
+		tags = append(tags, tag)
+	}
+	return map[string]any{
+		"content_id": content.ContentID,
+		"kind":       content.Kind,
+		"text":       content.Text,
+		"tags":       tags,
+	}
+}
+
+func (content referenceContent) hasTag(tag string) bool {
+	for _, candidate := range content.Tags {
+		if candidate == tag {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeReferenceContent(w http.ResponseWriter, r *http.Request, requireTags bool) (referenceContent, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, "invalid content", http.StatusBadRequest)
+		return referenceContent{}, false
+	}
+	contentID, ok := requiredString(raw, "content_id")
+	if !ok {
+		http.Error(w, "invalid content", http.StatusBadRequest)
+		return referenceContent{}, false
+	}
+	kind, ok := requiredString(raw, "kind")
+	if !ok {
+		http.Error(w, "invalid content", http.StatusBadRequest)
+		return referenceContent{}, false
+	}
+	text, ok := requiredString(raw, "text")
+	if !ok {
+		http.Error(w, "invalid content", http.StatusBadRequest)
+		return referenceContent{}, false
+	}
+	tags, ok := requiredUniqueStrings(raw, "tags")
+	if !ok || (requireTags && len(tags) == 0) {
+		http.Error(w, "invalid content", http.StatusBadRequest)
+		return referenceContent{}, false
+	}
+	return referenceContent{ContentID: contentID, Kind: kind, Text: text, Tags: tags}, true
+}
+
+func decodeReferenceContentTags(w http.ResponseWriter, r *http.Request, requireTags bool) ([]string, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, "invalid content tags", http.StatusBadRequest)
+		return nil, false
+	}
+	tags, ok := requiredUniqueStrings(raw, "tags")
+	if !ok || (requireTags && len(tags) == 0) {
+		http.Error(w, "invalid content tags", http.StatusBadRequest)
+		return nil, false
+	}
+	return tags, true
+}
+
+func requiredUniqueStrings(raw map[string]json.RawMessage, key string) ([]string, bool) {
+	values, ok := requiredStringArray(raw, key)
+	if !ok {
+		return nil, false
+	}
+	seen := map[string]bool{}
+	for _, value := range values {
+		if seen[value] {
+			return nil, false
+		}
+		seen[value] = true
+	}
+	return values, true
 }
 
 func decodeReferenceRecipe(w http.ResponseWriter, r *http.Request) (referenceRecipe, bool) {

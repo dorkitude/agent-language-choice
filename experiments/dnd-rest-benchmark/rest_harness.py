@@ -612,6 +612,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Persist campaign rules, tone, and consent settings before start",
     ),
+    LifecycleStage(
+        id="074-content-tags",
+        suite="074-content-tags",
+        spec_path=BENCH_DIR / "challenges" / "074-content-tags.md",
+        kind="maintenance",
+        description="Tag scenes/events and filter role-appropriate content",
+    ),
 ]
 
 

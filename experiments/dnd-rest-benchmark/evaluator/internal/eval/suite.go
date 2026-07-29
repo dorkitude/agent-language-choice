@@ -94,6 +94,7 @@ func Suites() []Suite {
 		recipeCatalogSuite(),
 		recurringDowntimeSuite(),
 		sessionZeroSettingsSuite(),
+		contentTagsSuite(),
 	}
 }
 
