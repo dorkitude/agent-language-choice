@@ -85,6 +85,7 @@ func Suites() []Suite {
 		relationshipGraphSuite(),
 		secretsAndCluesSuite(),
 		questDependenciesSuite(),
+		questRewardsSuite(),
 	}
 }
 

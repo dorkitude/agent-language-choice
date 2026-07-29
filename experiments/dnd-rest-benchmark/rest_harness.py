@@ -549,6 +549,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Gate quest state transitions on completed prerequisites",
     ),
+    LifecycleStage(
+        id="065-quest-rewards",
+        suite="065-quest-rewards",
+        spec_path=BENCH_DIR / "challenges" / "065-quest-rewards.md",
+        kind="maintenance",
+        description="Award configured quest XP and items once on completion",
+    ),
 ]
 
 
