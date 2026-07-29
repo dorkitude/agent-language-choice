@@ -1857,42 +1857,49 @@ def selected_stages(value: str | None) -> list[LifecycleStage]:
 def run_lifecycle_one(args: argparse.Namespace) -> int:
     target = targets()[args.target]
     stages = selected_stages(args.stages)
-    run_dir = LIFECYCLE_RUNS_DIR / "_".join(
-        [
-            dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-            slug(args.provider),
-            slug(args.model),
-            slug(target.id),
-        ]
-    )
-    run_dir.mkdir(parents=True, exist_ok=False)
-    materialize(run_dir, target)
+    if args.resume:
+        resumed = find_resumable_lifecycle_run(args.provider, args.model, target.id, stages)
+        if resumed is None:
+            raise SystemExit("no matching incomplete lifecycle run to resume")
+        run_dir, final = resumed
+        print(f"[lifecycle] resuming {run_dir}", flush=True)
+    else:
+        run_dir = LIFECYCLE_RUNS_DIR / "_".join(
+            [
+                dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+                slug(args.provider),
+                slug(args.model),
+                slug(target.id),
+            ]
+        )
+        run_dir.mkdir(parents=True, exist_ok=False)
+        materialize(run_dir, target)
+        metadata = {
+            "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "provider": args.provider,
+            "model": args.model,
+            "target": target.id,
+            "language": target.language,
+            "framework": target.framework,
+            "versions": LATEST,
+            "max_fix_shots": args.max_fix_shots,
+            "stages": [stage.id for stage in stages],
+        }
+        final = {
+            "metadata": metadata,
+            "shots": [],
+            "stage_results": [],
+            "passed": False,
+            "completed_stages": 0,
+            "total_shots": 0,
+        }
     evaluator = build_evaluator()
-
-    metadata = {
-        "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "provider": args.provider,
-        "model": args.model,
-        "target": target.id,
-        "language": target.language,
-        "framework": target.framework,
-        "versions": LATEST,
-        "max_fix_shots": args.max_fix_shots,
-        "stages": [stage.id for stage in stages],
-    }
-    final: dict[str, Any] = {
-        "metadata": metadata,
-        "shots": [],
-        "stage_results": [],
-        "passed": False,
-        "completed_stages": 0,
-        "total_shots": 0,
-    }
 
     previous_failure: dict[str, Any] | None = None
     previous_failure_record: str | None = None
-    shot_number = 0
-    for stage_index, stage in enumerate(stages):
+    shot_number = max((int(shot["shot"]) for shot in final["shots"]), default=0)
+    start_stage_index = len([result for result in final["stage_results"] if result.get("passed")])
+    for stage_index, stage in enumerate(stages[start_stage_index:], start=start_stage_index):
         stage_passed = False
         stage_shots: list[dict[str, Any]] = []
         max_attempts = 1 + args.max_fix_shots
@@ -1963,7 +1970,7 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             final["shots"].append(shot)
             stage_shots.append(shot)
             final["total_shots"] = shot_number
-            (run_dir / "lifecycle-result.json").write_text(json.dumps(final, indent=2) + "\n")
+            persist_lifecycle_state(run_dir, final)
 
             if shot["passed"]:
                 print(
@@ -1992,14 +1999,15 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
         )
         if not stage_passed:
             final["failed_stage"] = stage.id
+            persist_lifecycle_state(run_dir, final)
             break
         final["completed_stages"] = len(final["stage_results"])
+        persist_lifecycle_state(run_dir, final)
 
     final["passed"] = final["completed_stages"] == len(stages) and all(item["passed"] for item in final["stage_results"])
     final["completed_at_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
     final["status"] = run_status(final, run_dir)
-    (run_dir / "lifecycle-result.json").write_text(json.dumps(final, indent=2) + "\n")
-    sync_state_db(argparse.Namespace(db=None, quiet=True))
+    persist_lifecycle_state(run_dir, final)
     print(json.dumps({"run_dir": str(run_dir), "passed": final["passed"], "completed_stages": final["completed_stages"], "total_shots": final["total_shots"]}, indent=2), flush=True)
     return 0 if final["passed"] else 1
 
@@ -2055,6 +2063,45 @@ def write_lifecycle_evaluation_record(
     record_path = evaluations_dir / f"{record_stem}.json"
     record_path.write_text(json.dumps(record, indent=2) + "\n")
     return str(record_path.relative_to(run_dir))
+
+
+def persist_lifecycle_state(run_dir: Path, final: dict[str, Any]) -> None:
+    """Make completed shots/stages queryable immediately, even if a run stops."""
+    result_path = run_dir / "lifecycle-result.json"
+    result_path.write_text(json.dumps(final, indent=2) + "\n")
+    with sqlite3.connect(EXPERIMENT_DB) as conn:
+        init_state_db(conn)
+        conn.execute("PRAGMA foreign_keys = ON")
+        upsert_run(conn, result_path, "lifecycle")
+        conn.commit()
+
+
+def find_resumable_lifecycle_run(
+    provider: str,
+    model: str,
+    target: str,
+    stages: list[LifecycleStage],
+) -> tuple[Path, dict[str, Any]] | None:
+    wanted_stages = [stage.id for stage in stages]
+    candidates: list[tuple[float, Path, dict[str, Any]]] = []
+    for path in LIFECYCLE_RUNS_DIR.glob("*/lifecycle-result.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        meta = data.get("metadata") or {}
+        if (
+            meta.get("provider") == provider
+            and meta.get("model") == model
+            and meta.get("target") == target
+            and meta.get("stages") == wanted_stages
+            and not data.get("completed_at_utc")
+        ):
+            candidates.append((path.stat().st_mtime, path.parent, data))
+    if not candidates:
+        return None
+    _, run_dir, data = max(candidates, key=lambda item: item[0])
+    return run_dir, data
 
 
 def lifecycle_matrix(args: argparse.Namespace) -> int:
@@ -2708,6 +2755,7 @@ def main(argv: list[str]) -> int:
     lifecycle.add_argument("--target", choices=sorted(targets()), required=True)
     lifecycle.add_argument("--stages")
     lifecycle.add_argument("--max-fix-shots", type=int, default=1)
+    lifecycle.add_argument("--resume", action="store_true", help="Resume the latest matching incomplete lifecycle cell")
     lifecycle.set_defaults(func=run_lifecycle_one)
 
     lifecycle_matrix_parser = sub.add_parser("run-lifecycle-matrix", parents=[common])
@@ -2715,6 +2763,7 @@ def main(argv: list[str]) -> int:
     lifecycle_matrix_parser.add_argument("--targets")
     lifecycle_matrix_parser.add_argument("--stages")
     lifecycle_matrix_parser.add_argument("--max-fix-shots", type=int, default=1)
+    lifecycle_matrix_parser.add_argument("--resume", action="store_true", help="Resume matching incomplete lifecycle cells")
     lifecycle_matrix_parser.add_argument("--continue-on-fail", action="store_true")
     lifecycle_matrix_parser.add_argument("--skip-existing", action="store_true")
     lifecycle_matrix_parser.set_defaults(func=lifecycle_matrix)
