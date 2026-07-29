@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -1424,6 +1425,50 @@ func ReferenceHandler() http.Handler {
 			transfers = append(transfers, transfer.json())
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"transfers": transfers})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/exports", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		export := referenceCampaignExport{Version: len(campaign.Exports) + 1, Story: campaign.Story, Status: campaign.Status}
+		campaign.Exports = append(campaign.Exports, export)
+		writeJSON(w, http.StatusCreated, export.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/exports", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		exports := make([]any, 0, len(campaign.Exports))
+		for _, export := range campaign.Exports {
+			exports = append(exports, export.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"exports": exports})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/exports/{version}", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		version, err := strconv.Atoi(r.PathValue("version"))
+		if err != nil || version < 1 || version > len(campaign.Exports) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.Exports[version-1].json())
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -4414,6 +4459,7 @@ type referencePlayCampaign struct {
 	SafeAccepted           []referenceSafeTurnSubmission
 	SafeSubmissionIndex    map[string]bool
 	TransactionalTransfers []referenceTransactionalTransfer
+	Exports                []referenceCampaignExport
 	DeathSaves             int
 	DeathStable            bool
 }
@@ -4512,6 +4558,16 @@ func (transfer referenceTransactionalTransfer) json() map[string]any {
 		"to_gold":           transfer.ToGold,
 		"sequence":          transfer.Sequence,
 	}
+}
+
+type referenceCampaignExport struct {
+	Version int
+	Story   string
+	Status  string
+}
+
+func (export referenceCampaignExport) json() map[string]any {
+	return map[string]any{"version": export.Version, "story": export.Story, "status": export.Status}
 }
 
 type referenceNote struct {

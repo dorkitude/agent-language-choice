@@ -103,6 +103,7 @@ func Suites() []Suite {
 		idempotencyKeysSuite(),
 		concurrentTurnSafetySuite(),
 		transactionRecoverySuite(),
+		versionedExportSuite(),
 	}
 }
 

@@ -675,6 +675,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Ensure failed compound mutations leave no partial state",
     ),
+    LifecycleStage(
+        id="083-versioned-export",
+        suite="083-versioned-export",
+        spec_path=BENCH_DIR / "challenges" / "083-versioned-export.md",
+        kind="maintenance",
+        description="Export immutable, versioned campaign story snapshots",
+    ),
 ]
 
 
