@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2240,6 +2240,84 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"npc_id": npcID, "entries": entries})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/relationships", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			SourceID string `json:"source_id"`
+			TargetID string `json:"target_id"`
+			Kind     string `json:"kind"`
+			Score    *int   `json:"score"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.Score == nil || !nonEmptyString(q.SourceID) || !nonEmptyString(q.TargetID) || !nonEmptyString(q.Kind) || q.SourceID == q.TargetID || !validRelationshipScore(*q.Score) {
+			http.Error(w, "invalid relationship", http.StatusBadRequest)
+			return
+		}
+		if !c.hasEntity(q.SourceID) || !c.hasEntity(q.TargetID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		key := relationshipKey(q.SourceID, q.TargetID, q.Kind)
+		if c.RelationshipIndex == nil {
+			c.RelationshipIndex = map[string]int{}
+		}
+		if _, exists := c.RelationshipIndex[key]; exists {
+			http.Error(w, "duplicate relationship", http.StatusConflict)
+			return
+		}
+		edge := referenceRelationshipEdge{SourceID: q.SourceID, TargetID: q.TargetID, Kind: q.Kind, Score: *q.Score}
+		c.Relationships = append(c.Relationships, edge)
+		c.RelationshipIndex[key] = len(c.Relationships) - 1
+		writeJSON(w, http.StatusCreated, edge.json())
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/relationships/{source_id}/{target_id}/{kind}", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			Score *int `json:"score"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.Score == nil || !validRelationshipScore(*q.Score) {
+			http.Error(w, "invalid relationship", http.StatusBadRequest)
+			return
+		}
+		sourceID := r.PathValue("source_id")
+		targetID := r.PathValue("target_id")
+		kind := r.PathValue("kind")
+		if !c.hasEntity(sourceID) || !c.hasEntity(targetID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		index, exists := c.RelationshipIndex[relationshipKey(sourceID, targetID, kind)]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		c.Relationships[index].Score = *q.Score
+		writeJSON(w, http.StatusOK, c.Relationships[index].json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/relationships", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		edges := make([]any, 0, len(c.Relationships))
+		for _, edge := range c.Relationships {
+			edges = append(edges, edge.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"edges": edges})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/factions", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
 		if !ok {
@@ -2592,44 +2670,46 @@ type referenceUser struct {
 }
 
 type referencePlayCampaign struct {
-	ID             string
-	Name           string
-	Owner          string
-	MaxPlayers     int
-	Status         string
-	Members        map[string]referencePlayMember
-	Order          []string
-	Queue          []string
-	CurrentActor   string
-	Phase          string
-	TurnNumber     int
-	NudgeCount     int
-	Events         []referencePlayEvent
-	Story          string
-	DMNotes        string
-	Scenes         map[string]string
-	SceneNames     map[string]string
-	CurrentScene   string
-	Locations      map[string]string
-	Edges          map[string]bool
-	Encounter      *referencePlayEncounter
-	CharacterOwner map[string]string
-	Spells         map[string][]string
-	PreparedSpells map[string][]string
-	SpellSlots     map[string]int
-	SpellCasts     map[string][]referenceSpellCast
-	Concentration  map[string]*referenceConcentration
-	Inventory      map[string]map[string]int
-	Equipment      map[string]map[string]referenceEquipmentItem
-	AttunedItems   map[string]map[string]bool
-	Currency       map[string]int
-	TransferSeq    int
-	Loot           map[string]*referenceLoot
-	NPCs           map[string]*referencePlayNPC
-	Factions       map[string]*referencePlayFaction
-	Reputation     map[string]map[string]int
-	DeathSaves     int
-	DeathStable    bool
+	ID                string
+	Name              string
+	Owner             string
+	MaxPlayers        int
+	Status            string
+	Members           map[string]referencePlayMember
+	Order             []string
+	Queue             []string
+	CurrentActor      string
+	Phase             string
+	TurnNumber        int
+	NudgeCount        int
+	Events            []referencePlayEvent
+	Story             string
+	DMNotes           string
+	Scenes            map[string]string
+	SceneNames        map[string]string
+	CurrentScene      string
+	Locations         map[string]string
+	Edges             map[string]bool
+	Encounter         *referencePlayEncounter
+	CharacterOwner    map[string]string
+	Spells            map[string][]string
+	PreparedSpells    map[string][]string
+	SpellSlots        map[string]int
+	SpellCasts        map[string][]referenceSpellCast
+	Concentration     map[string]*referenceConcentration
+	Inventory         map[string]map[string]int
+	Equipment         map[string]map[string]referenceEquipmentItem
+	AttunedItems      map[string]map[string]bool
+	Currency          map[string]int
+	TransferSeq       int
+	Loot              map[string]*referenceLoot
+	NPCs              map[string]*referencePlayNPC
+	Factions          map[string]*referencePlayFaction
+	Reputation        map[string]map[string]int
+	Relationships     []referenceRelationshipEdge
+	RelationshipIndex map[string]int
+	DeathSaves        int
+	DeathStable       bool
 }
 
 type referenceLoot struct {
@@ -2670,6 +2750,13 @@ type referenceNPCDialogueEntry struct {
 	Visibility string
 }
 
+type referenceRelationshipEdge struct {
+	SourceID string
+	TargetID string
+	Kind     string
+	Score    int
+}
+
 func (faction *referencePlayFaction) json() map[string]any {
 	return map[string]any{
 		"faction_id": faction.FactionID,
@@ -2693,6 +2780,15 @@ func (entry referenceNPCDialogueEntry) json() map[string]any {
 		"speaker":     entry.Speaker,
 		"text":        entry.Text,
 		"visibility":  entry.Visibility,
+	}
+}
+
+func (edge referenceRelationshipEdge) json() map[string]any {
+	return map[string]any{
+		"source_id": edge.SourceID,
+		"target_id": edge.TargetID,
+		"kind":      edge.Kind,
+		"score":     edge.Score,
 	}
 }
 
@@ -2802,6 +2898,14 @@ func validInventoryItem(itemID string) bool {
 
 func nonEmptyString(value string) bool {
 	return strings.TrimSpace(value) != ""
+}
+
+func validRelationshipScore(score int) bool {
+	return score >= -100 && score <= 100
+}
+
+func relationshipKey(sourceID string, targetID string, kind string) string {
+	return sourceID + "\x00" + targetID + "\x00" + kind
 }
 
 func boundedReputation(value int) int {
@@ -2927,6 +3031,10 @@ func (campaign *referencePlayCampaign) hasCharacter(characterID string) bool {
 		}
 	}
 	return false
+}
+
+func (campaign *referencePlayCampaign) hasEntity(entityID string) bool {
+	return campaign.hasCharacter(entityID) || campaign.NPCs[entityID] != nil
 }
 
 func (campaign *referencePlayCampaign) appendEvent(kind string, actor string, eventType string, text string) referencePlayEvent {

@@ -528,6 +528,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Append NPC dialogue with player-safe visibility filtering",
     ),
+    LifecycleStage(
+        id="062-relationship-graph",
+        suite="062-relationship-graph",
+        spec_path=BENCH_DIR / "challenges" / "062-relationship-graph.md",
+        kind="maintenance",
+        description="Create and update bounded relationship edges among campaign entities",
+    ),
 ]
 
 
