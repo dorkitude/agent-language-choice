@@ -101,6 +101,7 @@ func Suites() []Suite {
 		actorAuditTrailSuite(),
 		eventProjectionsSuite(),
 		idempotencyKeysSuite(),
+		concurrentTurnSafetySuite(),
 	}
 }
 

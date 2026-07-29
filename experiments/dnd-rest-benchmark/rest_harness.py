@@ -661,6 +661,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Ensure duplicate keyed mutating requests create one public effect",
     ),
+    LifecycleStage(
+        id="081-concurrent-turn-safety",
+        suite="081-concurrent-turn-safety",
+        spec_path=BENCH_DIR / "challenges" / "081-concurrent-turn-safety.md",
+        kind="maintenance",
+        description="Reject stale turn submissions without corrupting queue state",
+    ),
 ]
 
 
