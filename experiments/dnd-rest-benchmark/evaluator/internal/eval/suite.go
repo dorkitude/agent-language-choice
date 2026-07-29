@@ -110,6 +110,7 @@ func Suites() []Suite {
 		rateLimitsSuite(),
 		serviceMetricsSuite(),
 		readinessHealthSuite(),
+		backupRestoreSuite(),
 	}
 }
 

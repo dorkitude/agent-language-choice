@@ -724,6 +724,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add public liveness and readiness with DM-controlled maintenance mode",
     ),
+    LifecycleStage(
+        id="090-backup-restore",
+        suite="090-backup-restore",
+        spec_path=BENCH_DIR / "challenges" / "090-backup-restore.md",
+        kind="maintenance",
+        description="Create owner-only immutable campaign backups and restore snapshots",
+    ),
 ]
 
 
