@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1138,6 +1138,42 @@ func ReferenceHandler() http.Handler {
 		}
 		entries := make([]any, 0, len(campaign.DelegationAudit))
 		for _, entry := range campaign.DelegationAudit {
+			entries = append(entries, entry.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/audit-events", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			Kind          string `json:"kind"`
+			CorrelationID string `json:"correlation_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !nonEmptyString(req.Kind) || !nonEmptyString(req.CorrelationID) {
+			http.Error(w, "invalid audit event", http.StatusBadRequest)
+			return
+		}
+		if campaign.AuditCorrelationIndex[req.CorrelationID] {
+			http.Error(w, "duplicate correlation_id", http.StatusConflict)
+			return
+		}
+		entry := campaign.appendAuditEvent(req.Kind, req.CorrelationID, actor)
+		campaign.AuditCorrelationIndex[entry.CorrelationID] = true
+		writeJSON(w, http.StatusCreated, entry.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/audit-events", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		entries := make([]any, 0, len(campaign.AuditEvents))
+		for _, entry := range campaign.AuditEvents {
 			entries = append(entries, entry.json())
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
@@ -4116,8 +4152,22 @@ type referencePlayCampaign struct {
 	InvitationIndex       map[string]int
 	Delegations           map[string]referenceDelegation
 	DelegationAudit       []referenceDelegationAuditEntry
+	AuditEvents           []referenceAuditEvent
+	AuditCorrelationIndex map[string]bool
+	AuditTimestamp        int
 	DeathSaves            int
 	DeathStable           bool
+}
+
+func (campaign *referencePlayCampaign) appendAuditEvent(kind string, correlationID string, actor referenceUser) referenceAuditEvent {
+	campaign.AuditTimestamp++
+	role := "player"
+	if actor.Username == campaign.Owner {
+		role = "DM"
+	}
+	entry := referenceAuditEvent{Kind: kind, Actor: actor.Username, Role: role, Timestamp: campaign.AuditTimestamp, CorrelationID: correlationID}
+	campaign.AuditEvents = append(campaign.AuditEvents, entry)
+	return entry
 }
 
 type referenceNote struct {
@@ -4171,6 +4221,18 @@ type referenceDelegationAuditEntry struct {
 
 func (entry referenceDelegationAuditEntry) json() map[string]any {
 	return map[string]any{"username": entry.Username, "action": entry.Action, "powers": stringSliceAny(entry.Powers)}
+}
+
+type referenceAuditEvent struct {
+	Kind          string
+	Actor         string
+	Role          string
+	Timestamp     int
+	CorrelationID string
+}
+
+func (entry referenceAuditEvent) json() map[string]any {
+	return map[string]any{"kind": entry.Kind, "actor": entry.Actor, "role": entry.Role, "timestamp": entry.Timestamp, "correlation_id": entry.CorrelationID}
 }
 
 func stringSliceAny(values []string) []any {

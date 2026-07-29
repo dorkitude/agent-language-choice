@@ -640,6 +640,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Grant and revoke limited co-GM narration authority with owner audit",
     ),
+    LifecycleStage(
+        id="078-actor-audit-trail",
+        suite="078-actor-audit-trail",
+        spec_path=BENCH_DIR / "challenges" / "078-actor-audit-trail.md",
+        kind="maintenance",
+        description="Record actor, role, timestamp, and correlation ID for mutating audit events",
+    ),
 ]
 
 

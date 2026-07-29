@@ -98,6 +98,7 @@ func Suites() []Suite {
 		privacyControlsSuite(),
 		campaignInvitationsSuite(),
 		gmDelegationSuite(),
+		actorAuditTrailSuite(),
 	}
 }
 
