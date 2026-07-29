@@ -759,6 +759,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add campaign safety boundaries and accepted safety event checks",
     ),
+    LifecycleStage(
+        id="095-fixture-seeding",
+        suite="095-fixture-seeding",
+        spec_path=BENCH_DIR / "challenges" / "095-fixture-seeding.md",
+        kind="maintenance",
+        description="Add DM-only deterministic canonical fixture seeding",
+    ),
 ]
 
 

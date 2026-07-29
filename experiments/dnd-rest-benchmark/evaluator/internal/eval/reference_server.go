@@ -2050,6 +2050,43 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, campaign.safetyEventsJSON())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/fixture-seeds", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		fixtureID, ok := requiredString(raw, "fixture_id")
+		if !ok || fixtureID != "canonical-v1" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		status := http.StatusCreated
+		if campaign.FixtureSeeded {
+			status = http.StatusOK
+		}
+		campaign.FixtureSeeded = true
+		writeJSON(w, status, campaign.fixtureStateJSON())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/fixture-state", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if !campaign.FixtureSeeded {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.fixtureStateJSON())
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -5063,6 +5100,7 @@ type referencePlayCampaign struct {
 	SafetyBlockedTags        []string
 	SafetyEvents             []referenceSafetyEvent
 	SafetyEventIndex         map[string]bool
+	FixtureSeeded            bool
 	DeathSaves               int
 	DeathStable              bool
 }
@@ -6488,6 +6526,23 @@ func (campaign *referencePlayCampaign) safetyEventsJSON() map[string]any {
 		events = append(events, event.json())
 	}
 	return map[string]any{"events": events}
+}
+
+func (campaign *referencePlayCampaign) fixtureStateJSON() map[string]any {
+	return canonicalFixtureStateJSON()
+}
+
+func canonicalFixtureStateJSON() map[string]any {
+	return map[string]any{
+		"fixture_id": "canonical-v1",
+		"status":     "seeded",
+		"characters": []any{
+			map[string]any{"character_id": "fixture-hero", "name": "Ari", "class": "fighter"},
+			map[string]any{"character_id": "fixture-mage", "name": "Bea", "class": "wizard"},
+		},
+		"story":     "The lantern is lit.",
+		"event_ids": []any{"fixture-event-1", "fixture-event-2"},
+	}
 }
 
 func deterministicRNGResult(seed string, sequence int, rollID string, sides int) int {

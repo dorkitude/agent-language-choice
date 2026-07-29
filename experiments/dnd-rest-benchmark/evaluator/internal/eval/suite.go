@@ -115,6 +115,7 @@ func Suites() []Suite {
 		rngLedgerSuite(),
 		moderationWorkflowSuite(),
 		safetyBoundariesSuite(),
+		fixtureSeedingSuite(),
 	}
 }
 
