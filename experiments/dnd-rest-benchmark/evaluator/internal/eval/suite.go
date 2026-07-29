@@ -91,6 +91,7 @@ func Suites() []Suite {
 		calendarAndWeatherSuite(),
 		settlementsSuite(),
 		shopsSuite(),
+		recipeCatalogSuite(),
 	}
 }
 

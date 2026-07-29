@@ -591,6 +591,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Browse stock and buy/sell through inventory and currency APIs",
     ),
+    LifecycleStage(
+        id="071-recipe-catalog",
+        suite="071-recipe-catalog",
+        spec_path=BENCH_DIR / "challenges" / "071-recipe-catalog.md",
+        kind="maintenance",
+        description="Add deterministic crafting recipes and ingredient requirements",
+    ),
 ]
 
 
