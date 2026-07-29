@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2318,6 +2318,92 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"edges": edges})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/clues", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid clue", http.StatusBadRequest)
+			return
+		}
+		clueID, ok := requiredString(raw, "clue_id")
+		if !ok {
+			http.Error(w, "invalid clue", http.StatusBadRequest)
+			return
+		}
+		text, ok := requiredString(raw, "text")
+		if !ok {
+			http.Error(w, "invalid clue", http.StatusBadRequest)
+			return
+		}
+		audience, ok := requiredString(raw, "audience")
+		if !ok {
+			http.Error(w, "invalid clue", http.StatusBadRequest)
+			return
+		}
+		characterID := ""
+		_, hasCharacterID := raw["character_id"]
+		switch audience {
+		case "character":
+			var valid bool
+			characterID, valid = requiredString(raw, "character_id")
+			if !valid || !c.hasCharacter(characterID) {
+				http.Error(w, "invalid clue", http.StatusBadRequest)
+				return
+			}
+		case "party", "hidden":
+			if hasCharacterID {
+				http.Error(w, "invalid clue", http.StatusBadRequest)
+				return
+			}
+		default:
+			http.Error(w, "invalid clue", http.StatusBadRequest)
+			return
+		}
+		if c.ClueIndex == nil {
+			c.ClueIndex = map[string]bool{}
+		}
+		if c.ClueIndex[clueID] {
+			http.Error(w, "duplicate clue", http.StatusConflict)
+			return
+		}
+		clue := referenceClue{ClueID: clueID, Text: text, Audience: audience, CharacterID: characterID}
+		c.Clues = append(c.Clues, clue)
+		c.ClueIndex[clueID] = true
+		writeJSON(w, http.StatusCreated, clue.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/clues", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		clues := make([]any, 0, len(c.Clues))
+		ownedCharacterID := ""
+		if member, exists := c.Members[a.Username]; exists {
+			ownedCharacterID = member.CharacterID
+		}
+		for _, clue := range c.Clues {
+			if a.Username != c.Owner {
+				switch clue.Audience {
+				case "party":
+				case "character":
+					if clue.CharacterID != ownedCharacterID {
+						continue
+					}
+				default:
+					continue
+				}
+			}
+			clues = append(clues, clue.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"clues": clues})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/factions", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
 		if !ok {
@@ -2708,6 +2794,8 @@ type referencePlayCampaign struct {
 	Reputation        map[string]map[string]int
 	Relationships     []referenceRelationshipEdge
 	RelationshipIndex map[string]int
+	Clues             []referenceClue
+	ClueIndex         map[string]bool
 	DeathSaves        int
 	DeathStable       bool
 }
@@ -2757,6 +2845,13 @@ type referenceRelationshipEdge struct {
 	Score    int
 }
 
+type referenceClue struct {
+	ClueID      string
+	Text        string
+	Audience    string
+	CharacterID string
+}
+
 func (faction *referencePlayFaction) json() map[string]any {
 	return map[string]any{
 		"faction_id": faction.FactionID,
@@ -2790,6 +2885,18 @@ func (edge referenceRelationshipEdge) json() map[string]any {
 		"kind":      edge.Kind,
 		"score":     edge.Score,
 	}
+}
+
+func (clue referenceClue) json() map[string]any {
+	payload := map[string]any{
+		"clue_id":  clue.ClueID,
+		"text":     clue.Text,
+		"audience": clue.Audience,
+	}
+	if clue.Audience == "character" {
+		payload["character_id"] = clue.CharacterID
+	}
+	return payload
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {
@@ -2898,6 +3005,14 @@ func validInventoryItem(itemID string) bool {
 
 func nonEmptyString(value string) bool {
 	return strings.TrimSpace(value) != ""
+}
+
+func requiredString(raw map[string]json.RawMessage, key string) (string, bool) {
+	var value string
+	if payload, exists := raw[key]; !exists || json.Unmarshal(payload, &value) != nil || !nonEmptyString(value) {
+		return "", false
+	}
+	return value, true
 }
 
 func validRelationshipScore(score int) bool {

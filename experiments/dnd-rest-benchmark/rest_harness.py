@@ -535,6 +535,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Create and update bounded relationship edges among campaign entities",
     ),
+    LifecycleStage(
+        id="063-secrets-and-clues",
+        suite="063-secrets-and-clues",
+        spec_path=BENCH_DIR / "challenges" / "063-secrets-and-clues.md",
+        kind="maintenance",
+        description="Reveal campaign clues to one player, the party, or nobody",
+    ),
 ]
 
 

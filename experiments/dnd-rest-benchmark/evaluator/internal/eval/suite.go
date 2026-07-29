@@ -83,6 +83,7 @@ func Suites() []Suite {
 		factionReputationSuite(),
 		npcDialogueSuite(),
 		relationshipGraphSuite(),
+		secretsAndCluesSuite(),
 	}
 }
 
