@@ -542,6 +542,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Reveal campaign clues to one player, the party, or nobody",
     ),
+    LifecycleStage(
+        id="064-quest-dependencies",
+        suite="064-quest-dependencies",
+        spec_path=BENCH_DIR / "challenges" / "064-quest-dependencies.md",
+        kind="maintenance",
+        description="Gate quest state transitions on completed prerequisites",
+    ),
 ]
 
 

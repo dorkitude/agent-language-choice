@@ -84,6 +84,7 @@ func Suites() []Suite {
 		npcDialogueSuite(),
 		relationshipGraphSuite(),
 		secretsAndCluesSuite(),
+		questDependenciesSuite(),
 	}
 }
 

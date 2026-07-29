@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2404,6 +2404,110 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"clues": clues})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid quest", http.StatusBadRequest)
+			return
+		}
+		questID, ok := requiredString(raw, "quest_id")
+		if !ok {
+			http.Error(w, "invalid quest", http.StatusBadRequest)
+			return
+		}
+		title, ok := requiredString(raw, "title")
+		if !ok {
+			http.Error(w, "invalid quest", http.StatusBadRequest)
+			return
+		}
+		dependsOn, ok := requiredStringArray(raw, "depends_on")
+		if !ok {
+			http.Error(w, "invalid quest", http.StatusBadRequest)
+			return
+		}
+		if c.PlayQuestIndex == nil {
+			c.PlayQuestIndex = map[string]int{}
+		}
+		if _, exists := c.PlayQuestIndex[questID]; exists {
+			http.Error(w, "duplicate quest", http.StatusConflict)
+			return
+		}
+		seen := map[string]bool{}
+		for _, dependencyID := range dependsOn {
+			if dependencyID == questID || seen[dependencyID] {
+				http.Error(w, "invalid quest", http.StatusBadRequest)
+				return
+			}
+			seen[dependencyID] = true
+			if _, exists := c.PlayQuestIndex[dependencyID]; !exists {
+				http.Error(w, "invalid quest", http.StatusBadRequest)
+				return
+			}
+		}
+		quest := referencePlayQuest{QuestID: questID, Title: title, DependsOn: dependsOn, State: "locked"}
+		c.PlayQuestIndex[questID] = len(c.PlayQuests)
+		c.PlayQuests = append(c.PlayQuests, quest)
+		writeJSON(w, http.StatusCreated, quest.json())
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/quests/{quest_id}/state", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid quest state", http.StatusBadRequest)
+			return
+		}
+		state, ok := requiredString(raw, "state")
+		if !ok || (state != "active" && state != "completed") {
+			http.Error(w, "invalid quest state", http.StatusBadRequest)
+			return
+		}
+		index, exists := c.PlayQuestIndex[r.PathValue("quest_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		quest := &c.PlayQuests[index]
+		switch {
+		case quest.State == "locked" && state == "active":
+			if !c.playQuestDependenciesCompleted(quest) {
+				http.Error(w, "quest dependencies incomplete", http.StatusConflict)
+				return
+			}
+			quest.State = state
+		case quest.State == "active" && state == "completed":
+			quest.State = state
+		default:
+			http.Error(w, "invalid quest transition", http.StatusConflict)
+			return
+		}
+		writeJSON(w, http.StatusOK, quest.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		quests := make([]any, 0, len(c.PlayQuests))
+		for _, quest := range c.PlayQuests {
+			quests = append(quests, quest.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"quests": quests})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/factions", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
 		if !ok {
@@ -2796,6 +2900,8 @@ type referencePlayCampaign struct {
 	RelationshipIndex map[string]int
 	Clues             []referenceClue
 	ClueIndex         map[string]bool
+	PlayQuests        []referencePlayQuest
+	PlayQuestIndex    map[string]int
 	DeathSaves        int
 	DeathStable       bool
 }
@@ -2852,6 +2958,13 @@ type referenceClue struct {
 	CharacterID string
 }
 
+type referencePlayQuest struct {
+	QuestID   string
+	Title     string
+	DependsOn []string
+	State     string
+}
+
 func (faction *referencePlayFaction) json() map[string]any {
 	return map[string]any{
 		"faction_id": faction.FactionID,
@@ -2897,6 +3010,19 @@ func (clue referenceClue) json() map[string]any {
 		payload["character_id"] = clue.CharacterID
 	}
 	return payload
+}
+
+func (quest referencePlayQuest) json() map[string]any {
+	dependsOn := make([]any, 0, len(quest.DependsOn))
+	for _, dependencyID := range quest.DependsOn {
+		dependsOn = append(dependsOn, dependencyID)
+	}
+	return map[string]any{
+		"quest_id":   quest.QuestID,
+		"title":      quest.Title,
+		"depends_on": dependsOn,
+		"state":      quest.State,
+	}
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {
@@ -3013,6 +3139,29 @@ func requiredString(raw map[string]json.RawMessage, key string) (string, bool) {
 		return "", false
 	}
 	return value, true
+}
+
+func requiredStringArray(raw map[string]json.RawMessage, key string) ([]string, bool) {
+	var values []string
+	if payload, exists := raw[key]; !exists || json.Unmarshal(payload, &values) != nil {
+		return nil, false
+	}
+	for _, value := range values {
+		if !nonEmptyString(value) {
+			return nil, false
+		}
+	}
+	return values, true
+}
+
+func (campaign *referencePlayCampaign) playQuestDependenciesCompleted(quest *referencePlayQuest) bool {
+	for _, dependencyID := range quest.DependsOn {
+		index, exists := campaign.PlayQuestIndex[dependencyID]
+		if !exists || campaign.PlayQuests[index].State != "completed" {
+			return false
+		}
+	}
+	return true
 }
 
 func validRelationshipScore(score int) bool {
