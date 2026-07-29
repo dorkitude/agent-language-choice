@@ -761,6 +761,29 @@ func ReferenceHandler() http.Handler {
 		}
 		return campaign, actor, true
 	}
+	validatePreparedSpell := func(campaign *referencePlayCampaign, characterID string, spellID string) bool {
+		owner := campaign.CharacterOwner[characterID]
+		member, exists := campaign.Members[owner]
+		if !exists || member.Class != "wizard" {
+			return false
+		}
+		known := false
+		for _, candidate := range campaign.Spells[characterID] {
+			if candidate == spellID {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return false
+		}
+		for _, candidate := range campaign.PreparedSpells[characterID] {
+			if candidate == spellID {
+				return true
+			}
+		}
+		return false
+	}
 	mux.HandleFunc("POST /v1/play/campaigns", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := playActor(w, r)
 		if !ok {
@@ -783,7 +806,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1692,6 +1715,71 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"casts": casts})
 	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/characters/{character_id}/concentration", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			SpellID       string `json:"spell_id"`
+			Target        string `json:"target"`
+			DurationTurns int    `json:"duration_turns"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.SpellID == "" || q.Target == "" || q.DurationTurns < 1 || !validatePreparedSpell(c, characterID, q.SpellID) {
+			http.Error(w, "invalid concentration", http.StatusBadRequest)
+			return
+		}
+		c.Concentration[characterID] = &referenceConcentration{SpellID: q.SpellID, Target: q.Target, RemainingTurns: q.DurationTurns}
+		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "concentration": concentrationJSON(c, characterID)})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/concentration", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "concentration": concentrationJSON(c, characterID)})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/concentration/advance-turn", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if concentration := c.Concentration[characterID]; concentration != nil {
+			concentration.RemainingTurns--
+			if concentration.RemainingTurns <= 0 {
+				delete(c.Concentration, characterID)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "concentration": concentrationJSON(c, characterID)})
+	})
+	mux.HandleFunc("DELETE /v1/play/campaigns/{id}/characters/{character_id}/concentration", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		delete(c.Concentration, characterID)
+		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "concentration": nil})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -1989,8 +2077,23 @@ type referencePlayCampaign struct {
 	PreparedSpells map[string][]string
 	SpellSlots     map[string]int
 	SpellCasts     map[string][]referenceSpellCast
+	Concentration  map[string]*referenceConcentration
 	DeathSaves     int
 	DeathStable    bool
+}
+
+type referenceConcentration struct {
+	SpellID        string
+	Target         string
+	RemainingTurns int
+}
+
+func (concentration referenceConcentration) json() map[string]any {
+	return map[string]any{
+		"spell_id":        concentration.SpellID,
+		"target":          concentration.Target,
+		"remaining_turns": concentration.RemainingTurns,
+	}
 }
 
 type referenceSpellCast struct {
@@ -2011,6 +2114,14 @@ func (cast referenceSpellCast) json() map[string]any {
 		"slots_remaining": cast.SlotsRemaining,
 		"sequence":        cast.Sequence,
 	}
+}
+
+func concentrationJSON(campaign *referencePlayCampaign, characterID string) any {
+	concentration := campaign.Concentration[characterID]
+	if concentration == nil {
+		return nil
+	}
+	return concentration.json()
 }
 
 type referencePlayEncounter struct {

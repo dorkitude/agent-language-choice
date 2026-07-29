@@ -71,6 +71,7 @@ func Suites() []Suite {
 		spellbookStateSuite(),
 		spellPreparationSuite(),
 		spellCastingSuite(),
+		concentrationSuite(),
 	}
 }
 

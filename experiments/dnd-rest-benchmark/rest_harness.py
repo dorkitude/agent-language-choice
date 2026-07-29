@@ -465,6 +465,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Cast prepared spells with deterministic slot consumption",
     ),
+    LifecycleStage(
+        id="053-concentration",
+        suite="053-concentration",
+        spec_path=BENCH_DIR / "challenges" / "053-concentration.md",
+        kind="maintenance",
+        description="Replace, clear, and expire active concentration",
+    ),
 ]
 
 
