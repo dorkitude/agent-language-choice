@@ -473,11 +473,11 @@ LIFECYCLE_STAGES = [
         description="Replace, clear, and expire active concentration",
     ),
     LifecycleStage(
-        id="054-concentration-damage",
-        suite="054-concentration-damage",
-        spec_path=BENCH_DIR / "challenges" / "054-concentration-damage.md",
+        id="054-inventory-stacks",
+        suite="054-inventory-stacks",
+        spec_path=BENCH_DIR / "challenges" / "054-inventory-stacks.md",
         kind="maintenance",
-        description="Resolve deterministic concentration checks after damage",
+        description="Add owner-controlled character inventory item stacks",
     ),
 ]
 

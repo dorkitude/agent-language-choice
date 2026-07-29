@@ -72,7 +72,7 @@ func Suites() []Suite {
 		spellPreparationSuite(),
 		spellCastingSuite(),
 		concentrationSuite(),
-		concentrationDamageSuite(),
+		inventoryStacksSuite(),
 	}
 }
 

@@ -3,6 +3,7 @@ package eval
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -806,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1780,7 +1781,7 @@ func ReferenceHandler() http.Handler {
 		delete(c.Concentration, characterID)
 		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "concentration": nil})
 	})
-	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/concentration/damage", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/inventory/items", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
 		if !ok {
 			return
@@ -1791,29 +1792,59 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		var q struct {
-			Damage int `json:"damage"`
-			Roll   int `json:"roll"`
+			ItemID   string `json:"item_id"`
+			Quantity int    `json:"quantity"`
 		}
-		concentration := c.Concentration[characterID]
-		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.Damage < 1 || concentration == nil {
-			http.Error(w, "invalid concentration damage check", http.StatusBadRequest)
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !validInventoryItem(q.ItemID) || q.Quantity < 1 {
+			http.Error(w, "invalid inventory item", http.StatusBadRequest)
 			return
 		}
-		dc := (q.Damage + 1) / 2
-		if dc < 10 {
-			dc = 10
+		if c.Inventory[characterID] == nil {
+			c.Inventory[characterID] = map[string]int{}
 		}
-		maintained := q.Roll >= dc
-		if !maintained {
-			delete(c.Concentration, characterID)
+		c.Inventory[characterID][q.ItemID] += q.Quantity
+		writeJSON(w, http.StatusCreated, inventoryItemJSON(characterID, q.ItemID, q.Quantity, c.Inventory[characterID][q.ItemID]))
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/inventory/items", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"character_id":  characterID,
-			"dc":            dc,
-			"roll":          q.Roll,
-			"maintained":    maintained,
-			"concentration": concentrationJSON(c, characterID),
-		})
+		characterID := r.PathValue("character_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"character_id": characterID, "items": inventoryItemsJSON(c.Inventory[characterID])})
+	})
+	mux.HandleFunc("DELETE /v1/play/campaigns/{id}/characters/{character_id}/inventory/items/{item_id}", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		itemID := r.PathValue("item_id")
+		var q struct {
+			Quantity int `json:"quantity"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !validInventoryItem(itemID) || q.Quantity < 1 {
+			http.Error(w, "invalid inventory item", http.StatusBadRequest)
+			return
+		}
+		held := c.Inventory[characterID][itemID]
+		if q.Quantity > held {
+			http.Error(w, "insufficient inventory quantity", http.StatusConflict)
+			return
+		}
+		c.Inventory[characterID][itemID] = held - q.Quantity
+		if c.Inventory[characterID][itemID] == 0 {
+			delete(c.Inventory[characterID], itemID)
+		}
+		writeJSON(w, http.StatusOK, inventoryItemJSON(characterID, itemID, q.Quantity, held-q.Quantity))
 	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
@@ -2113,6 +2144,7 @@ type referencePlayCampaign struct {
 	SpellSlots     map[string]int
 	SpellCasts     map[string][]referenceSpellCast
 	Concentration  map[string]*referenceConcentration
+	Inventory      map[string]map[string]int
 	DeathSaves     int
 	DeathStable    bool
 }
@@ -2157,6 +2189,34 @@ func concentrationJSON(campaign *referencePlayCampaign, characterID string) any 
 		return nil
 	}
 	return concentration.json()
+}
+
+func validInventoryItem(itemID string) bool {
+	return itemID == "healing-potion" || itemID == "torch"
+}
+
+func inventoryItemJSON(characterID string, itemID string, quantity int, totalQuantity int) map[string]any {
+	return map[string]any{
+		"character_id":   characterID,
+		"item_id":        itemID,
+		"quantity":       quantity,
+		"total_quantity": totalQuantity,
+	}
+}
+
+func inventoryItemsJSON(stacks map[string]int) []map[string]any {
+	itemIDs := make([]string, 0, len(stacks))
+	for itemID, quantity := range stacks {
+		if quantity > 0 {
+			itemIDs = append(itemIDs, itemID)
+		}
+	}
+	sort.Strings(itemIDs)
+	items := make([]map[string]any, 0, len(itemIDs))
+	for _, itemID := range itemIDs {
+		items = append(items, map[string]any{"item_id": itemID, "quantity": stacks[itemID]})
+	}
+	return items
 }
 
 type referencePlayEncounter struct {
