@@ -92,6 +92,7 @@ func Suites() []Suite {
 		settlementsSuite(),
 		shopsSuite(),
 		recipeCatalogSuite(),
+		recurringDowntimeSuite(),
 	}
 }
 

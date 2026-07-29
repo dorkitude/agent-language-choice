@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -3115,6 +3115,134 @@ func ReferenceHandler() http.Handler {
 		c.Inventory[q.CharacterID][recipe.OutputItem] += recipe.OutputQuantity
 		writeJSON(w, http.StatusCreated, map[string]any{"character_id": q.CharacterID, "recipe_id": recipe.RecipeID, "output_item": recipe.OutputItem, "output_quantity": recipe.OutputQuantity})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/downtime/activities", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			ActivityID     string `json:"activity_id"`
+			Name           string `json:"name"`
+			CyclesRequired int    `json:"cycles_required"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ActivityID == "" || req.Name == "" || req.CyclesRequired < 1 || req.CyclesRequired > 10 {
+			http.Error(w, "invalid downtime activity", http.StatusBadRequest)
+			return
+		}
+		if c.DowntimeActivityIndex == nil {
+			c.DowntimeActivityIndex = map[string]int{}
+		}
+		if _, exists := c.DowntimeActivityIndex[req.ActivityID]; exists {
+			http.Error(w, "duplicate downtime activity", http.StatusConflict)
+			return
+		}
+		activity := referenceDowntimeActivity{ActivityID: req.ActivityID, Name: req.Name, CyclesRequired: req.CyclesRequired}
+		c.DowntimeActivityIndex[activity.ActivityID] = len(c.DowntimeActivities)
+		c.DowntimeActivities = append(c.DowntimeActivities, activity)
+		writeJSON(w, http.StatusCreated, activity.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/downtime/allocations", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if a.Username == c.Owner || a.Role != "player" {
+			http.Error(w, "player role required", http.StatusForbidden)
+			return
+		}
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			ActivityID string `json:"activity_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ActivityID == "" {
+			http.Error(w, "invalid downtime allocation", http.StatusBadRequest)
+			return
+		}
+		if _, exists := c.DowntimeActivityIndex[req.ActivityID]; !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if c.DowntimeAllocations == nil {
+			c.DowntimeAllocations = map[string]map[string]*referenceDowntimeAllocation{}
+		}
+		if c.DowntimeAllocations[characterID] == nil {
+			c.DowntimeAllocations[characterID] = map[string]*referenceDowntimeAllocation{}
+		}
+		if _, exists := c.DowntimeAllocations[characterID][req.ActivityID]; exists {
+			http.Error(w, "duplicate downtime allocation", http.StatusConflict)
+			return
+		}
+		allocation := &referenceDowntimeAllocation{CharacterID: characterID, ActivityID: req.ActivityID}
+		c.DowntimeAllocations[characterID][req.ActivityID] = allocation
+		writeJSON(w, http.StatusCreated, allocation.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/downtime/allocations/{activity_id}/progress", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		activityID := r.PathValue("activity_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if a.Username == c.Owner || a.Role != "player" {
+			http.Error(w, "player role required", http.StatusForbidden)
+			return
+		}
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		activityIndex, activityExists := c.DowntimeActivityIndex[activityID]
+		allocation := c.DowntimeAllocations[characterID][activityID]
+		if !activityExists || allocation == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		activity := c.DowntimeActivities[activityIndex]
+		allocation.CyclesCompleted++
+		if allocation.CyclesCompleted >= activity.CyclesRequired {
+			allocation.CyclesCompleted = 0
+			allocation.Completions++
+		}
+		writeJSON(w, http.StatusOK, allocation.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/downtime/allocations/{activity_id}", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		activityID := r.PathValue("activity_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if _, exists := c.DowntimeActivityIndex[activityID]; !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		allocation := c.DowntimeAllocations[characterID][activityID]
+		if allocation == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, allocation.json())
+	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := playCampaign(w, r)
 		if !ok {
@@ -3494,62 +3622,65 @@ type referenceUser struct {
 }
 
 type referencePlayCampaign struct {
-	ID                string
-	Name              string
-	Owner             string
-	MaxPlayers        int
-	Status            string
-	Members           map[string]referencePlayMember
-	Order             []string
-	Queue             []string
-	CurrentActor      string
-	Phase             string
-	TurnNumber        int
-	NudgeCount        int
-	Events            []referencePlayEvent
-	Story             string
-	DMNotes           string
-	Scenes            map[string]string
-	SceneNames        map[string]string
-	CurrentScene      string
-	Locations         map[string]string
-	Edges             map[string]bool
-	Encounter         *referencePlayEncounter
-	CharacterOwner    map[string]string
-	Spells            map[string][]string
-	PreparedSpells    map[string][]string
-	SpellSlots        map[string]int
-	SpellCasts        map[string][]referenceSpellCast
-	Concentration     map[string]*referenceConcentration
-	Inventory         map[string]map[string]int
-	Equipment         map[string]map[string]referenceEquipmentItem
-	AttunedItems      map[string]map[string]bool
-	Currency          map[string]int
-	TransferSeq       int
-	Loot              map[string]*referenceLoot
-	NPCs              map[string]*referencePlayNPC
-	Factions          map[string]*referencePlayFaction
-	Reputation        map[string]map[string]int
-	Relationships     []referenceRelationshipEdge
-	RelationshipIndex map[string]int
-	Clues             []referenceClue
-	ClueIndex         map[string]bool
-	PlayQuests        []referencePlayQuest
-	PlayQuestIndex    map[string]int
-	QuestRewardXP     map[string]int
-	QuestRewardItems  map[string]map[string]int
-	WorldEvents       []referenceWorldEvent
-	WorldEventIndex   map[string]int
-	Rumors            []referenceRumor
-	RumorIndex        map[string]int
-	RumorTextIndex    map[string]bool
-	Calendar          *referenceCalendar
-	Settlements       []referenceSettlement
-	SettlementIndex   map[string]int
-	Recipes           []referenceRecipe
-	RecipeIndex       map[string]int
-	DeathSaves        int
-	DeathStable       bool
+	ID                    string
+	Name                  string
+	Owner                 string
+	MaxPlayers            int
+	Status                string
+	Members               map[string]referencePlayMember
+	Order                 []string
+	Queue                 []string
+	CurrentActor          string
+	Phase                 string
+	TurnNumber            int
+	NudgeCount            int
+	Events                []referencePlayEvent
+	Story                 string
+	DMNotes               string
+	Scenes                map[string]string
+	SceneNames            map[string]string
+	CurrentScene          string
+	Locations             map[string]string
+	Edges                 map[string]bool
+	Encounter             *referencePlayEncounter
+	CharacterOwner        map[string]string
+	Spells                map[string][]string
+	PreparedSpells        map[string][]string
+	SpellSlots            map[string]int
+	SpellCasts            map[string][]referenceSpellCast
+	Concentration         map[string]*referenceConcentration
+	Inventory             map[string]map[string]int
+	Equipment             map[string]map[string]referenceEquipmentItem
+	AttunedItems          map[string]map[string]bool
+	Currency              map[string]int
+	TransferSeq           int
+	Loot                  map[string]*referenceLoot
+	NPCs                  map[string]*referencePlayNPC
+	Factions              map[string]*referencePlayFaction
+	Reputation            map[string]map[string]int
+	Relationships         []referenceRelationshipEdge
+	RelationshipIndex     map[string]int
+	Clues                 []referenceClue
+	ClueIndex             map[string]bool
+	PlayQuests            []referencePlayQuest
+	PlayQuestIndex        map[string]int
+	QuestRewardXP         map[string]int
+	QuestRewardItems      map[string]map[string]int
+	WorldEvents           []referenceWorldEvent
+	WorldEventIndex       map[string]int
+	Rumors                []referenceRumor
+	RumorIndex            map[string]int
+	RumorTextIndex        map[string]bool
+	Calendar              *referenceCalendar
+	Settlements           []referenceSettlement
+	SettlementIndex       map[string]int
+	Recipes               []referenceRecipe
+	RecipeIndex           map[string]int
+	DowntimeActivities    []referenceDowntimeActivity
+	DowntimeActivityIndex map[string]int
+	DowntimeAllocations   map[string]map[string]*referenceDowntimeAllocation
+	DeathSaves            int
+	DeathStable           bool
 }
 
 type referenceLoot struct {
@@ -3672,6 +3803,19 @@ type referenceRecipe struct {
 	Ingredients    map[string]int
 	OutputItem     string
 	OutputQuantity int
+}
+
+type referenceDowntimeActivity struct {
+	ActivityID     string
+	Name           string
+	CyclesRequired int
+}
+
+type referenceDowntimeAllocation struct {
+	CharacterID     string
+	ActivityID      string
+	CyclesCompleted int
+	Completions     int
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -4016,6 +4160,23 @@ func (recipe referenceRecipe) json() map[string]any {
 		"ingredients":     intMapJSON(recipe.Ingredients),
 		"output_item":     recipe.OutputItem,
 		"output_quantity": recipe.OutputQuantity,
+	}
+}
+
+func (activity referenceDowntimeActivity) json() map[string]any {
+	return map[string]any{
+		"activity_id":     activity.ActivityID,
+		"name":            activity.Name,
+		"cycles_required": activity.CyclesRequired,
+	}
+}
+
+func (allocation referenceDowntimeAllocation) json() map[string]any {
+	return map[string]any{
+		"character_id":     allocation.CharacterID,
+		"activity_id":      allocation.ActivityID,
+		"cycles_completed": allocation.CyclesCompleted,
+		"completions":      allocation.Completions,
 	}
 }
 

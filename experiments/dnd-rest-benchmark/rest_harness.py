@@ -598,6 +598,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add deterministic crafting recipes and ingredient requirements",
     ),
+    LifecycleStage(
+        id="072-recurring-downtime",
+        suite="072-recurring-downtime",
+        spec_path=BENCH_DIR / "challenges" / "072-recurring-downtime.md",
+        kind="maintenance",
+        description="Allocate, progress, and complete repeated downtime activities",
+    ),
 ]
 
 
