@@ -773,6 +773,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add public deterministic API schema discovery endpoint",
     ),
+    LifecycleStage(
+        id="097-agent-onboarding",
+        suite="097-agent-onboarding",
+        spec_path=BENCH_DIR / "challenges" / "097-agent-onboarding.md",
+        kind="maintenance",
+        description="Add authenticated role-specific campaign agent onboarding",
+    ),
 ]
 
 

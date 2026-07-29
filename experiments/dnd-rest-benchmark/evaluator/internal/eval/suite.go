@@ -117,6 +117,7 @@ func Suites() []Suite {
 		safetyBoundariesSuite(),
 		fixtureSeedingSuite(),
 		apiSchemaEndpointSuite(),
+		agentOnboardingSuite(),
 	}
 }
 

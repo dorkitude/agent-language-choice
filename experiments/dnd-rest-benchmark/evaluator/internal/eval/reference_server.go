@@ -866,6 +866,25 @@ func ReferenceHandler() http.Handler {
 		campaign.Order = append(campaign.Order, actor.Username)
 		writeJSON(w, http.StatusCreated, member.json())
 	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/onboarding", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username == campaign.Owner {
+			writeJSON(w, http.StatusOK, referenceOnboardingJSON{
+				Role:      "dm",
+				NextSteps: []string{"configure-safety", "invite-players", "start-campaign"},
+				CanMutate: true,
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, referenceOnboardingJSON{
+			Role:      "player",
+			NextSteps: []string{"review-party", "take-turn", "submit-action"},
+			CanMutate: true,
+		})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/start", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -4993,6 +5012,12 @@ type referenceUser struct {
 	Username string
 	Password string
 	Role     string
+}
+
+type referenceOnboardingJSON struct {
+	Role      string   `json:"role"`
+	NextSteps []string `json:"next_steps"`
+	CanMutate bool     `json:"can_mutate"`
 }
 
 type referencePlayCampaign struct {
