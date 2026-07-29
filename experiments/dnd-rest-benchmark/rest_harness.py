@@ -1625,27 +1625,46 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str) -> dict[str,
         raise SystemExit(f"unknown provider {args.provider}")
 
     started = time.time()
-    try:
-        completed = subprocess.run(
+    stdout_path = run_dir / "agent_stdout.txt"
+    stderr_path = run_dir / "agent_stderr.txt"
+    timed_out = False
+    with stdout_path.open("w") as stdout_file, stderr_path.open("w") as stderr_file:
+        process = subprocess.Popen(
             command,
             cwd=run_dir,
             env=env,
-            capture_output=True,
+            stdout=stdout_file,
+            stderr=stderr_file,
             text=True,
-            timeout=args.agent_timeout,
+            start_new_session=True,
         )
-        timed_out = False
-        stdout = completed.stdout
-        stderr = completed.stderr
-        returncode = completed.returncode
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        stdout = exc.stdout or ""
-        stderr = exc.stderr or ""
-        returncode = None
+        print(f"[agent] started provider={args.provider} model={args.model}", flush=True)
+        deadline = started + args.agent_timeout
+        while process.poll() is None:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                timed_out = True
+                print(f"[agent] timed out after {args.agent_timeout}s; stopping process", flush=True)
+                terminate_process_group(process)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    kill_process_group(process)
+                    process.wait(timeout=5)
+                break
+            try:
+                process.wait(timeout=min(30, remaining))
+            except subprocess.TimeoutExpired:
+                print(f"[agent] still running ({int(time.time() - started)}s elapsed)", flush=True)
+        returncode = process.returncode
 
-    (run_dir / "agent_stdout.txt").write_text(stdout)
-    (run_dir / "agent_stderr.txt").write_text(stderr)
+    stdout = stdout_path.read_text(errors="replace")
+    stderr = stderr_path.read_text(errors="replace")
+    print(
+        f"[agent] finished exit={returncode} elapsed={round(time.time() - started, 1)}s",
+        flush=True,
+    )
+
     exit_class = classify_agent_exit(stdout, stderr, timed_out, returncode)
     return {
         "timed_out": timed_out,
@@ -1900,6 +1919,11 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             (shot_dir / "PROMPT.md").write_text(f"```text\n{prompt}\n```\n")
             (run_dir / "PROMPT.md").write_text(f"```text\n{prompt}\n```\n")
 
+            print(
+                f"[stage {stage_index + 1}/{len(stages)}] {stage.id} "
+                f"attempt {attempt + 1}/{max_attempts} ({shot_kind})",
+                flush=True,
+            )
             agent = run_agent(args, run_dir, prompt)
             copy_if_exists(run_dir / "agent_stdout.txt", shot_dir / "agent_stdout.txt")
             copy_if_exists(run_dir / "agent_stderr.txt", shot_dir / "agent_stderr.txt")
@@ -1909,6 +1933,7 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             copy_if_exists(run_dir / "setup.json", shot_dir / "setup.json")
             setup_ok = all(item["returncode"] == 0 for item in setup)
             if setup_ok and agent_ok(agent):
+                print(f"[stage {stage_index + 1}/{len(stages)}] evaluating {stage.suite}", flush=True)
                 evaluation = evaluate(run_dir, evaluator, free_port(), args.server_timeout, stage.suite)
             else:
                 evaluation = {"passed": False, "error": "setup or agent failed"}
@@ -1941,8 +1966,18 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             (run_dir / "lifecycle-result.json").write_text(json.dumps(final, indent=2) + "\n")
 
             if shot["passed"]:
+                print(
+                    f"[stage {stage_index + 1}/{len(stages)}] PASS "
+                    f"({shot['evaluation_record']})",
+                    flush=True,
+                )
                 stage_passed = True
                 break
+            print(
+                f"[stage {stage_index + 1}/{len(stages)}] FAIL "
+                f"({shot['evaluation_record']})",
+                flush=True,
+            )
             previous_failure = shot
             previous_failure_record = str(shot["evaluation_record"])
 
