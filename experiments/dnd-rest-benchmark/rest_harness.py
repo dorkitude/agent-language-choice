@@ -1642,11 +1642,11 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             start_new_session=True,
         )
         print(f"[agent {progress_name}] started provider={args.provider}", flush=True)
-        deadline = started + args.agent_timeout
+        deadline = started + args.agent_timeout if args.agent_timeout > 0 else None
         next_heartbeat = 60
         while process.poll() is None:
-            remaining = deadline - time.time()
-            if remaining <= 0:
+            remaining = deadline - time.time() if deadline is not None else None
+            if remaining is not None and remaining <= 0:
                 timed_out = True
                 print(f"[agent {progress_name}] timed out after {args.agent_timeout}s; stopping process", flush=True)
                 terminate_process_group(process)
@@ -1658,7 +1658,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
                 break
             try:
                 until_heartbeat = max(0.1, next_heartbeat - (time.time() - started))
-                process.wait(timeout=min(until_heartbeat, remaining))
+                process.wait(timeout=min(until_heartbeat, remaining) if remaining is not None else until_heartbeat)
             except subprocess.TimeoutExpired:
                 elapsed = time.time() - started
                 while elapsed >= next_heartbeat:
@@ -2848,7 +2848,12 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(required=True)
 
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--agent-timeout", type=int, default=900)
+    common.add_argument(
+        "--agent-timeout",
+        type=int,
+        default=0,
+        help="Per-agent deadline in seconds; 0 disables the deadline (default: 0)",
+    )
     common.add_argument("--setup-timeout", type=int, default=600)
     common.add_argument("--server-timeout", type=int, default=45)
     common.add_argument("--codex-reasoning-effort", default="medium")
