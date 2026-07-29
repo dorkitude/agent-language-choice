@@ -88,6 +88,7 @@ func Suites() []Suite {
 		questRewardsSuite(),
 		worldEventsSuite(),
 		rumorsSuite(),
+		calendarAndWeatherSuite(),
 	}
 }
 

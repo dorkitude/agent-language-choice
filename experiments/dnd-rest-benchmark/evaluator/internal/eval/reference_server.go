@@ -2759,6 +2759,74 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"rumors": rumors})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/calendar", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		if c.Calendar != nil {
+			http.Error(w, "calendar already initialized", http.StatusConflict)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid calendar", http.StatusBadRequest)
+			return
+		}
+		day, ok := requiredInt(raw, "day")
+		if !ok || day < 1 {
+			http.Error(w, "invalid calendar", http.StatusBadRequest)
+			return
+		}
+		season, ok := requiredString(raw, "season")
+		if !ok || !validCalendarSeason(season) {
+			http.Error(w, "invalid calendar", http.StatusBadRequest)
+			return
+		}
+		c.Calendar = &referenceCalendar{Day: day, Season: season}
+		writeJSON(w, http.StatusCreated, c.Calendar.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/calendar", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if c.Calendar == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, c.Calendar.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/calendar/advance", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		if c.Calendar == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid calendar advance", http.StatusBadRequest)
+			return
+		}
+		days, ok := requiredInt(raw, "days")
+		if !ok || days < 1 || days > 30 {
+			http.Error(w, "invalid calendar advance", http.StatusBadRequest)
+			return
+		}
+		c.Calendar.Day += days
+		writeJSON(w, http.StatusOK, c.Calendar.json())
+	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := playCampaign(w, r)
 		if !ok {
@@ -3187,6 +3255,7 @@ type referencePlayCampaign struct {
 	Rumors            []referenceRumor
 	RumorIndex        map[string]int
 	RumorTextIndex    map[string]bool
+	Calendar          *referenceCalendar
 	DeathSaves        int
 	DeathStable       bool
 }
@@ -3275,6 +3344,11 @@ type referenceRumor struct {
 	RumorID      string
 	Text         string
 	DiscoveredBy []string
+}
+
+type referenceCalendar struct {
+	Day    int
+	Season string
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -3383,6 +3457,28 @@ func (rumor referenceRumor) json(visibleCharacterIDs []string, includeAll bool) 
 		"text":          rumor.Text,
 		"discovered_by": discoveredBy,
 	}
+}
+
+func (calendar referenceCalendar) json() map[string]any {
+	return map[string]any{
+		"day":     calendar.Day,
+		"season":  calendar.Season,
+		"weather": calendarWeather(calendar.Day, calendar.Season),
+	}
+}
+
+func validCalendarSeason(season string) bool {
+	return season == "spring" || season == "summer" || season == "autumn" || season == "winter"
+}
+
+func calendarWeather(day int, season string) string {
+	seasonOffset := map[string]int{
+		"spring": 0,
+		"summer": 1,
+		"autumn": 2,
+		"winter": 3,
+	}[season]
+	return []string{"clear", "rain", "wind", "snow"}[(day+seasonOffset)%4]
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {

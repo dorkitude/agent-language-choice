@@ -570,6 +570,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Publish, discover, and deduplicate campaign rumors",
     ),
+    LifecycleStage(
+        id="068-calendar-and-weather",
+        suite="068-calendar-and-weather",
+        spec_path=BENCH_DIR / "challenges" / "068-calendar-and-weather.md",
+        kind="maintenance",
+        description="Advance campaign time and deterministically derive weather",
+    ),
 ]
 
 
