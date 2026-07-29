@@ -1353,6 +1353,78 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"current_turn": campaign.SafeCurrentTurn, "accepted": accepted})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/transactional-transfers", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid transactional transfer", http.StatusBadRequest)
+			return
+		}
+		fromCharacterID, ok := requiredString(raw, "from_character_id")
+		if !ok {
+			http.Error(w, "invalid transactional transfer", http.StatusBadRequest)
+			return
+		}
+		toCharacterID, ok := requiredString(raw, "to_character_id")
+		if !ok || toCharacterID == fromCharacterID || !campaign.hasCharacter(toCharacterID) {
+			http.Error(w, "invalid transactional transfer", http.StatusBadRequest)
+			return
+		}
+		amount, ok := requiredInt(raw, "amount")
+		if !ok || amount <= 0 {
+			http.Error(w, "invalid transactional transfer", http.StatusBadRequest)
+			return
+		}
+		simulateFailure, ok := requiredBool(raw, "simulate_failure")
+		if !ok {
+			http.Error(w, "invalid transactional transfer", http.StatusBadRequest)
+			return
+		}
+		if !campaign.hasCharacter(fromCharacterID) {
+			http.Error(w, "invalid transactional transfer", http.StatusBadRequest)
+			return
+		}
+		if campaign.CharacterOwner[fromCharacterID] != actor.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		fromGold := campaign.Currency[fromCharacterID]
+		toGold := campaign.Currency[toCharacterID]
+		if amount > fromGold {
+			http.Error(w, "insufficient funds", http.StatusConflict)
+			return
+		}
+		prepared := referenceTransactionalTransfer{
+			FromCharacterID: fromCharacterID,
+			ToCharacterID:   toCharacterID,
+			Amount:          amount,
+			FromGold:        fromGold - amount,
+			ToGold:          toGold + amount,
+			Sequence:        len(campaign.TransactionalTransfers) + 1,
+		}
+		if simulateFailure {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "simulated failure"})
+			return
+		}
+		campaign.Currency[fromCharacterID] = prepared.FromGold
+		campaign.Currency[toCharacterID] = prepared.ToGold
+		campaign.TransactionalTransfers = append(campaign.TransactionalTransfers, prepared)
+		writeJSON(w, http.StatusCreated, prepared.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/transactional-transfers", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		transfers := make([]any, 0, len(campaign.TransactionalTransfers))
+		for _, transfer := range campaign.TransactionalTransfers {
+			transfers = append(transfers, transfer.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"transfers": transfers})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -4259,90 +4331,91 @@ type referenceUser struct {
 }
 
 type referencePlayCampaign struct {
-	ID                    string
-	Name                  string
-	Owner                 string
-	MaxPlayers            int
-	Status                string
-	Members               map[string]referencePlayMember
-	Order                 []string
-	Queue                 []string
-	CurrentActor          string
-	Phase                 string
-	TurnNumber            int
-	NudgeCount            int
-	Events                []referencePlayEvent
-	Story                 string
-	DMNotes               string
-	Scenes                map[string]string
-	SceneNames            map[string]string
-	CurrentScene          string
-	Locations             map[string]string
-	Edges                 map[string]bool
-	Encounter             *referencePlayEncounter
-	CharacterOwner        map[string]string
-	Spells                map[string][]string
-	PreparedSpells        map[string][]string
-	SpellSlots            map[string]int
-	SpellCasts            map[string][]referenceSpellCast
-	Concentration         map[string]*referenceConcentration
-	Inventory             map[string]map[string]int
-	Equipment             map[string]map[string]referenceEquipmentItem
-	AttunedItems          map[string]map[string]bool
-	Currency              map[string]int
-	TransferSeq           int
-	Loot                  map[string]*referenceLoot
-	NPCs                  map[string]*referencePlayNPC
-	Factions              map[string]*referencePlayFaction
-	Reputation            map[string]map[string]int
-	Relationships         []referenceRelationshipEdge
-	RelationshipIndex     map[string]int
-	Clues                 []referenceClue
-	ClueIndex             map[string]bool
-	PlayQuests            []referencePlayQuest
-	PlayQuestIndex        map[string]int
-	QuestRewardXP         map[string]int
-	QuestRewardItems      map[string]map[string]int
-	WorldEvents           []referenceWorldEvent
-	WorldEventIndex       map[string]int
-	Rumors                []referenceRumor
-	RumorIndex            map[string]int
-	RumorTextIndex        map[string]bool
-	Calendar              *referenceCalendar
-	Settlements           []referenceSettlement
-	SettlementIndex       map[string]int
-	Recipes               []referenceRecipe
-	RecipeIndex           map[string]int
-	DowntimeActivities    []referenceDowntimeActivity
-	DowntimeActivityIndex map[string]int
-	DowntimeAllocations   map[string]map[string]*referenceDowntimeAllocation
-	SessionZero           *referenceSessionZeroSettings
-	Content               []referenceContent
-	ContentIndex          map[string]int
-	Notes                 []referenceNote
-	NoteIndex             map[string]int
-	Whispers              []referenceWhisper
-	WhisperIndex          map[string]int
-	Invitations           []referenceInvitation
-	InvitationIndex       map[string]int
-	Delegations           map[string]referenceDelegation
-	DelegationAudit       []referenceDelegationAuditEntry
-	AuditEvents           []referenceAuditEvent
-	AuditCorrelationIndex map[string]bool
-	AuditTimestamp        int
-	ProjectionEvents      []referenceProjectionEvent
-	ProjectionEventIndex  map[string]bool
-	ProjectionStory       string
-	ProjectionDanger      int
-	ProjectionAppliedIDs  []string
-	IdempotentEvents      []referenceIdempotentEvent
-	IdempotencyKeys       map[string]referenceIdempotentEvent
-	IdempotentEventIndex  map[string]bool
-	SafeCurrentTurn       int
-	SafeAccepted          []referenceSafeTurnSubmission
-	SafeSubmissionIndex   map[string]bool
-	DeathSaves            int
-	DeathStable           bool
+	ID                     string
+	Name                   string
+	Owner                  string
+	MaxPlayers             int
+	Status                 string
+	Members                map[string]referencePlayMember
+	Order                  []string
+	Queue                  []string
+	CurrentActor           string
+	Phase                  string
+	TurnNumber             int
+	NudgeCount             int
+	Events                 []referencePlayEvent
+	Story                  string
+	DMNotes                string
+	Scenes                 map[string]string
+	SceneNames             map[string]string
+	CurrentScene           string
+	Locations              map[string]string
+	Edges                  map[string]bool
+	Encounter              *referencePlayEncounter
+	CharacterOwner         map[string]string
+	Spells                 map[string][]string
+	PreparedSpells         map[string][]string
+	SpellSlots             map[string]int
+	SpellCasts             map[string][]referenceSpellCast
+	Concentration          map[string]*referenceConcentration
+	Inventory              map[string]map[string]int
+	Equipment              map[string]map[string]referenceEquipmentItem
+	AttunedItems           map[string]map[string]bool
+	Currency               map[string]int
+	TransferSeq            int
+	Loot                   map[string]*referenceLoot
+	NPCs                   map[string]*referencePlayNPC
+	Factions               map[string]*referencePlayFaction
+	Reputation             map[string]map[string]int
+	Relationships          []referenceRelationshipEdge
+	RelationshipIndex      map[string]int
+	Clues                  []referenceClue
+	ClueIndex              map[string]bool
+	PlayQuests             []referencePlayQuest
+	PlayQuestIndex         map[string]int
+	QuestRewardXP          map[string]int
+	QuestRewardItems       map[string]map[string]int
+	WorldEvents            []referenceWorldEvent
+	WorldEventIndex        map[string]int
+	Rumors                 []referenceRumor
+	RumorIndex             map[string]int
+	RumorTextIndex         map[string]bool
+	Calendar               *referenceCalendar
+	Settlements            []referenceSettlement
+	SettlementIndex        map[string]int
+	Recipes                []referenceRecipe
+	RecipeIndex            map[string]int
+	DowntimeActivities     []referenceDowntimeActivity
+	DowntimeActivityIndex  map[string]int
+	DowntimeAllocations    map[string]map[string]*referenceDowntimeAllocation
+	SessionZero            *referenceSessionZeroSettings
+	Content                []referenceContent
+	ContentIndex           map[string]int
+	Notes                  []referenceNote
+	NoteIndex              map[string]int
+	Whispers               []referenceWhisper
+	WhisperIndex           map[string]int
+	Invitations            []referenceInvitation
+	InvitationIndex        map[string]int
+	Delegations            map[string]referenceDelegation
+	DelegationAudit        []referenceDelegationAuditEntry
+	AuditEvents            []referenceAuditEvent
+	AuditCorrelationIndex  map[string]bool
+	AuditTimestamp         int
+	ProjectionEvents       []referenceProjectionEvent
+	ProjectionEventIndex   map[string]bool
+	ProjectionStory        string
+	ProjectionDanger       int
+	ProjectionAppliedIDs   []string
+	IdempotentEvents       []referenceIdempotentEvent
+	IdempotencyKeys        map[string]referenceIdempotentEvent
+	IdempotentEventIndex   map[string]bool
+	SafeCurrentTurn        int
+	SafeAccepted           []referenceSafeTurnSubmission
+	SafeSubmissionIndex    map[string]bool
+	TransactionalTransfers []referenceTransactionalTransfer
+	DeathSaves             int
+	DeathStable            bool
 }
 
 func (campaign *referencePlayCampaign) appendAuditEvent(kind string, correlationID string, actor referenceUser) referenceAuditEvent {
@@ -4418,6 +4491,26 @@ func (campaign *referencePlayCampaign) ensureSafeTurns() {
 	}
 	if campaign.SafeSubmissionIndex == nil {
 		campaign.SafeSubmissionIndex = map[string]bool{}
+	}
+}
+
+type referenceTransactionalTransfer struct {
+	FromCharacterID string
+	ToCharacterID   string
+	Amount          int
+	FromGold        int
+	ToGold          int
+	Sequence        int
+}
+
+func (transfer referenceTransactionalTransfer) json() map[string]any {
+	return map[string]any{
+		"from_character_id": transfer.FromCharacterID,
+		"to_character_id":   transfer.ToCharacterID,
+		"amount":            transfer.Amount,
+		"from_gold":         transfer.FromGold,
+		"to_gold":           transfer.ToGold,
+		"sequence":          transfer.Sequence,
 	}
 }
 
@@ -5264,6 +5357,14 @@ func requiredInt(raw map[string]json.RawMessage, key string) (int, bool) {
 	var value int
 	if payload, exists := raw[key]; !exists || json.Unmarshal(payload, &value) != nil || !jsonInteger(payload) {
 		return 0, false
+	}
+	return value, true
+}
+
+func requiredBool(raw map[string]json.RawMessage, key string) (bool, bool) {
+	var value bool
+	if payload, exists := raw[key]; !exists || json.Unmarshal(payload, &value) != nil {
+		return false, false
 	}
 	return value, true
 }

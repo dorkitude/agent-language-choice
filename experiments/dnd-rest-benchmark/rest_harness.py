@@ -668,6 +668,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Reject stale turn submissions without corrupting queue state",
     ),
+    LifecycleStage(
+        id="082-transaction-recovery",
+        suite="082-transaction-recovery",
+        spec_path=BENCH_DIR / "challenges" / "082-transaction-recovery.md",
+        kind="maintenance",
+        description="Ensure failed compound mutations leave no partial state",
+    ),
 ]
 
 

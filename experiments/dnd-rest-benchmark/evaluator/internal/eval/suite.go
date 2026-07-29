@@ -102,6 +102,7 @@ func Suites() []Suite {
 		eventProjectionsSuite(),
 		idempotencyKeysSuite(),
 		concurrentTurnSafetySuite(),
+		transactionRecoverySuite(),
 	}
 }
 
