@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2672,6 +2672,93 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"events": payload})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/rumors", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid rumor", http.StatusBadRequest)
+			return
+		}
+		rumorID, ok := requiredString(raw, "rumor_id")
+		if !ok {
+			http.Error(w, "invalid rumor", http.StatusBadRequest)
+			return
+		}
+		text, ok := requiredString(raw, "text")
+		if !ok {
+			http.Error(w, "invalid rumor", http.StatusBadRequest)
+			return
+		}
+		if c.RumorIndex == nil {
+			c.RumorIndex = map[string]int{}
+		}
+		if c.RumorTextIndex == nil {
+			c.RumorTextIndex = map[string]bool{}
+		}
+		normalizedText := strings.ToLower(strings.TrimSpace(text))
+		if _, exists := c.RumorIndex[rumorID]; exists || c.RumorTextIndex[normalizedText] {
+			http.Error(w, "duplicate rumor", http.StatusConflict)
+			return
+		}
+		rumor := referenceRumor{RumorID: rumorID, Text: text}
+		c.RumorIndex[rumorID] = len(c.Rumors)
+		c.RumorTextIndex[normalizedText] = true
+		c.Rumors = append(c.Rumors, rumor)
+		writeJSON(w, http.StatusCreated, rumor.json(nil, true))
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/rumors/{rumor_id}/discover", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username == c.Owner || a.Role != "player" {
+			http.Error(w, "player role required", http.StatusForbidden)
+			return
+		}
+		index, exists := c.RumorIndex[r.PathValue("rumor_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		member, exists := c.Members[a.Username]
+		if !exists {
+			http.Error(w, "not a campaign member", http.StatusForbidden)
+			return
+		}
+		rumor := &c.Rumors[index]
+		for _, characterID := range rumor.DiscoveredBy {
+			if characterID == member.CharacterID {
+				http.Error(w, "rumor already discovered", http.StatusConflict)
+				return
+			}
+		}
+		rumor.DiscoveredBy = append(rumor.DiscoveredBy, member.CharacterID)
+		writeJSON(w, http.StatusCreated, rumor.json(nil, true))
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/rumors", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := ""
+		allDiscoverers := a.Username == c.Owner
+		if !allDiscoverers {
+			member := c.Members[a.Username]
+			characterID = member.CharacterID
+		}
+		rumors := make([]any, 0, len(c.Rumors))
+		for _, rumor := range c.Rumors {
+			rumors = append(rumors, rumor.json([]string{characterID}, allDiscoverers))
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"rumors": rumors})
+	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := playCampaign(w, r)
 		if !ok {
@@ -3097,6 +3184,9 @@ type referencePlayCampaign struct {
 	QuestRewardItems  map[string]map[string]int
 	WorldEvents       []referenceWorldEvent
 	WorldEventIndex   map[string]int
+	Rumors            []referenceRumor
+	RumorIndex        map[string]int
+	RumorTextIndex    map[string]bool
 	DeathSaves        int
 	DeathStable       bool
 }
@@ -3179,6 +3269,12 @@ type referenceWorldEvent struct {
 type referenceWorldEventResolution struct {
 	TurnNumber int
 	Text       string
+}
+
+type referenceRumor struct {
+	RumorID      string
+	Text         string
+	DiscoveredBy []string
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -3264,6 +3360,29 @@ func (event referenceWorldEvent) json() map[string]any {
 		}
 	}
 	return payload
+}
+
+func (rumor referenceRumor) json(visibleCharacterIDs []string, includeAll bool) map[string]any {
+	discoveredBy := []any{}
+	if includeAll {
+		for _, characterID := range rumor.DiscoveredBy {
+			discoveredBy = append(discoveredBy, characterID)
+		}
+	} else {
+		for _, visibleCharacterID := range visibleCharacterIDs {
+			for _, characterID := range rumor.DiscoveredBy {
+				if characterID == visibleCharacterID {
+					discoveredBy = append(discoveredBy, characterID)
+					break
+				}
+			}
+		}
+	}
+	return map[string]any{
+		"rumor_id":      rumor.RumorID,
+		"text":          rumor.Text,
+		"discovered_by": discoveredBy,
+	}
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {

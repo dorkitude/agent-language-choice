@@ -563,6 +563,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Schedule and resolve campaign-level world events in turn order",
     ),
+    LifecycleStage(
+        id="067-rumors",
+        suite="067-rumors",
+        spec_path=BENCH_DIR / "challenges" / "067-rumors.md",
+        kind="maintenance",
+        description="Publish, discover, and deduplicate campaign rumors",
+    ),
 ]
 
 
