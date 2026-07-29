@@ -2923,6 +2923,115 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"settlements": settlements})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/settlements/{settlement_id}/shops", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		index, exists := c.SettlementIndex[r.PathValue("settlement_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		shop, ok := decodeReferenceShop(w, r)
+		if !ok {
+			return
+		}
+		settlement := &c.Settlements[index]
+		if settlement.Shops == nil {
+			settlement.Shops = map[string]*referenceShop{}
+		}
+		if _, exists := settlement.Shops[shop.ShopID]; exists {
+			http.Error(w, "duplicate shop", http.StatusConflict)
+			return
+		}
+		settlement.Shops[shop.ShopID] = &shop
+		writeJSON(w, http.StatusCreated, shop.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/settlements/{settlement_id}/shops/{shop_id}", func(w http.ResponseWriter, r *http.Request) {
+		shop, ok := referenceShopForActor(w, r, playCampaign)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, shop.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/settlements/{settlement_id}/shops/{shop_id}/buy", func(w http.ResponseWriter, r *http.Request) {
+		c, a, shop, ok := referenceShopTradeContext(w, r, playCampaign)
+		if !ok {
+			return
+		}
+		if a.Username == c.Owner || a.Role != "player" {
+			http.Error(w, "player role required", http.StatusForbidden)
+			return
+		}
+		trade, ok := decodeReferenceShopTrade(w, r)
+		if !ok {
+			return
+		}
+		if !c.hasCharacter(trade.CharacterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if c.CharacterOwner[trade.CharacterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		stock := shop.Stock[trade.ItemID]
+		if stock < trade.Quantity {
+			http.Error(w, "insufficient stock", http.StatusConflict)
+			return
+		}
+		cost := shop.BuyPrice * trade.Quantity
+		if c.Currency[trade.CharacterID] < cost {
+			http.Error(w, "insufficient funds", http.StatusConflict)
+			return
+		}
+		shop.Stock[trade.ItemID] = stock - trade.Quantity
+		c.Currency[trade.CharacterID] -= cost
+		if c.Inventory[trade.CharacterID] == nil {
+			c.Inventory[trade.CharacterID] = map[string]int{}
+		}
+		c.Inventory[trade.CharacterID][trade.ItemID] += trade.Quantity
+		writeJSON(w, http.StatusOK, referenceShopTradeJSON(trade.CharacterID, trade.ItemID, trade.Quantity, c.Currency[trade.CharacterID], shop.Stock[trade.ItemID]))
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/settlements/{settlement_id}/shops/{shop_id}/sell", func(w http.ResponseWriter, r *http.Request) {
+		c, a, shop, ok := referenceShopTradeContext(w, r, playCampaign)
+		if !ok {
+			return
+		}
+		if a.Username == c.Owner || a.Role != "player" {
+			http.Error(w, "player role required", http.StatusForbidden)
+			return
+		}
+		trade, ok := decodeReferenceShopTrade(w, r)
+		if !ok {
+			return
+		}
+		if !c.hasCharacter(trade.CharacterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if c.CharacterOwner[trade.CharacterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		held := c.Inventory[trade.CharacterID][trade.ItemID]
+		if held < trade.Quantity {
+			http.Error(w, "insufficient inventory quantity", http.StatusConflict)
+			return
+		}
+		c.Inventory[trade.CharacterID][trade.ItemID] = held - trade.Quantity
+		if c.Inventory[trade.CharacterID][trade.ItemID] == 0 {
+			delete(c.Inventory[trade.CharacterID], trade.ItemID)
+		}
+		shop.Stock[trade.ItemID] += trade.Quantity
+		c.Currency[trade.CharacterID] += shop.SellPrice * trade.Quantity
+		writeJSON(w, http.StatusOK, referenceShopTradeJSON(trade.CharacterID, trade.ItemID, trade.Quantity, c.Currency[trade.CharacterID], shop.Stock[trade.ItemID]))
+	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := playCampaign(w, r)
 		if !ok {
@@ -3455,6 +3564,21 @@ type referenceSettlement struct {
 	Services     []string
 	Availability string
 	DiscoveredBy []string
+	Shops        map[string]*referenceShop
+}
+
+type referenceShop struct {
+	ShopID    string
+	Name      string
+	Stock     map[string]int
+	BuyPrice  int
+	SellPrice int
+}
+
+type referenceShopTrade struct {
+	CharacterID string
+	ItemID      string
+	Quantity    int
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -3611,6 +3735,16 @@ func (settlement referenceSettlement) discoveredBy(characterID string) bool {
 	return false
 }
 
+func (shop referenceShop) json() map[string]any {
+	return map[string]any{
+		"shop_id":    shop.ShopID,
+		"name":       shop.Name,
+		"stock":      intMapJSON(shop.Stock),
+		"buy_price":  shop.BuyPrice,
+		"sell_price": shop.SellPrice,
+	}
+}
+
 func validCalendarSeason(season string) bool {
 	return season == "spring" || season == "summer" || season == "autumn" || season == "winter"
 }
@@ -3655,11 +3789,131 @@ func decodeReferenceSettlement(w http.ResponseWriter, r *http.Request, pathSettl
 		http.Error(w, "invalid settlement", http.StatusBadRequest)
 		return referenceSettlement{}, false
 	}
-	return referenceSettlement{SettlementID: settlementID, Name: name, Services: services, Availability: availability}, true
+	return referenceSettlement{SettlementID: settlementID, Name: name, Services: services, Availability: availability, Shops: map[string]*referenceShop{}}, true
 }
 
 func validSettlementAvailability(availability string) bool {
 	return availability == "open" || availability == "limited" || availability == "closed"
+}
+
+func decodeReferenceShop(w http.ResponseWriter, r *http.Request) (referenceShop, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, "invalid shop", http.StatusBadRequest)
+		return referenceShop{}, false
+	}
+	shopID, ok := requiredString(raw, "shop_id")
+	if !ok {
+		http.Error(w, "invalid shop", http.StatusBadRequest)
+		return referenceShop{}, false
+	}
+	name, ok := requiredString(raw, "name")
+	if !ok {
+		http.Error(w, "invalid shop", http.StatusBadRequest)
+		return referenceShop{}, false
+	}
+	stock, ok := requiredItemQuantities(raw, "stock")
+	if !ok || len(stock) == 0 {
+		http.Error(w, "invalid shop", http.StatusBadRequest)
+		return referenceShop{}, false
+	}
+	buyPrice, ok := requiredInt(raw, "buy_price")
+	if !ok || buyPrice <= 0 {
+		http.Error(w, "invalid shop", http.StatusBadRequest)
+		return referenceShop{}, false
+	}
+	sellPrice, ok := requiredInt(raw, "sell_price")
+	if !ok || sellPrice < 0 {
+		http.Error(w, "invalid shop", http.StatusBadRequest)
+		return referenceShop{}, false
+	}
+	return referenceShop{ShopID: shopID, Name: name, Stock: stock, BuyPrice: buyPrice, SellPrice: sellPrice}, true
+}
+
+func decodeReferenceShopTrade(w http.ResponseWriter, r *http.Request) (referenceShopTrade, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, "invalid shop trade", http.StatusBadRequest)
+		return referenceShopTrade{}, false
+	}
+	characterID, ok := requiredString(raw, "character_id")
+	if !ok {
+		http.Error(w, "invalid shop trade", http.StatusBadRequest)
+		return referenceShopTrade{}, false
+	}
+	itemID, ok := requiredString(raw, "item_id")
+	if !ok || !validInventoryItem(itemID) {
+		http.Error(w, "invalid shop trade", http.StatusBadRequest)
+		return referenceShopTrade{}, false
+	}
+	quantity, ok := requiredInt(raw, "quantity")
+	if !ok || quantity < 1 {
+		http.Error(w, "invalid shop trade", http.StatusBadRequest)
+		return referenceShopTrade{}, false
+	}
+	return referenceShopTrade{CharacterID: characterID, ItemID: itemID, Quantity: quantity}, true
+}
+
+func referenceShopForActor(w http.ResponseWriter, r *http.Request, playCampaign func(http.ResponseWriter, *http.Request) (*referencePlayCampaign, referenceUser, bool)) (*referenceShop, bool) {
+	c, a, ok := playCampaign(w, r)
+	if !ok {
+		return nil, false
+	}
+	index, exists := c.SettlementIndex[r.PathValue("settlement_id")]
+	if !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return nil, false
+	}
+	settlement := &c.Settlements[index]
+	if a.Username != c.Owner {
+		member, exists := c.Members[a.Username]
+		if !exists || !settlement.discoveredBy(member.CharacterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return nil, false
+		}
+	}
+	shop := settlement.Shops[r.PathValue("shop_id")]
+	if shop == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return nil, false
+	}
+	return shop, true
+}
+
+func referenceShopTradeContext(w http.ResponseWriter, r *http.Request, playCampaign func(http.ResponseWriter, *http.Request) (*referencePlayCampaign, referenceUser, bool)) (*referencePlayCampaign, referenceUser, *referenceShop, bool) {
+	c, a, ok := playCampaign(w, r)
+	if !ok {
+		return nil, referenceUser{}, nil, false
+	}
+	index, exists := c.SettlementIndex[r.PathValue("settlement_id")]
+	if !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return nil, referenceUser{}, nil, false
+	}
+	settlement := &c.Settlements[index]
+	if a.Username != c.Owner {
+		member, exists := c.Members[a.Username]
+		if !exists || !settlement.discoveredBy(member.CharacterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return nil, referenceUser{}, nil, false
+		}
+	}
+	shop := settlement.Shops[r.PathValue("shop_id")]
+	if shop == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return nil, referenceUser{}, nil, false
+	}
+	return c, a, shop, true
+}
+
+func referenceShopTradeJSON(characterID string, itemID string, quantity int, gold int, stock int) map[string]any {
+	return map[string]any{
+		"character_id": characterID,
+		"item_id":      itemID,
+		"quantity":     quantity,
+		"gold":         gold,
+		"stock":        stock,
+	}
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {
@@ -3817,26 +4071,34 @@ func requiredUniqueNormalizedStrings(raw map[string]json.RawMessage, key string)
 	return normalized, true
 }
 
+func requiredItemQuantities(raw map[string]json.RawMessage, key string) (map[string]int, bool) {
+	payload, exists := raw[key]
+	if !exists {
+		return nil, false
+	}
+	var itemRaw map[string]json.RawMessage
+	if json.Unmarshal(payload, &itemRaw) != nil {
+		return nil, false
+	}
+	items := map[string]int{}
+	for itemID, itemPayload := range itemRaw {
+		var quantity int
+		if !validInventoryItem(itemID) || json.Unmarshal(itemPayload, &quantity) != nil || quantity < 1 || !jsonInteger(itemPayload) {
+			return nil, false
+		}
+		items[itemID] = quantity
+	}
+	return items, true
+}
+
 func parseQuestRewards(raw map[string]json.RawMessage) (int, map[string]int, bool) {
 	var xp int
 	if payload, exists := raw["xp"]; !exists || json.Unmarshal(payload, &xp) != nil || xp < 0 || !jsonInteger(payload) {
 		return 0, nil, false
 	}
-	itemPayload, exists := raw["items"]
-	if !exists {
+	items, ok := requiredItemQuantities(raw, "items")
+	if !ok {
 		return 0, nil, false
-	}
-	var itemRaw map[string]json.RawMessage
-	if json.Unmarshal(itemPayload, &itemRaw) != nil {
-		return 0, nil, false
-	}
-	items := map[string]int{}
-	for itemID, payload := range itemRaw {
-		var quantity int
-		if !validInventoryItem(itemID) || json.Unmarshal(payload, &quantity) != nil || quantity < 1 || !jsonInteger(payload) {
-			return 0, nil, false
-		}
-		items[itemID] = quantity
 	}
 	return xp, items, true
 }

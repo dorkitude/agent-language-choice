@@ -584,6 +584,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Manage settlement services, availability, and campaign discovery",
     ),
+    LifecycleStage(
+        id="070-shops",
+        suite="070-shops",
+        spec_path=BENCH_DIR / "challenges" / "070-shops.md",
+        kind="maintenance",
+        description="Browse stock and buy/sell through inventory and currency APIs",
+    ),
 ]
 
 

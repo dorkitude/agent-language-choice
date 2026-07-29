@@ -90,6 +90,7 @@ func Suites() []Suite {
 		rumorsSuite(),
 		calendarAndWeatherSuite(),
 		settlementsSuite(),
+		shopsSuite(),
 	}
 }
 
