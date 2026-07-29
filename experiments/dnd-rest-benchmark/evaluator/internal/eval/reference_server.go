@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2827,6 +2827,102 @@ func ReferenceHandler() http.Handler {
 		c.Calendar.Day += days
 		writeJSON(w, http.StatusOK, c.Calendar.json())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/settlements", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		settlement, ok := decodeReferenceSettlement(w, r, "")
+		if !ok {
+			return
+		}
+		if c.SettlementIndex == nil {
+			c.SettlementIndex = map[string]int{}
+		}
+		if _, exists := c.SettlementIndex[settlement.SettlementID]; exists {
+			http.Error(w, "duplicate settlement", http.StatusConflict)
+			return
+		}
+		c.SettlementIndex[settlement.SettlementID] = len(c.Settlements)
+		c.Settlements = append(c.Settlements, settlement)
+		writeJSON(w, http.StatusCreated, settlement.json(nil, true))
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/settlements/{settlement_id}", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		index, exists := c.SettlementIndex[r.PathValue("settlement_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		settlement, ok := decodeReferenceSettlement(w, r, r.PathValue("settlement_id"))
+		if !ok {
+			return
+		}
+		settlement.DiscoveredBy = c.Settlements[index].DiscoveredBy
+		c.Settlements[index] = settlement
+		writeJSON(w, http.StatusOK, settlement.json(nil, true))
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/settlements/{settlement_id}/discover", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username == c.Owner || a.Role != "player" {
+			http.Error(w, "player role required", http.StatusForbidden)
+			return
+		}
+		index, exists := c.SettlementIndex[r.PathValue("settlement_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		member, exists := c.Members[a.Username]
+		if !exists {
+			http.Error(w, "not a campaign member", http.StatusForbidden)
+			return
+		}
+		settlement := &c.Settlements[index]
+		status := http.StatusCreated
+		for _, characterID := range settlement.DiscoveredBy {
+			if characterID == member.CharacterID {
+				status = http.StatusOK
+				writeJSON(w, status, settlement.json([]string{member.CharacterID}, false))
+				return
+			}
+		}
+		settlement.DiscoveredBy = append(settlement.DiscoveredBy, member.CharacterID)
+		writeJSON(w, status, settlement.json([]string{member.CharacterID}, false))
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/settlements", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		includeAll := a.Username == c.Owner
+		characterID := ""
+		if !includeAll {
+			member := c.Members[a.Username]
+			characterID = member.CharacterID
+		}
+		settlements := make([]any, 0, len(c.Settlements))
+		for _, settlement := range c.Settlements {
+			if includeAll || settlement.discoveredBy(characterID) {
+				settlements = append(settlements, settlement.json([]string{characterID}, includeAll))
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"settlements": settlements})
+	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/quests", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := playCampaign(w, r)
 		if !ok {
@@ -3256,6 +3352,8 @@ type referencePlayCampaign struct {
 	RumorIndex        map[string]int
 	RumorTextIndex    map[string]bool
 	Calendar          *referenceCalendar
+	Settlements       []referenceSettlement
+	SettlementIndex   map[string]int
 	DeathSaves        int
 	DeathStable       bool
 }
@@ -3349,6 +3447,14 @@ type referenceRumor struct {
 type referenceCalendar struct {
 	Day    int
 	Season string
+}
+
+type referenceSettlement struct {
+	SettlementID string
+	Name         string
+	Services     []string
+	Availability string
+	DiscoveredBy []string
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -3467,6 +3573,44 @@ func (calendar referenceCalendar) json() map[string]any {
 	}
 }
 
+func (settlement referenceSettlement) json(visibleCharacterIDs []string, includeAll bool) map[string]any {
+	services := make([]any, 0, len(settlement.Services))
+	for _, service := range settlement.Services {
+		services = append(services, service)
+	}
+	discoveredBy := []any{}
+	if includeAll {
+		for _, characterID := range settlement.DiscoveredBy {
+			discoveredBy = append(discoveredBy, characterID)
+		}
+	} else {
+		for _, visibleCharacterID := range visibleCharacterIDs {
+			for _, characterID := range settlement.DiscoveredBy {
+				if characterID == visibleCharacterID {
+					discoveredBy = append(discoveredBy, characterID)
+					break
+				}
+			}
+		}
+	}
+	return map[string]any{
+		"settlement_id": settlement.SettlementID,
+		"name":          settlement.Name,
+		"services":      services,
+		"availability":  settlement.Availability,
+		"discovered_by": discoveredBy,
+	}
+}
+
+func (settlement referenceSettlement) discoveredBy(characterID string) bool {
+	for _, discoveredBy := range settlement.DiscoveredBy {
+		if discoveredBy == characterID {
+			return true
+		}
+	}
+	return false
+}
+
 func validCalendarSeason(season string) bool {
 	return season == "spring" || season == "summer" || season == "autumn" || season == "winter"
 }
@@ -3479,6 +3623,43 @@ func calendarWeather(day int, season string) string {
 		"winter": 3,
 	}[season]
 	return []string{"clear", "rain", "wind", "snow"}[(day+seasonOffset)%4]
+}
+
+func decodeReferenceSettlement(w http.ResponseWriter, r *http.Request, pathSettlementID string) (referenceSettlement, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		http.Error(w, "invalid settlement", http.StatusBadRequest)
+		return referenceSettlement{}, false
+	}
+	settlementID := pathSettlementID
+	if settlementID == "" {
+		var ok bool
+		settlementID, ok = requiredString(raw, "settlement_id")
+		if !ok {
+			http.Error(w, "invalid settlement", http.StatusBadRequest)
+			return referenceSettlement{}, false
+		}
+	}
+	name, ok := requiredString(raw, "name")
+	if !ok {
+		http.Error(w, "invalid settlement", http.StatusBadRequest)
+		return referenceSettlement{}, false
+	}
+	services, ok := requiredUniqueNormalizedStrings(raw, "services")
+	if !ok || len(services) == 0 {
+		http.Error(w, "invalid settlement", http.StatusBadRequest)
+		return referenceSettlement{}, false
+	}
+	availability, ok := requiredString(raw, "availability")
+	if !ok || !validSettlementAvailability(availability) {
+		http.Error(w, "invalid settlement", http.StatusBadRequest)
+		return referenceSettlement{}, false
+	}
+	return referenceSettlement{SettlementID: settlementID, Name: name, Services: services, Availability: availability}, true
+}
+
+func validSettlementAvailability(availability string) bool {
+	return availability == "open" || availability == "limited" || availability == "closed"
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {
@@ -3616,6 +3797,24 @@ func requiredStringArray(raw map[string]json.RawMessage, key string) ([]string, 
 		}
 	}
 	return values, true
+}
+
+func requiredUniqueNormalizedStrings(raw map[string]json.RawMessage, key string) ([]string, bool) {
+	values, ok := requiredStringArray(raw, key)
+	if !ok {
+		return nil, false
+	}
+	normalized := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if seen[trimmed] {
+			return nil, false
+		}
+		seen[trimmed] = true
+		normalized = append(normalized, trimmed)
+	}
+	return normalized, true
 }
 
 func parseQuestRewards(raw map[string]json.RawMessage) (int, map[string]int, bool) {

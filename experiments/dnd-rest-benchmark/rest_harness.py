@@ -577,6 +577,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Advance campaign time and deterministically derive weather",
     ),
+    LifecycleStage(
+        id="069-settlements",
+        suite="069-settlements",
+        spec_path=BENCH_DIR / "challenges" / "069-settlements.md",
+        kind="maintenance",
+        description="Manage settlement services, availability, and campaign discovery",
+    ),
 ]
 
 
