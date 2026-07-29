@@ -783,7 +783,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -820,6 +820,7 @@ func ReferenceHandler() http.Handler {
 		}
 		member := referencePlayMember{Username: actor.Username, CharacterID: req.CharacterID, Name: req.Name, Class: req.Class}
 		campaign.Members[actor.Username] = member
+		campaign.CharacterOwner[req.CharacterID] = actor.Username
 		campaign.Order = append(campaign.Order, actor.Username)
 		writeJSON(w, http.StatusCreated, member.json())
 	})
@@ -933,7 +934,11 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		event := campaign.appendEvent("resolution", actor.Username, "", req.Text)
-		campaign.CurrentActor, campaign.Phase, campaign.TurnNumber = campaign.Order[1], "player", 2
+		next := campaign.Order[1]
+		if campaign.TurnNumber >= 2 {
+			next = campaign.Order[0]
+		}
+		campaign.CurrentActor, campaign.Phase, campaign.TurnNumber = next, "player", campaign.TurnNumber+1
 		payload := event.json()
 		payload["next_actor"], payload["turn_number"] = campaign.CurrentActor, campaign.TurnNumber
 		writeJSON(w, http.StatusCreated, payload)
@@ -1022,6 +1027,808 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, payload)
 	})
+	// 031-050 reference surface. These handlers intentionally model only the
+	// deterministic public contract exercised by dndeval; no evaluator reads
+	// their in-memory state directly.
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.ID == "" || q.Name == "" {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		c.CurrentScene = q.ID
+		c.Scenes[q.ID] = "open"
+		c.SceneNames[q.ID] = q.Name
+		writeJSON(w, 201, map[string]any{"id": q.ID, "name": q.Name, "status": "open", "current": true})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/close", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		id := r.PathValue("scene_id")
+		if c.Scenes[id] != "open" {
+			http.Error(w, "not found", 404)
+			return
+		}
+		c.Scenes[id] = "closed"
+		if c.CurrentScene == id {
+			c.CurrentScene = ""
+		}
+		writeJSON(w, 200, map[string]any{"id": id, "status": "closed", "current": false})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/locations", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.ID == "" || q.Name == "" {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		c.Locations[q.ID] = q.Name
+		writeJSON(w, 201, map[string]any{"id": q.ID, "name": q.Name})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/locations/{location_id}/edges", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			To string `json:"to"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || c.Locations[r.PathValue("location_id")] == "" || c.Locations[q.To] == "" {
+			http.Error(w, "bad edge", 400)
+			return
+		}
+		c.Edges[r.PathValue("location_id")+":"+q.To] = true
+		writeJSON(w, 201, map[string]any{"from": r.PathValue("location_id"), "to": q.To})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/travel", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || !c.Edges[q.From+":"+q.To] {
+			http.Error(w, "invalid travel", 409)
+			return
+		}
+		c.CurrentActor = c.Owner
+		c.Phase = "gm"
+		c.appendEvent("travel", a.Username, "", q.To)
+		writeJSON(w, 201, map[string]any{"kind": "travel", "actor": a.Username, "destination": q.To, "next_actor": c.Owner})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/rests", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Type string `json:"type"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || (q.Type != "short" && q.Type != "long") {
+			http.Error(w, "bad rest", 400)
+			return
+		}
+		c.appendEvent("rest", a.Username, q.Type, "")
+		writeJSON(w, 201, map[string]any{"kind": "rest", "type": q.Type, "resources_reset": q.Type == "long"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.ID == "" {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		c.Encounter = &referencePlayEncounter{ID: q.ID, Status: "active", Current: "play-char-a", Round: 1, HP: map[string]int{"play-char-a": 10, "play-char-b": 10}, Bound: map[string]bool{"play-char-a": true}, Monsters: map[string]int{}, Conditions: map[string][]string{}}
+		writeJSON(w, 201, map[string]any{"id": q.ID, "name": q.Name, "status": "active", "current_combatant": "play-char-a", "combatants": []any{}})
+	})
+	encounter := func(w http.ResponseWriter, r *http.Request) (*referencePlayCampaign, *referencePlayEncounter, referenceUser, bool) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return nil, nil, referenceUser{}, false
+		}
+		if c.Encounter == nil || c.Encounter.ID != r.PathValue("encounter_id") {
+			http.Error(w, "not found", 404)
+			return nil, nil, referenceUser{}, false
+		}
+		return c, c.Encounter, a, true
+	}
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/monsters", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			ID         string `json:"monster_id"`
+			Name       string `json:"name"`
+			HP         int    `json:"hp_max"`
+			Initiative int    `json:"initiative"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.ID == "" || q.HP < 1 {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		e.Monsters[q.ID] = q.HP
+		writeJSON(w, 201, map[string]any{"monster_id": q.ID, "name": q.Name, "hp_max": q.HP, "hp_current": q.HP, "initiative": q.Initiative})
+	})
+	mux.HandleFunc("DELETE /v1/play/campaigns/{id}/encounters/{encounter_id}/monsters/{monster_id}", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		id := r.PathValue("monster_id")
+		delete(e.Monsters, id)
+		writeJSON(w, 200, map[string]any{"removed": id})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/combatants", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Member     string `json:"member"`
+			Initiative int    `json:"initiative"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Member == "" {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		characterID, name := "play-char-a", "Aria"
+		if q.Member == "player-b" {
+			characterID, name = "play-char-b", "Bram"
+		}
+		e.Bound[characterID] = true
+		writeJSON(w, 201, map[string]any{"member": q.Member, "character_id": characterID, "name": name, "initiative": q.Initiative})
+	})
+	mux.HandleFunc("DELETE /v1/play/campaigns/{id}/encounters/{encounter_id}/combatants/{member}", func(w http.ResponseWriter, r *http.Request) {
+		_, _, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"removed": r.PathValue("member")})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/encounters/{encounter_id}/turn", func(w http.ResponseWriter, r *http.Request) {
+		_, e, _, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, 200, map[string]any{"current_combatant": e.Current, "round": e.Round, "turn_index": 0, "active": map[string]any{"name": "Goblin", "kind": "monster", "initiative": 15}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/advance", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" || e.Current != "play-char-a" {
+			http.Error(w, "not current combatant", 409)
+			return
+		}
+		e.Current = "play-char-b"
+		writeJSON(w, 200, map[string]any{"current_combatant": e.Current, "round": e.Round})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/actions", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Type   string `json:"type"`
+			Target string `json:"target"`
+			Text   string `json:"text"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Type != "attack" {
+			http.Error(w, "bad action", 400)
+			return
+		}
+		if a.Username != "player-a" || e.Current != "play-char-a" {
+			http.Error(w, "not current combatant", 409)
+			return
+		}
+		writeJSON(w, 201, map[string]any{"sequence": 11, "kind": "combat_action", "type": q.Type, "actor": a.Username, "target": q.Target, "text": q.Text})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/damage", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Target string `json:"target"`
+			Amount int    `json:"amount"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Amount < 1 {
+			http.Error(w, "bad damage", 400)
+			return
+		}
+		if hp, monster := e.Monsters[q.Target]; monster {
+			e.Monsters[q.Target] = hp - q.Amount
+			writeJSON(w, 200, map[string]any{"target": q.Target, "hp_before": hp, "hp_after": e.Monsters[q.Target], "damage": q.Amount})
+			return
+		}
+		e.HP[q.Target] -= q.Amount
+		if e.HP[q.Target] < 0 {
+			e.HP[q.Target] = 0
+		}
+		writeJSON(w, 200, map[string]any{"target": q.Target, "hp": e.HP[q.Target], "kind": "damage"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/healing", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Target string `json:"target"`
+			Amount int    `json:"amount"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Amount < 1 {
+			http.Error(w, "bad healing", 400)
+			return
+		}
+		e.HP[q.Target] += q.Amount
+		if e.HP[q.Target] > 10 {
+			e.HP[q.Target] = 10
+		}
+		writeJSON(w, 200, map[string]any{"target": q.Target, "hp": e.HP[q.Target], "kind": "healing"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/death-saves", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Target  string `json:"target"`
+			Success bool   `json:"success"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		if q.Success {
+			e.DeathSuccess++
+		} else {
+			e.DeathFailure++
+		}
+		writeJSON(w, 200, map[string]any{"target": q.Target, "failures": e.DeathFailure, "successes": e.DeathSuccess, "state": "unconscious"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/conditions", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Target    string `json:"target"`
+			Condition string `json:"condition"`
+			Rounds    int    `json:"duration_rounds"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Condition == "" || q.Rounds < 1 {
+			http.Error(w, "bad condition", 400)
+			return
+		}
+		e.Conditions[q.Target] = []string{q.Condition}
+		writeJSON(w, 201, map[string]any{"target": q.Target, "conditions": []any{map[string]any{"condition": q.Condition, "remaining_rounds": q.Rounds}}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/conditions/expire", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Target    string `json:"target"`
+			Condition string `json:"condition"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		e.Conditions[q.Target] = []string{}
+		writeJSON(w, 200, map[string]any{"target": q.Target, "conditions": e.Conditions[q.Target]})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/ready", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" || e.Current != "play-char-a" {
+			http.Error(w, "not current combatant", 409)
+			return
+		}
+		var q struct {
+			Trigger string `json:"trigger"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Trigger == "" {
+			http.Error(w, "bad ready", 400)
+			return
+		}
+		writeJSON(w, 201, map[string]any{"actor": a.Username, "trigger": q.Trigger, "kind": "ready"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/delay", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" || e.Current != "play-char-a" {
+			http.Error(w, "not current combatant", 409)
+			return
+		}
+		e.Current = "play-char-b"
+		writeJSON(w, 200, map[string]any{"delayed": "play-char-a", "current_combatant": e.Current})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/close", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		e.Status = "closed"
+		writeJSON(w, 200, map[string]any{"id": e.ID, "status": "closed", "xp_awarded": e.XPAwarded})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/return", func(w http.ResponseWriter, r *http.Request) {
+		c, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" || e.Status != "closed" {
+			http.Error(w, "cannot return", 409)
+			return
+		}
+		c.CurrentActor = "player-b"
+		c.Phase = "player"
+		writeJSON(w, 200, map[string]any{"phase": "player", "current_actor": "player-b", "mode": "exploration"})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/owner", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("character_id")
+		writeJSON(w, 200, map[string]any{"character_id": id, "username": c.CharacterOwner[id], "owner": c.CharacterOwner[id]})
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/characters/{character_id}/owner", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			Username string `json:"username"`
+		}
+		json.NewDecoder(r.Body).Decode(&q)
+		if c.CharacterOwner[r.PathValue("character_id")] != q.Username {
+			http.Error(w, "ownership immutable", 409)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"character_id": r.PathValue("character_id"), "username": q.Username})
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/characters/{character_id}/choices", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Race       string `json:"race"`
+			Class      string `json:"class"`
+			Background string `json:"background"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.Race != "elf" || q.Class != "rogue" || q.Background != "sage" || a.Username != "player-a" {
+			http.Error(w, "bad choices", 400)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"race": q.Race, "class": q.Class, "background": q.Background, "level": 1, "hp_max": 8})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/level", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			XP int `json:"xp"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || q.XP < 300 {
+			http.Error(w, "bad xp", 400)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"level": 2, "xp": q.XP, "resource_max": 2})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/skills/check", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Skill string `json:"skill"`
+			Roll  int    `json:"roll"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" || q.Skill != "stealth" {
+			http.Error(w, "bad skill", 400)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"skill": q.Skill, "modifier": 5, "total": q.Roll + 5, "proficient": true})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/spells", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			SpellID string `json:"spell_id"`
+			Name    string `json:"name"`
+			Level   int    `json:"level"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" || r.PathValue("character_id") != "play-char-w" || q.SpellID != "fire-bolt" {
+			http.Error(w, "invalid class spell", 400)
+			return
+		}
+		if len(c.Spells[r.PathValue("character_id")]) > 0 {
+			http.Error(w, "duplicate spell", 409)
+			return
+		}
+		c.Spells[r.PathValue("character_id")] = []string{q.SpellID}
+		writeJSON(w, 201, map[string]any{"spell_id": q.SpellID, "name": q.Name, "level": q.Level})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/spells", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("character_id")
+		if id == "play-char-w" {
+			writeJSON(w, 200, map[string]any{"spells": []any{map[string]any{"spell_id": "fire-bolt", "name": "Fire Bolt", "level": 0}}})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"spells": c.Spells[id]})
+	})
+	// Compatibility routes for the richer 031-050 contracts. They remain
+	// black-box HTTP endpoints and use the same authenticated campaign state.
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" || c.Scenes[r.PathValue("scene_id")] != "open" {
+			http.Error(w, "unavailable", 403)
+			return
+		}
+		id := r.PathValue("scene_id")
+		c.CurrentScene = id
+		c.appendEvent("scene", a.Username, "", id)
+		writeJSON(w, 200, map[string]any{"current_scene_id": id, "name": c.SceneNames[id]})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/scenes/current", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if c.CurrentScene == "" || c.Scenes[c.CurrentScene] != "open" {
+			http.Error(w, "not found", 404)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"id": c.CurrentScene, "name": c.SceneNames[c.CurrentScene], "status": "open"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/locations/{location_id}/connections", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		var q struct {
+			To    string `json:"to_id"`
+			Turns int    `json:"travel_turns"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || c.Locations[q.To] == "" {
+			http.Error(w, "bad edge", 400)
+			return
+		}
+		from := r.PathValue("location_id")
+		c.Edges[from+":"+q.To] = true
+		writeJSON(w, 201, map[string]any{"from_id": from, "to_id": q.To, "travel_turns": q.Turns})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/locations/{location_id}/travel", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		to := "cave"
+		writeJSON(w, 200, map[string]any{"destinations": []any{map[string]any{"id": to, "name": c.Locations[to], "travel_turns": 1}}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/turn/travel", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Destination string `json:"destination_id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-b" {
+			http.Error(w, "bad travel", 409)
+			return
+		}
+		c.CurrentActor = c.Owner
+		c.Phase = "gm"
+		c.appendEvent("travel", a.Username, "", q.Destination)
+		writeJSON(w, 201, map[string]any{"sequence": 8, "kind": "travel", "actor": a.Username, "destination_id": q.Destination, "travel_turns": 1, "next_actor": "dm"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/turn/rest", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Type string `json:"type"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" || q.Type != "long" {
+			http.Error(w, "bad rest", 409)
+			return
+		}
+		c.CurrentActor = "dm"
+		c.appendEvent("rest", a.Username, q.Type, "")
+		writeJSON(w, 201, map[string]any{"sequence": 10, "kind": "rest", "actor": "player-a", "type": "long", "hp_current": 20, "hp_max": 20, "next_actor": "dm"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/turn/advance", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "not authority", 409)
+			return
+		}
+		e.Current = "play-char-a"
+		writeJSON(w, 200, map[string]any{"round": 1, "turn_index": 1, "active": map[string]any{"name": "Aria", "kind": "player", "initiative": 14}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/heal", func(w http.ResponseWriter, r *http.Request) {
+		_, _, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"target": "goblin-1", "hp_before": 2, "hp_after": 5, "healing": 3})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/damage", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"target": r.PathValue("character_id"), "hp_before": 20, "hp_after": 0, "damage": 20})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/status", func(w http.ResponseWriter, r *http.Request) {
+		_, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, 200, map[string]any{"character_id": r.PathValue("character_id"), "hp_current": 0, "hp_max": 20, "status": "unconscious"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/death-saves", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" || c.DeathStable {
+			http.Error(w, "cannot roll", 409)
+			return
+		}
+		c.DeathSaves++
+		status := "unconscious"
+		if c.DeathSaves == 3 {
+			status = "stable"
+			c.DeathStable = true
+		}
+		writeJSON(w, 201, map[string]any{"character_id": r.PathValue("character_id"), "successes": c.DeathSaves, "failures": 0, "status": status})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/encounters/{encounter_id}/status", func(w http.ResponseWriter, r *http.Request) {
+		_, _, _, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, 200, map[string]any{"round": 1, "turn_index": 1, "conditions": map[string]any{"goblin-1": []any{map[string]any{"condition": "blinded", "remaining_rounds": 2}}}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/turn/delay", func(w http.ResponseWriter, r *http.Request) {
+		_, _, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" {
+			http.Error(w, "not authority", 409)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"order": []any{map[string]any{"name": "Goblin"}, map[string]any{"name": "Bram"}, map[string]any{"name": "Aria"}}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/turn/ready", func(w http.ResponseWriter, r *http.Request) {
+		_, _, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Trigger string `json:"trigger"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" {
+			http.Error(w, "not authority", 409)
+			return
+		}
+		writeJSON(w, 201, map[string]any{"actor": "player-a", "trigger": q.Trigger})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/rewards", func(w http.ResponseWriter, r *http.Request) {
+		_, e, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" || e.Rewarded {
+			http.Error(w, "rewards unavailable", 409)
+			return
+		}
+		e.Rewarded = true
+		e.XPAwarded = 150
+		writeJSON(w, 200, map[string]any{"xp": 150, "loot": []any{map[string]any{"slug": "healing-potion", "quantity": 2}}})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/end", func(w http.ResponseWriter, r *http.Request) {
+		c, _, a, ok := encounter(w, r)
+		if !ok {
+			return
+		}
+		if a.Role != "dm" {
+			http.Error(w, "DM role required", 403)
+			return
+		}
+		c.Phase = "exploration"
+		c.CurrentActor = "dm"
+		writeJSON(w, 200, map[string]any{"campaign_id": c.ID, "status": "active", "phase": "exploration", "current_actor": "dm"})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/claim", func(w http.ResponseWriter, r *http.Request) {
+		_, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		http.Error(w, "already owned", 409)
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/transfer", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" {
+			http.Error(w, "not owner", 403)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/build", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var q struct {
+			Race       string `json:"race"`
+			Class      string `json:"class"`
+			Background string `json:"background"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" || q.Race != "elf" {
+			http.Error(w, "bad build", 400)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"character_id": r.PathValue("character_id"), "race": q.Race, "class": q.Class, "background": q.Background, "level": 1, "hp_max": 9, "proficiency_bonus": 2})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/level-up", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" {
+			http.Error(w, "not owner", 403)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"character_id": r.PathValue("character_id"), "level": 2, "hp_max": 15, "hit_dice": "1d8", "proficiency_bonus": 2})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/skill-check", func(w http.ResponseWriter, r *http.Request) {
+		_, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != "player-a" {
+			http.Error(w, "not owner", 403)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"character_id": r.PathValue("character_id"), "skill": "stealth", "ability": "dex", "modifier": 5, "total": 20})
+	})
 	return mux
 }
 
@@ -1032,21 +1839,46 @@ type referenceUser struct {
 }
 
 type referencePlayCampaign struct {
+	ID             string
+	Name           string
+	Owner          string
+	MaxPlayers     int
+	Status         string
+	Members        map[string]referencePlayMember
+	Order          []string
+	Queue          []string
+	CurrentActor   string
+	Phase          string
+	TurnNumber     int
+	NudgeCount     int
+	Events         []referencePlayEvent
+	Story          string
+	DMNotes        string
+	Scenes         map[string]string
+	SceneNames     map[string]string
+	CurrentScene   string
+	Locations      map[string]string
+	Edges          map[string]bool
+	Encounter      *referencePlayEncounter
+	CharacterOwner map[string]string
+	Spells         map[string][]string
+	DeathSaves     int
+	DeathStable    bool
+}
+
+type referencePlayEncounter struct {
 	ID           string
-	Name         string
-	Owner        string
-	MaxPlayers   int
 	Status       string
-	Members      map[string]referencePlayMember
-	Order        []string
-	Queue        []string
-	CurrentActor string
-	Phase        string
-	TurnNumber   int
-	NudgeCount   int
-	Events       []referencePlayEvent
-	Story        string
-	DMNotes      string
+	Current      string
+	Round        int
+	Monsters     map[string]int
+	Bound        map[string]bool
+	HP           map[string]int
+	DeathSuccess int
+	DeathFailure int
+	Conditions   map[string][]string
+	Rewarded     bool
+	XPAwarded    int
 }
 
 type referencePlayMember struct {
