@@ -32,6 +32,9 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ready", "schema_version": 2})
 	})
+	mux.HandleFunc("GET /v1/schema", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, apiSchemaResponse())
+	})
 	mux.HandleFunc("POST /v1/dice/stats", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Expression string `json:"expression"`

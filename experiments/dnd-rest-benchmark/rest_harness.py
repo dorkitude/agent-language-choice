@@ -766,6 +766,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add DM-only deterministic canonical fixture seeding",
     ),
+    LifecycleStage(
+        id="096-api-schema-endpoint",
+        suite="096-api-schema-endpoint",
+        spec_path=BENCH_DIR / "challenges" / "096-api-schema-endpoint.md",
+        kind="maintenance",
+        description="Add public deterministic API schema discovery endpoint",
+    ),
 ]
 
 

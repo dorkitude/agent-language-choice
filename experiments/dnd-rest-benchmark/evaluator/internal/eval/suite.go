@@ -116,6 +116,7 @@ func Suites() []Suite {
 		moderationWorkflowSuite(),
 		safetyBoundariesSuite(),
 		fixtureSeedingSuite(),
+		apiSchemaEndpointSuite(),
 	}
 }
 
