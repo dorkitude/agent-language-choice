@@ -626,6 +626,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Restrict private notes, whispers, and character sheets by role",
     ),
+    LifecycleStage(
+        id="076-campaign-invitations",
+        suite="076-campaign-invitations",
+        spec_path=BENCH_DIR / "challenges" / "076-campaign-invitations.md",
+        kind="maintenance",
+        description="Invite registered players and bind acceptance to the invited identity",
+    ),
 ]
 
 

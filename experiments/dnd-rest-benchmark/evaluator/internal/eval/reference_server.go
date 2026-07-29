@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -975,6 +975,111 @@ func ReferenceHandler() http.Handler {
 			content = append(content, record.json())
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"content": content})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/invitations", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := playActor(w, r)
+		if !ok {
+			return
+		}
+		campaign := playCampaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			InvitationID string `json:"invitation_id"`
+			Username     string `json:"username"`
+			CharacterID  string `json:"character_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !nonEmptyString(req.InvitationID) || !nonEmptyString(req.Username) || !nonEmptyString(req.CharacterID) {
+			http.Error(w, "invalid invitation", http.StatusBadRequest)
+			return
+		}
+		target, exists := users[req.Username]
+		if !exists || target.Role != "player" {
+			http.Error(w, "invalid target", http.StatusBadRequest)
+			return
+		}
+		if _, exists := campaign.InvitationIndex[req.InvitationID]; exists {
+			http.Error(w, "duplicate invitation", http.StatusConflict)
+			return
+		}
+		for _, invitation := range campaign.Invitations {
+			if invitation.Username == req.Username && invitation.Status == "pending" {
+				http.Error(w, "duplicate active invitation", http.StatusConflict)
+				return
+			}
+		}
+		invitation := referenceInvitation{InvitationID: req.InvitationID, Username: req.Username, CharacterID: req.CharacterID, Status: "pending"}
+		campaign.InvitationIndex[invitation.InvitationID] = len(campaign.Invitations)
+		campaign.Invitations = append(campaign.Invitations, invitation)
+		writeJSON(w, http.StatusCreated, invitation.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/invitations", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := playActor(w, r)
+		if !ok {
+			return
+		}
+		campaign := playCampaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		invitations := make([]any, 0, len(campaign.Invitations))
+		for _, invitation := range campaign.Invitations {
+			if actor.Username == campaign.Owner || invitation.Username == actor.Username {
+				invitations = append(invitations, invitation.json())
+			}
+		}
+		if actor.Username != campaign.Owner && !campaign.hasMember(actor.Username) && len(invitations) == 0 {
+			http.Error(w, "not a campaign member", http.StatusForbidden)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"invitations": invitations})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/invitations/{invitation_id}/accept", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := playActor(w, r)
+		if !ok {
+			return
+		}
+		campaign := playCampaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		index, exists := campaign.InvitationIndex[r.PathValue("invitation_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		invitation := &campaign.Invitations[index]
+		if actor.Username != invitation.Username {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if invitation.Status != "pending" {
+			http.Error(w, "invitation already accepted", http.StatusConflict)
+			return
+		}
+		if campaign.hasMember(actor.Username) || campaign.hasCharacter(invitation.CharacterID) {
+			http.Error(w, "duplicate party member", http.StatusConflict)
+			return
+		}
+		if len(campaign.Members) >= campaign.MaxPlayers {
+			http.Error(w, "party full", http.StatusConflict)
+			return
+		}
+		member := referencePlayMember{Username: actor.Username, CharacterID: invitation.CharacterID, Name: actor.Username, Class: "adventurer"}
+		campaign.Members[actor.Username] = member
+		campaign.CharacterOwner[invitation.CharacterID] = actor.Username
+		campaign.Currency[invitation.CharacterID] = 10
+		campaign.Order = append(campaign.Order, actor.Username)
+		invitation.Status = "accepted"
+		writeJSON(w, http.StatusOK, invitation.json())
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -3946,6 +4051,8 @@ type referencePlayCampaign struct {
 	NoteIndex             map[string]int
 	Whispers              []referenceWhisper
 	WhisperIndex          map[string]int
+	Invitations           []referenceInvitation
+	InvitationIndex       map[string]int
 	DeathSaves            int
 	DeathStable           bool
 }
@@ -3970,6 +4077,17 @@ type referenceWhisper struct {
 
 func (whisper referenceWhisper) json() map[string]any {
 	return map[string]any{"whisper_id": whisper.WhisperID, "from_character_id": whisper.FromCharacterID, "to_character_id": whisper.ToCharacterID, "text": whisper.Text}
+}
+
+type referenceInvitation struct {
+	InvitationID string
+	Username     string
+	CharacterID  string
+	Status       string
+}
+
+func (invitation referenceInvitation) json() map[string]any {
+	return map[string]any{"invitation_id": invitation.InvitationID, "username": invitation.Username, "character_id": invitation.CharacterID, "status": invitation.Status}
 }
 
 type referenceLoot struct {
