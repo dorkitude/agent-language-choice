@@ -112,6 +112,7 @@ func Suites() []Suite {
 		readinessHealthSuite(),
 		backupRestoreSuite(),
 		deterministicReplaySuite(),
+		rngLedgerSuite(),
 	}
 }
 

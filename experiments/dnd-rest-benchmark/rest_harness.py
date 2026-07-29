@@ -738,6 +738,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Replay ordered campaign events to an exact deterministic public state",
     ),
+    LifecycleStage(
+        id="092-rng-ledger",
+        suite="092-rng-ledger",
+        spec_path=BENCH_DIR / "challenges" / "092-rng-ledger.md",
+        kind="maintenance",
+        description="Add campaign-scoped deterministic RNG seed and immutable roll ledger",
+    ),
 ]
 
 
