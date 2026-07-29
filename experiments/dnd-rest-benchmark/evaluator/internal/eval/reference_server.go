@@ -783,7 +783,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1545,15 +1545,29 @@ func ReferenceHandler() http.Handler {
 			Name    string `json:"name"`
 			Level   int    `json:"level"`
 		}
-		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" || r.PathValue("character_id") != "play-char-w" || q.SpellID != "fire-bolt" {
+		if json.NewDecoder(r.Body).Decode(&q) != nil || a.Username != "player-a" || r.PathValue("character_id") != "play-char-w" || (q.SpellID != "fire-bolt" && q.SpellID != "magic-missile") {
 			http.Error(w, "invalid class spell", 400)
 			return
 		}
-		if len(c.Spells[r.PathValue("character_id")]) > 0 {
-			http.Error(w, "duplicate spell", 409)
+		for _, knownSpellID := range c.Spells[r.PathValue("character_id")] {
+			if knownSpellID == q.SpellID {
+				http.Error(w, "duplicate spell", 409)
+				return
+			}
+		}
+		if q.SpellID == "magic-missile" && (q.Name != "Magic Missile" || q.Level != 1) {
+			http.Error(w, "invalid class spell", 400)
 			return
 		}
-		c.Spells[r.PathValue("character_id")] = []string{q.SpellID}
+		if q.SpellID == "fire-bolt" && (q.Name != "Fire Bolt" || q.Level != 0) {
+			http.Error(w, "invalid class spell", 400)
+			return
+		}
+		characterID := r.PathValue("character_id")
+		c.Spells[characterID] = append(c.Spells[characterID], q.SpellID)
+		if q.SpellID == "magic-missile" {
+			c.SpellSlots[characterID] = 1
+		}
 		writeJSON(w, 201, map[string]any{"spell_id": q.SpellID, "name": q.Name, "level": q.Level})
 	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/spells", func(w http.ResponseWriter, r *http.Request) {
@@ -1562,11 +1576,16 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		id := r.PathValue("character_id")
-		if id == "play-char-w" {
-			writeJSON(w, 200, map[string]any{"spells": []any{map[string]any{"spell_id": "fire-bolt", "name": "Fire Bolt", "level": 0}}})
-			return
+		spells := make([]any, 0, len(c.Spells[id]))
+		for _, spellID := range c.Spells[id] {
+			switch spellID {
+			case "fire-bolt":
+				spells = append(spells, map[string]any{"spell_id": "fire-bolt", "name": "Fire Bolt", "level": 0})
+			case "magic-missile":
+				spells = append(spells, map[string]any{"spell_id": "magic-missile", "name": "Magic Missile", "level": 1})
+			}
 		}
-		writeJSON(w, 200, map[string]any{"spells": c.Spells[id]})
+		writeJSON(w, 200, map[string]any{"spells": spells})
 	})
 	mux.HandleFunc("PUT /v1/play/campaigns/{id}/characters/{character_id}/prepared-spells", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
@@ -1618,6 +1637,60 @@ func ReferenceHandler() http.Handler {
 			prepared = []string{}
 		}
 		writeJSON(w, 200, map[string]any{"character_id": characterID, "prepared_spells": prepared, "max_prepared": 1})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/casts", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			SpellID string `json:"spell_id"`
+			Target  string `json:"target"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || q.SpellID != "magic-missile" || q.Target == "" {
+			http.Error(w, "invalid cast", http.StatusBadRequest)
+			return
+		}
+		prepared := false
+		for _, spellID := range c.PreparedSpells[characterID] {
+			if spellID == q.SpellID {
+				prepared = true
+				break
+			}
+		}
+		if !prepared {
+			http.Error(w, "spell not prepared", http.StatusBadRequest)
+			return
+		}
+		if c.SpellSlots[characterID] < 1 {
+			http.Error(w, "spell slots exhausted", http.StatusConflict)
+			return
+		}
+		c.SpellSlots[characterID]--
+		event := referenceSpellCast{CharacterID: characterID, SpellID: q.SpellID, Target: q.Target, SlotLevel: 1, SlotsRemaining: c.SpellSlots[characterID], Sequence: len(c.SpellCasts[characterID]) + 1}
+		c.SpellCasts[characterID] = append(c.SpellCasts[characterID], event)
+		writeJSON(w, http.StatusCreated, event.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/casts", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		casts := make([]map[string]any, 0, len(c.SpellCasts[characterID]))
+		for _, event := range c.SpellCasts[characterID] {
+			casts = append(casts, event.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"casts": casts})
 	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
@@ -1914,8 +1987,30 @@ type referencePlayCampaign struct {
 	CharacterOwner map[string]string
 	Spells         map[string][]string
 	PreparedSpells map[string][]string
+	SpellSlots     map[string]int
+	SpellCasts     map[string][]referenceSpellCast
 	DeathSaves     int
 	DeathStable    bool
+}
+
+type referenceSpellCast struct {
+	CharacterID    string
+	SpellID        string
+	Target         string
+	SlotLevel      int
+	SlotsRemaining int
+	Sequence       int
+}
+
+func (cast referenceSpellCast) json() map[string]any {
+	return map[string]any{
+		"character_id":    cast.CharacterID,
+		"spell_id":        cast.SpellID,
+		"target":          cast.Target,
+		"slot_level":      cast.SlotLevel,
+		"slots_remaining": cast.SlotsRemaining,
+		"sequence":        cast.Sequence,
+	}
 }
 
 type referencePlayEncounter struct {

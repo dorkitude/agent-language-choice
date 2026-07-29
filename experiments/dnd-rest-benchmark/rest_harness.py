@@ -458,6 +458,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add owner-controlled prepared spells for spellcasting characters",
     ),
+    LifecycleStage(
+        id="052-spell-casting",
+        suite="052-spell-casting",
+        spec_path=BENCH_DIR / "challenges" / "052-spell-casting.md",
+        kind="maintenance",
+        description="Cast prepared spells with deterministic slot consumption",
+    ),
 ]
 
 
