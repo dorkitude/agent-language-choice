@@ -647,6 +647,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Record actor, role, timestamp, and correlation ID for mutating audit events",
     ),
+    LifecycleStage(
+        id="079-event-projections",
+        suite="079-event-projections",
+        spec_path=BENCH_DIR / "challenges" / "079-event-projections.md",
+        kind="maintenance",
+        description="Rebuild campaign story and danger projection from ordered event logs",
+    ),
 ]
 
 
