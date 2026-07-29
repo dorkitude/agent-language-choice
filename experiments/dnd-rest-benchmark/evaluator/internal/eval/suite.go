@@ -113,6 +113,7 @@ func Suites() []Suite {
 		backupRestoreSuite(),
 		deterministicReplaySuite(),
 		rngLedgerSuite(),
+		moderationWorkflowSuite(),
 	}
 }
 

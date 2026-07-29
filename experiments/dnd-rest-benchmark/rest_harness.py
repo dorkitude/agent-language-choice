@@ -745,6 +745,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add campaign-scoped deterministic RNG seed and immutable roll ledger",
     ),
+    LifecycleStage(
+        id="093-moderation-workflow",
+        suite="093-moderation-workflow",
+        spec_path=BENCH_DIR / "challenges" / "093-moderation-workflow.md",
+        kind="maintenance",
+        description="Add campaign moderation reports with DM-only resolution",
+    ),
 ]
 
 

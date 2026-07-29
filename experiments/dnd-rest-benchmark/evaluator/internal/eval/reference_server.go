@@ -821,7 +821,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}, RateEventIndex: map[string]bool{}, RateCounts: map[string]int{}, BackupIndex: map[string]int{}, ReplayEventIndex: map[string]bool{}, RNGRollIndex: map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}, RateEventIndex: map[string]bool{}, RateCounts: map[string]int{}, BackupIndex: map[string]int{}, ReplayEventIndex: map[string]bool{}, RNGRollIndex: map[string]bool{}, ModerationReportIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1874,6 +1874,94 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, campaign.rngLedgerJSON())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/moderation/reports", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		reportID, ok := requiredString(raw, "report_id")
+		if !ok {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		targetID, ok := requiredString(raw, "target_id")
+		if !ok {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		reason, ok := requiredString(raw, "reason")
+		if !ok {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if campaign.ModerationReportIndex[reportID] != 0 {
+			http.Error(w, "duplicate report", http.StatusConflict)
+			return
+		}
+		report := referenceModerationReport{
+			ReportID: reportID,
+			TargetID: targetID,
+			Reason:   reason,
+			Status:   "open",
+			Reporter: actor.Username,
+			Sequence: len(campaign.ModerationReports) + 1,
+		}
+		campaign.ModerationReports = append(campaign.ModerationReports, report)
+		campaign.ModerationReportIndex[reportID] = len(campaign.ModerationReports)
+		writeJSON(w, http.StatusCreated, report.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/moderation/reports", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.moderationReportsJSON())
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/moderation/reports/{report_id}/resolution", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		index := campaign.ModerationReportIndex[r.PathValue("report_id")]
+		if index == 0 {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		action, ok := requiredString(raw, "action")
+		if !ok || (action != "allow" && action != "remove") {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		note, ok := requiredString(raw, "note")
+		if !ok {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		report := &campaign.ModerationReports[index-1]
+		if report.Status != "open" {
+			http.Error(w, "report already resolved", http.StatusConflict)
+			return
+		}
+		report.Status = "resolved"
+		report.Action = action
+		report.Note = note
+		report.Resolver = actor.Username
+		writeJSON(w, http.StatusOK, report.json())
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -4883,6 +4971,8 @@ type referencePlayCampaign struct {
 	RNGSeed                  string
 	RNGRolls                 []referenceRNGRoll
 	RNGRollIndex             map[string]bool
+	ModerationReports        []referenceModerationReport
+	ModerationReportIndex    map[string]int
 	DeathSaves               int
 	DeathStable              bool
 }
@@ -5052,6 +5142,35 @@ type referenceRNGRoll struct {
 
 func (roll referenceRNGRoll) json() map[string]any {
 	return map[string]any{"roll_id": roll.RollID, "sides": roll.Sides, "result": roll.Result, "sequence": roll.Sequence}
+}
+
+type referenceModerationReport struct {
+	ReportID string
+	TargetID string
+	Reason   string
+	Status   string
+	Reporter string
+	Sequence int
+	Action   string
+	Note     string
+	Resolver string
+}
+
+func (report referenceModerationReport) json() map[string]any {
+	payload := map[string]any{
+		"report_id": report.ReportID,
+		"target_id": report.TargetID,
+		"reason":    report.Reason,
+		"status":    report.Status,
+		"reporter":  report.Reporter,
+		"sequence":  report.Sequence,
+	}
+	if report.Status == "resolved" {
+		payload["action"] = report.Action
+		payload["note"] = report.Note
+		payload["resolver"] = report.Resolver
+	}
+	return payload
 }
 
 type referenceCampaignMigration struct {
@@ -6239,6 +6358,14 @@ func (campaign *referencePlayCampaign) rngLedgerJSON() map[string]any {
 		rolls = append(rolls, roll.json())
 	}
 	return map[string]any{"seed": campaign.RNGSeed, "rolls": rolls}
+}
+
+func (campaign *referencePlayCampaign) moderationReportsJSON() map[string]any {
+	reports := make([]any, 0, len(campaign.ModerationReports))
+	for _, report := range campaign.ModerationReports {
+		reports = append(reports, report.json())
+	}
+	return map[string]any{"reports": reports}
 }
 
 func deterministicRNGResult(seed string, sequence int, rollID string, sides int) int {
