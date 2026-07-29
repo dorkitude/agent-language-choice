@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1081,6 +1081,67 @@ func ReferenceHandler() http.Handler {
 		invitation.Status = "accepted"
 		writeJSON(w, http.StatusOK, invitation.json())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/delegations", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			Username string   `json:"username"`
+			Powers   []string `json:"powers"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !campaign.hasMember(req.Username) || !validReferenceDelegationPowers(req.Powers) {
+			http.Error(w, "invalid delegation", http.StatusBadRequest)
+			return
+		}
+		if existing, exists := campaign.Delegations[req.Username]; exists && existing.Active {
+			http.Error(w, "duplicate active delegate", http.StatusConflict)
+			return
+		}
+		delegation := referenceDelegation{Username: req.Username, Powers: append([]string{}, req.Powers...), Active: true}
+		campaign.Delegations[req.Username] = delegation
+		campaign.DelegationAudit = append(campaign.DelegationAudit, referenceDelegationAuditEntry{Username: req.Username, Action: "granted", Powers: append([]string{}, req.Powers...)})
+		writeJSON(w, http.StatusCreated, delegation.json())
+	})
+	mux.HandleFunc("DELETE /v1/play/campaigns/{id}/delegations/{username}", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		username := r.PathValue("username")
+		delegation, exists := campaign.Delegations[username]
+		if !exists || !delegation.Active {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		delegation.Active = false
+		campaign.Delegations[username] = delegation
+		campaign.DelegationAudit = append(campaign.DelegationAudit, referenceDelegationAuditEntry{Username: username, Action: "revoked", Powers: append([]string{}, delegation.Powers...)})
+		writeJSON(w, http.StatusOK, delegation.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/delegations/audit", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		entries := make([]any, 0, len(campaign.DelegationAudit))
+		for _, entry := range campaign.DelegationAudit {
+			entries = append(entries, entry.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -1237,7 +1298,7 @@ func ReferenceHandler() http.Handler {
 		if !ok {
 			return
 		}
-		if actor.Username != campaign.Owner {
+		if actor.Username != campaign.Owner && !campaign.hasActiveDelegationPower(actor.Username, "narrate") {
 			http.Error(w, "DM role required", http.StatusForbidden)
 			return
 		}
@@ -4053,6 +4114,8 @@ type referencePlayCampaign struct {
 	WhisperIndex          map[string]int
 	Invitations           []referenceInvitation
 	InvitationIndex       map[string]int
+	Delegations           map[string]referenceDelegation
+	DelegationAudit       []referenceDelegationAuditEntry
 	DeathSaves            int
 	DeathStable           bool
 }
@@ -4088,6 +4151,48 @@ type referenceInvitation struct {
 
 func (invitation referenceInvitation) json() map[string]any {
 	return map[string]any{"invitation_id": invitation.InvitationID, "username": invitation.Username, "character_id": invitation.CharacterID, "status": invitation.Status}
+}
+
+type referenceDelegation struct {
+	Username string
+	Powers   []string
+	Active   bool
+}
+
+func (delegation referenceDelegation) json() map[string]any {
+	return map[string]any{"username": delegation.Username, "powers": stringSliceAny(delegation.Powers), "active": delegation.Active}
+}
+
+type referenceDelegationAuditEntry struct {
+	Username string
+	Action   string
+	Powers   []string
+}
+
+func (entry referenceDelegationAuditEntry) json() map[string]any {
+	return map[string]any{"username": entry.Username, "action": entry.Action, "powers": stringSliceAny(entry.Powers)}
+}
+
+func stringSliceAny(values []string) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	return result
+}
+
+func validReferenceDelegationPowers(powers []string) bool {
+	if len(powers) == 0 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, power := range powers {
+		if power != "narrate" || seen[power] {
+			return false
+		}
+		seen[power] = true
+	}
+	return true
 }
 
 type referenceLoot struct {
@@ -5069,6 +5174,19 @@ func (campaign *referencePlayCampaign) hasMember(username string) bool {
 func (campaign *referencePlayCampaign) hasCharacter(characterID string) bool {
 	for _, member := range campaign.Members {
 		if member.CharacterID == characterID {
+			return true
+		}
+	}
+	return false
+}
+
+func (campaign *referencePlayCampaign) hasActiveDelegationPower(username string, power string) bool {
+	delegation, exists := campaign.Delegations[username]
+	if !exists || !delegation.Active {
+		return false
+	}
+	for _, candidate := range delegation.Powers {
+		if candidate == power {
 			return true
 		}
 	}

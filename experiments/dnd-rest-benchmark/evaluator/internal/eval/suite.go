@@ -97,6 +97,7 @@ func Suites() []Suite {
 		contentTagsSuite(),
 		privacyControlsSuite(),
 		campaignInvitationsSuite(),
+		gmDelegationSuite(),
 	}
 }
 

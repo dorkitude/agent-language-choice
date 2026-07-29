@@ -633,6 +633,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Invite registered players and bind acceptance to the invited identity",
     ),
+    LifecycleStage(
+        id="077-gm-delegation",
+        suite="077-gm-delegation",
+        spec_path=BENCH_DIR / "challenges" / "077-gm-delegation.md",
+        kind="maintenance",
+        description="Grant and revoke limited co-GM narration authority with owner audit",
+    ),
 ]
 
 
