@@ -867,6 +867,50 @@ func ReferenceHandler() http.Handler {
 		campaign.Queue = []string{campaign.Order[0], campaign.Owner, campaign.Order[1], campaign.Owner}
 		writeJSON(w, http.StatusOK, map[string]any{"id": campaign.ID, "status": campaign.Status, "current_actor": campaign.CurrentActor, "turn_number": campaign.TurnNumber})
 	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/session-zero", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		if campaign.Status != "lobby" {
+			http.Error(w, "campaign already started", http.StatusConflict)
+			return
+		}
+		var req struct {
+			Rules   string   `json:"rules"`
+			Tone    string   `json:"tone"`
+			Consent []string `json:"consent"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !nonEmptyString(req.Rules) || !nonEmptyString(req.Tone) || len(req.Consent) == 0 {
+			http.Error(w, "invalid session-zero settings", http.StatusBadRequest)
+			return
+		}
+		seen := map[string]bool{}
+		for _, consent := range req.Consent {
+			if !nonEmptyString(consent) || seen[consent] {
+				http.Error(w, "invalid session-zero settings", http.StatusBadRequest)
+				return
+			}
+			seen[consent] = true
+		}
+		campaign.SessionZero = &referenceSessionZeroSettings{Rules: req.Rules, Tone: req.Tone, Consent: append([]string{}, req.Consent...)}
+		writeJSON(w, http.StatusOK, campaign.SessionZero.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/session-zero", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if campaign.SessionZero == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.SessionZero.json())
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/narrations", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -3679,6 +3723,7 @@ type referencePlayCampaign struct {
 	DowntimeActivities    []referenceDowntimeActivity
 	DowntimeActivityIndex map[string]int
 	DowntimeAllocations   map[string]map[string]*referenceDowntimeAllocation
+	SessionZero           *referenceSessionZeroSettings
 	DeathSaves            int
 	DeathStable           bool
 }
@@ -3816,6 +3861,12 @@ type referenceDowntimeAllocation struct {
 	ActivityID      string
 	CyclesCompleted int
 	Completions     int
+}
+
+type referenceSessionZeroSettings struct {
+	Rules   string
+	Tone    string
+	Consent []string
 }
 
 func (faction *referencePlayFaction) json() map[string]any {
@@ -4177,6 +4228,18 @@ func (allocation referenceDowntimeAllocation) json() map[string]any {
 		"activity_id":      allocation.ActivityID,
 		"cycles_completed": allocation.CyclesCompleted,
 		"completions":      allocation.Completions,
+	}
+}
+
+func (settings referenceSessionZeroSettings) json() map[string]any {
+	consent := make([]any, 0, len(settings.Consent))
+	for _, item := range settings.Consent {
+		consent = append(consent, item)
+	}
+	return map[string]any{
+		"rules":   settings.Rules,
+		"tone":    settings.Tone,
+		"consent": consent,
 	}
 }
 

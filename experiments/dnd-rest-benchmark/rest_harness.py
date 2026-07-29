@@ -605,6 +605,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Allocate, progress, and complete repeated downtime activities",
     ),
+    LifecycleStage(
+        id="073-session-zero-settings",
+        suite="073-session-zero-settings",
+        spec_path=BENCH_DIR / "challenges" / "073-session-zero-settings.md",
+        kind="maintenance",
+        description="Persist campaign rules, tone, and consent settings before start",
+    ),
 ]
 
 

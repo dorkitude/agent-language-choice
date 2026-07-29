@@ -93,6 +93,7 @@ func Suites() []Suite {
 		shopsSuite(),
 		recipeCatalogSuite(),
 		recurringDowntimeSuite(),
+		sessionZeroSettingsSuite(),
 	}
 }
 
