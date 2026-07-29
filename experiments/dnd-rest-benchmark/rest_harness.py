@@ -787,6 +787,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add DM-issued read-only spectator tokens and exact redacted spectator projection",
     ),
+    LifecycleStage(
+        id="099-load-safe-event-feed",
+        suite="099-load-safe-event-feed",
+        spec_path=BENCH_DIR / "challenges" / "099-load-safe-event-feed.md",
+        kind="maintenance",
+        description="Add append-only campaign event feed with load-safe cursor pagination",
+    ),
 ]
 
 

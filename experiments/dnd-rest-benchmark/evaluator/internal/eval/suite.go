@@ -119,6 +119,7 @@ func Suites() []Suite {
 		apiSchemaEndpointSuite(),
 		agentOnboardingSuite(),
 		spectatorViewSuite(),
+		loadSafeEventFeedSuite(),
 	}
 }
 
