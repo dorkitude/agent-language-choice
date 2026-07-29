@@ -108,6 +108,7 @@ func Suites() []Suite {
 		schemaMigrationSuite(),
 		paginationSearchSuite(),
 		rateLimitsSuite(),
+		serviceMetricsSuite(),
 	}
 }
 

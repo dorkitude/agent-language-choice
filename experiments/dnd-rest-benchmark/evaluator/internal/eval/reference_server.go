@@ -1225,6 +1225,7 @@ func ReferenceHandler() http.Handler {
 		event := referenceProjectionEvent{Sequence: len(campaign.ProjectionEvents) + 1, EventID: eventID, Kind: kind, Value: value}
 		campaign.ProjectionEventIndex[eventID] = true
 		campaign.ProjectionEvents = append(campaign.ProjectionEvents, event)
+		campaign.MetricProjectionEvents++
 		campaign.rebuildProjection()
 		writeJSON(w, http.StatusCreated, event.json())
 	})
@@ -1641,6 +1642,7 @@ func ReferenceHandler() http.Handler {
 		}
 		remaining := campaign.rateRemaining(actor.Username)
 		if remaining == 0 {
+			campaign.MetricRejectedRateEvents++
 			writeJSON(w, http.StatusTooManyRequests, map[string]any{"limit": referenceRateEventLimit, "remaining": 0})
 			return
 		}
@@ -1648,6 +1650,7 @@ func ReferenceHandler() http.Handler {
 		event := referenceRateEvent{EventID: req.EventID, Actor: actor.Username}
 		campaign.RateEvents = append(campaign.RateEvents, event)
 		campaign.RateEventIndex[event.EventID] = true
+		campaign.MetricAcceptedRateEvents++
 		writeJSON(w, http.StatusCreated, map[string]any{"event_id": event.EventID, "actor": event.Actor, "remaining": campaign.rateRemaining(actor.Username)})
 	})
 	mux.HandleFunc("GET /v1/play/campaigns/{id}/rate-events", func(w http.ResponseWriter, r *http.Request) {
@@ -1661,6 +1664,22 @@ func ReferenceHandler() http.Handler {
 			events = append(events, event.json())
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"events": events, "remaining": campaign.rateRemaining(actor.Username)})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/metrics", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"accepted_rate_events": campaign.MetricAcceptedRateEvents,
+			"rejected_rate_events": campaign.MetricRejectedRateEvents,
+			"projection_events":    campaign.MetricProjectionEvents,
+			"uptime_ticks":         1,
+		})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -4568,100 +4587,103 @@ type referenceUser struct {
 }
 
 type referencePlayCampaign struct {
-	ID                     string
-	Name                   string
-	Owner                  string
-	MaxPlayers             int
-	Status                 string
-	Members                map[string]referencePlayMember
-	Order                  []string
-	Queue                  []string
-	CurrentActor           string
-	Phase                  string
-	TurnNumber             int
-	NudgeCount             int
-	Events                 []referencePlayEvent
-	Story                  string
-	DMNotes                string
-	Scenes                 map[string]string
-	SceneNames             map[string]string
-	CurrentScene           string
-	Locations              map[string]string
-	Edges                  map[string]bool
-	Encounter              *referencePlayEncounter
-	CharacterOwner         map[string]string
-	Spells                 map[string][]string
-	PreparedSpells         map[string][]string
-	SpellSlots             map[string]int
-	SpellCasts             map[string][]referenceSpellCast
-	Concentration          map[string]*referenceConcentration
-	Inventory              map[string]map[string]int
-	Equipment              map[string]map[string]referenceEquipmentItem
-	AttunedItems           map[string]map[string]bool
-	Currency               map[string]int
-	TransferSeq            int
-	Loot                   map[string]*referenceLoot
-	NPCs                   map[string]*referencePlayNPC
-	Factions               map[string]*referencePlayFaction
-	Reputation             map[string]map[string]int
-	Relationships          []referenceRelationshipEdge
-	RelationshipIndex      map[string]int
-	Clues                  []referenceClue
-	ClueIndex              map[string]bool
-	PlayQuests             []referencePlayQuest
-	PlayQuestIndex         map[string]int
-	QuestRewardXP          map[string]int
-	QuestRewardItems       map[string]map[string]int
-	WorldEvents            []referenceWorldEvent
-	WorldEventIndex        map[string]int
-	Rumors                 []referenceRumor
-	RumorIndex             map[string]int
-	RumorTextIndex         map[string]bool
-	Calendar               *referenceCalendar
-	Settlements            []referenceSettlement
-	SettlementIndex        map[string]int
-	Recipes                []referenceRecipe
-	RecipeIndex            map[string]int
-	DowntimeActivities     []referenceDowntimeActivity
-	DowntimeActivityIndex  map[string]int
-	DowntimeAllocations    map[string]map[string]*referenceDowntimeAllocation
-	SessionZero            *referenceSessionZeroSettings
-	Content                []referenceContent
-	ContentIndex           map[string]int
-	Notes                  []referenceNote
-	NoteIndex              map[string]int
-	Whispers               []referenceWhisper
-	WhisperIndex           map[string]int
-	Invitations            []referenceInvitation
-	InvitationIndex        map[string]int
-	Delegations            map[string]referenceDelegation
-	DelegationAudit        []referenceDelegationAuditEntry
-	AuditEvents            []referenceAuditEvent
-	AuditCorrelationIndex  map[string]bool
-	AuditTimestamp         int
-	ProjectionEvents       []referenceProjectionEvent
-	ProjectionEventIndex   map[string]bool
-	ProjectionStory        string
-	ProjectionDanger       int
-	ProjectionAppliedIDs   []string
-	IdempotentEvents       []referenceIdempotentEvent
-	IdempotencyKeys        map[string]referenceIdempotentEvent
-	IdempotentEventIndex   map[string]bool
-	SafeCurrentTurn        int
-	SafeAccepted           []referenceSafeTurnSubmission
-	SafeSubmissionIndex    map[string]bool
-	TransactionalTransfers []referenceTransactionalTransfer
-	Exports                []referenceCampaignExport
-	ImportedState          *referenceCampaignImport
-	MigratedState          *referenceCampaignMigration
-	SearchRecords          []referenceSearchRecord
-	SearchRecordIndex      map[string]bool
-	SearchTextIndex        map[string]bool
-	RateEvents             []referenceRateEvent
-	RateEventIndex         map[string]bool
-	RateCounts             map[string]int
-	DeathSaves             int
-	DeathStable            bool
+	ID                       string
+	Name                     string
+	Owner                    string
+	MaxPlayers               int
+	Status                   string
+	Members                  map[string]referencePlayMember
+	Order                    []string
+	Queue                    []string
+	CurrentActor             string
+	Phase                    string
+	TurnNumber               int
+	NudgeCount               int
+	Events                   []referencePlayEvent
+	Story                    string
+	DMNotes                  string
+	Scenes                   map[string]string
+	SceneNames               map[string]string
+	CurrentScene             string
+	Locations                map[string]string
+	Edges                    map[string]bool
+	Encounter                *referencePlayEncounter
+	CharacterOwner           map[string]string
+	Spells                   map[string][]string
+	PreparedSpells           map[string][]string
+	SpellSlots               map[string]int
+	SpellCasts               map[string][]referenceSpellCast
+	Concentration            map[string]*referenceConcentration
+	Inventory                map[string]map[string]int
+	Equipment                map[string]map[string]referenceEquipmentItem
+	AttunedItems             map[string]map[string]bool
+	Currency                 map[string]int
+	TransferSeq              int
+	Loot                     map[string]*referenceLoot
+	NPCs                     map[string]*referencePlayNPC
+	Factions                 map[string]*referencePlayFaction
+	Reputation               map[string]map[string]int
+	Relationships            []referenceRelationshipEdge
+	RelationshipIndex        map[string]int
+	Clues                    []referenceClue
+	ClueIndex                map[string]bool
+	PlayQuests               []referencePlayQuest
+	PlayQuestIndex           map[string]int
+	QuestRewardXP            map[string]int
+	QuestRewardItems         map[string]map[string]int
+	WorldEvents              []referenceWorldEvent
+	WorldEventIndex          map[string]int
+	Rumors                   []referenceRumor
+	RumorIndex               map[string]int
+	RumorTextIndex           map[string]bool
+	Calendar                 *referenceCalendar
+	Settlements              []referenceSettlement
+	SettlementIndex          map[string]int
+	Recipes                  []referenceRecipe
+	RecipeIndex              map[string]int
+	DowntimeActivities       []referenceDowntimeActivity
+	DowntimeActivityIndex    map[string]int
+	DowntimeAllocations      map[string]map[string]*referenceDowntimeAllocation
+	SessionZero              *referenceSessionZeroSettings
+	Content                  []referenceContent
+	ContentIndex             map[string]int
+	Notes                    []referenceNote
+	NoteIndex                map[string]int
+	Whispers                 []referenceWhisper
+	WhisperIndex             map[string]int
+	Invitations              []referenceInvitation
+	InvitationIndex          map[string]int
+	Delegations              map[string]referenceDelegation
+	DelegationAudit          []referenceDelegationAuditEntry
+	AuditEvents              []referenceAuditEvent
+	AuditCorrelationIndex    map[string]bool
+	AuditTimestamp           int
+	ProjectionEvents         []referenceProjectionEvent
+	ProjectionEventIndex     map[string]bool
+	ProjectionStory          string
+	ProjectionDanger         int
+	ProjectionAppliedIDs     []string
+	IdempotentEvents         []referenceIdempotentEvent
+	IdempotencyKeys          map[string]referenceIdempotentEvent
+	IdempotentEventIndex     map[string]bool
+	SafeCurrentTurn          int
+	SafeAccepted             []referenceSafeTurnSubmission
+	SafeSubmissionIndex      map[string]bool
+	TransactionalTransfers   []referenceTransactionalTransfer
+	Exports                  []referenceCampaignExport
+	ImportedState            *referenceCampaignImport
+	MigratedState            *referenceCampaignMigration
+	SearchRecords            []referenceSearchRecord
+	SearchRecordIndex        map[string]bool
+	SearchTextIndex          map[string]bool
+	RateEvents               []referenceRateEvent
+	RateEventIndex           map[string]bool
+	RateCounts               map[string]int
+	MetricAcceptedRateEvents int
+	MetricRejectedRateEvents int
+	MetricProjectionEvents   int
+	DeathSaves               int
+	DeathStable              bool
 }
 
 const referenceRateEventLimit = 2

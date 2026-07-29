@@ -710,6 +710,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add deterministic per-identity campaign rate limits",
     ),
+    LifecycleStage(
+        id="088-service-metrics",
+        suite="088-service-metrics",
+        spec_path=BENCH_DIR / "challenges" / "088-service-metrics.md",
+        kind="maintenance",
+        description="Expose owner-only safe campaign service metrics",
+    ),
 ]
 
 
