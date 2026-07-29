@@ -118,6 +118,7 @@ func Suites() []Suite {
 		fixtureSeedingSuite(),
 		apiSchemaEndpointSuite(),
 		agentOnboardingSuite(),
+		spectatorViewSuite(),
 	}
 }
 

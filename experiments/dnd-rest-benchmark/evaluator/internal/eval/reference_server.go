@@ -779,6 +779,28 @@ func ReferenceHandler() http.Handler {
 		}
 		return campaign, actor, true
 	}
+	spectatorIDFromToken := func(w http.ResponseWriter, r *http.Request) (string, bool) {
+		const spectatorPrefix = "Bearer spectator-"
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			http.Error(w, "spectator token required", http.StatusUnauthorized)
+			return "", false
+		}
+		if strings.HasPrefix(header, "Bearer session-") {
+			http.Error(w, "spectator token required", http.StatusForbidden)
+			return "", false
+		}
+		if !strings.HasPrefix(header, spectatorPrefix) {
+			http.Error(w, "invalid spectator token", http.StatusUnauthorized)
+			return "", false
+		}
+		spectatorID := strings.TrimPrefix(header, spectatorPrefix)
+		if spectatorID == "" {
+			http.Error(w, "invalid spectator token", http.StatusUnauthorized)
+			return "", false
+		}
+		return spectatorID, true
+	}
 	validatePreparedSpell := func(campaign *referencePlayCampaign, characterID string, spellID string) bool {
 		owner := campaign.CharacterOwner[characterID]
 		member, exists := campaign.Members[owner]
@@ -824,7 +846,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}, RateEventIndex: map[string]bool{}, RateCounts: map[string]int{}, BackupIndex: map[string]int{}, ReplayEventIndex: map[string]bool{}, RNGRollIndex: map[string]bool{}, ModerationReportIndex: map[string]int{}, SafetyEventIndex: map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Spectators: map[string]bool{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}, SafeCurrentTurn: 1, SafeSubmissionIndex: map[string]bool{}, SearchRecordIndex: map[string]bool{}, SearchTextIndex: map[string]bool{}, RateEventIndex: map[string]bool{}, RateCounts: map[string]int{}, BackupIndex: map[string]int{}, ReplayEventIndex: map[string]bool{}, RNGRollIndex: map[string]bool{}, ModerationReportIndex: map[string]int{}, SafetyEventIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -883,6 +905,62 @@ func ReferenceHandler() http.Handler {
 			Role:      "player",
 			NextSteps: []string{"review-party", "take-turn", "submit-action"},
 			CanMutate: true,
+		})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/spectators", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			SpectatorID string `json:"spectator_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SpectatorID == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if campaign.Spectators == nil {
+			campaign.Spectators = map[string]bool{}
+		}
+		for _, candidate := range playCampaigns {
+			if candidate.Spectators[req.SpectatorID] {
+				http.Error(w, "duplicate spectator", http.StatusConflict)
+				return
+			}
+		}
+		campaign.Spectators[req.SpectatorID] = true
+		writeJSON(w, http.StatusCreated, map[string]any{"spectator_id": req.SpectatorID, "token": "spectator-" + req.SpectatorID})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/spectator-view", func(w http.ResponseWriter, r *http.Request) {
+		spectatorID, ok := spectatorIDFromToken(w, r)
+		if !ok {
+			return
+		}
+		campaign := playCampaigns[r.PathValue("id")]
+		if campaign == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if !campaign.Spectators[spectatorID] {
+			for _, candidate := range playCampaigns {
+				if candidate != campaign && candidate.Spectators[spectatorID] {
+					http.Error(w, "wrong campaign", http.StatusForbidden)
+					return
+				}
+			}
+			http.Error(w, "invalid spectator token", http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"campaign_id": campaign.ID,
+			"name":        campaign.Name,
+			"status":      campaign.Status,
+			"party_size":  len(campaign.Members),
+			"story":       campaign.Story,
 		})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/start", func(w http.ResponseWriter, r *http.Request) {
@@ -5027,6 +5105,7 @@ type referencePlayCampaign struct {
 	MaxPlayers               int
 	Status                   string
 	Members                  map[string]referencePlayMember
+	Spectators               map[string]bool
 	Order                    []string
 	Queue                    []string
 	CurrentActor             string

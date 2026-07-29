@@ -780,6 +780,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add authenticated role-specific campaign agent onboarding",
     ),
+    LifecycleStage(
+        id="098-spectator-view",
+        suite="098-spectator-view",
+        spec_path=BENCH_DIR / "challenges" / "098-spectator-view.md",
+        kind="maintenance",
+        description="Add DM-issued read-only spectator tokens and exact redacted spectator projection",
+    ),
 ]
 
 
