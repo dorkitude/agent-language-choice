@@ -1572,7 +1572,7 @@ def run_setup(run_dir: Path, target: Target, timeout: int) -> list[dict[str, Any
     return results
 
 
-def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str) -> dict[str, Any]:
+def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_name: str) -> dict[str, Any]:
     env = benchmark_env()
     command: list[str]
     if args.provider == "pi":
@@ -1641,13 +1641,14 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str) -> dict[str,
             text=True,
             start_new_session=True,
         )
-        print(f"[agent] started provider={args.provider} model={args.model}", flush=True)
+        print(f"[agent {progress_name}] started provider={args.provider}", flush=True)
         deadline = started + args.agent_timeout
+        next_heartbeat = 60
         while process.poll() is None:
             remaining = deadline - time.time()
             if remaining <= 0:
                 timed_out = True
-                print(f"[agent] timed out after {args.agent_timeout}s; stopping process", flush=True)
+                print(f"[agent {progress_name}] timed out after {args.agent_timeout}s; stopping process", flush=True)
                 terminate_process_group(process)
                 try:
                     process.wait(timeout=5)
@@ -1656,15 +1657,19 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str) -> dict[str,
                     process.wait(timeout=5)
                 break
             try:
-                process.wait(timeout=min(30, remaining))
+                until_heartbeat = max(0.1, next_heartbeat - (time.time() - started))
+                process.wait(timeout=min(until_heartbeat, remaining))
             except subprocess.TimeoutExpired:
-                print(f"[agent] still running ({int(time.time() - started)}s elapsed)", flush=True)
+                elapsed = time.time() - started
+                while elapsed >= next_heartbeat:
+                    print(f"[agent {progress_name}] still running ({next_heartbeat}s elapsed)", flush=True)
+                    next_heartbeat *= 2
         returncode = process.returncode
 
     stdout = stdout_path.read_text(errors="replace")
     stderr = stderr_path.read_text(errors="replace")
     print(
-        f"[agent] finished exit={returncode} elapsed={round(time.time() - started, 1)}s",
+        f"[agent {progress_name}] finished exit={returncode} elapsed={round(time.time() - started, 1)}s",
         flush=True,
     )
 
@@ -1836,7 +1841,7 @@ def run_one(args: argparse.Namespace) -> int:
 
     setup = run_setup(run_dir, target, args.setup_timeout)
     setup_ok = all(item["returncode"] == 0 for item in setup)
-    agent = run_agent(args, run_dir, prompt) if setup_ok else {"skipped": True}
+    agent = run_agent(args, run_dir, prompt, f"{args.model}/{target.id} core") if setup_ok else {"skipped": True}
     evaluator = build_evaluator()
     result = evaluate(run_dir, evaluator, free_port(), args.server_timeout) if setup_ok and agent_ok(agent) else {"passed": False, "error": "setup or agent failed"}
 
@@ -1892,6 +1897,7 @@ def selected_stages(value: str | None) -> list[LifecycleStage]:
 def run_lifecycle_one(args: argparse.Namespace) -> int:
     target = targets()[args.target]
     stages = selected_stages(args.stages)
+    cell_name = f"{args.model}/{target.id}"
     if args.resume:
         resumed = find_resumable_lifecycle_run(args.provider, args.model, target.id, stages)
         if resumed is None:
@@ -1961,12 +1967,16 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             (shot_dir / "PROMPT.md").write_text(f"```text\n{prompt}\n```\n")
             (run_dir / "PROMPT.md").write_text(f"```text\n{prompt}\n```\n")
 
+            progress_name = (
+                f"{cell_name} stage {stage_index + 1:03d}/{len(stages):03d} "
+                f"{stage.id} attempt {attempt + 1}/{max_attempts}"
+            )
+
             print(
-                f"[stage {stage_index + 1}/{len(stages)}] {stage.id} "
-                f"attempt {attempt + 1}/{max_attempts} ({shot_kind})",
+                f"[{progress_name}] {shot_kind}",
                 flush=True,
             )
-            agent = run_agent(args, run_dir, prompt)
+            agent = run_agent(args, run_dir, prompt, progress_name)
             copy_if_exists(run_dir / "agent_stdout.txt", shot_dir / "agent_stdout.txt")
             copy_if_exists(run_dir / "agent_stderr.txt", shot_dir / "agent_stderr.txt")
             copy_if_exists(run_dir / "agent_last_message.txt", shot_dir / "agent_last_message.txt")
@@ -1975,7 +1985,7 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             copy_if_exists(run_dir / "setup.json", shot_dir / "setup.json")
             setup_ok = all(item["returncode"] == 0 for item in setup)
             if setup_ok and agent_ok(agent):
-                print(f"[stage {stage_index + 1}/{len(stages)}] evaluating {stage.suite}", flush=True)
+                print(f"[{progress_name}] evaluating {stage.suite}", flush=True)
                 evaluation = evaluate(run_dir, evaluator, free_port(), args.server_timeout, stage.suite)
             else:
                 evaluation = {"passed": False, "error": "setup or agent failed"}
@@ -2009,14 +2019,14 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
 
             if shot["passed"]:
                 print(
-                    f"[stage {stage_index + 1}/{len(stages)}] PASS "
+                    f"[{progress_name}] PASS "
                     f"({shot['evaluation_record']})",
                     flush=True,
                 )
                 stage_passed = True
                 break
             print(
-                f"[stage {stage_index + 1}/{len(stages)}] FAIL "
+                f"[{progress_name}] FAIL "
                 f"({shot['evaluation_record']})",
                 flush=True,
             )
