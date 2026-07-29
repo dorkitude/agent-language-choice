@@ -61,9 +61,10 @@ after the 2026-07-12/13 Claude reruns.
 | Infrastructure accounting | 27 stored runs classified as blocked, not model failures | [`docs/findings/003-infra-block-classification.md`](docs/findings/003-infra-block-classification.md), [`results/dnd-rest-benchmark/experiment-state.sqlite3`](results/dnd-rest-benchmark/experiment-state.sqlite3) |
 | Research design status | Citation verification, qualitative target scoring, 24-stage roadmap, and venue plan complete | [`RESEARCH-DESIGN.md`](RESEARCH-DESIGN.md) |
 
-The default D&D REST roadmap now has 16 total stages: one initial creative
-build plus 15 fresh maintenance inheritances. The final suite,
-`analytics-reporting`, contains 58 cumulative deterministic HTTP checks.
+The default D&D REST roadmap now has 30 total stages: one initial creative
+build plus 29 fresh maintenance inheritances. The first post-baseline batch
+adds authenticated DM/player campaign play through stage 30; it has not yet
+been run in the model matrix.
 
 A self-contained HTML findings report can be generated from embedded JSON with:
 

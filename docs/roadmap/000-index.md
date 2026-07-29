@@ -5,10 +5,12 @@ stage is a backlog item applied to the same codebase by a fresh agent. The
 evaluator suite for each stage is cumulative, so passing a later stage requires
 preserving every earlier behavior.
 
-The completed result set to date used stages 001-009. The default roadmap now
-has 16 total stages: one initial creative build plus 15 fresh maintenance
-inheritance steps. With one allowed bug-fix shot per stage, each model/target
-cell can consume up to 32 shots.
+The completed result set to date used stages 001-009. The default runnable
+roadmap has 30 total stages: one initial creative build plus 29 fresh
+maintenance inheritance steps. With one allowed bug-fix shot per stage, each
+model/target cell can consume up to 60 shots. Tickets 017-030 now have runner
+and evaluator hooks; tickets 031-100 remain planned. None of this changes the
+frozen nine-stage baseline.
 
 ## Lifecycle Model
 
@@ -40,6 +42,7 @@ cell can consume up to 32 shots.
 | [015-audit-export.md](015-audit-export.md) | Audit and export | Specified; evaluator added | `audit-export` |
 | [016-analytics-reporting.md](016-analytics-reporting.md) | Analytics reporting | Specified; evaluator added | `analytics-reporting` |
 | [017-prompt-template.md](017-prompt-template.md) | Agent prompt contract | Active | n/a |
+| [018-100-ticket-campaign-expansion.md](018-100-ticket-campaign-expansion.md) | Tickets 017-100: authenticated DM/player campaign play | 017-030 specified/evaluator added; 031-100 planned | 017-030 enabled |
 
 ## Harness Hooks
 
@@ -49,6 +52,9 @@ cell can consume up to 32 shots.
   [`experiments/dnd-rest-benchmark/challenges/`](../../experiments/dnd-rest-benchmark/challenges/).
 - Cumulative evaluator suites live in
   [`experiments/dnd-rest-benchmark/evaluator/internal/eval/suite.go`](../../experiments/dnd-rest-benchmark/evaluator/internal/eval/suite.go).
+- Every ticket in the planned 017–100 expansion requires the same external,
+  deterministic `dndeval` HTTP-suite treatment before it can enter the runner;
+  see [018-100-ticket-campaign-expansion.md](018-100-ticket-campaign-expansion.md).
 
 Run the planned matrix without invoking agents:
 

@@ -99,6 +99,9 @@ func runTest(ctx context.Context, client *http.Client, baseURL string, test Test
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
+	for key, value := range test.Headers {
+		req.Header.Set(key, value)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {

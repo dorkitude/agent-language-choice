@@ -213,6 +213,13 @@ Finalized first-suite task roadmap:
 | 23 | dependency upgrade repair | ecosystem-volatility probe | framework-native + HTTP |
 | 24 | cross-file refactor | referential-locality probe | CLI/unit |
 
+The D&D REST roadmap also has a separately tracked 100-ticket product-scale
+expansion. It begins with authenticated DM/player campaign play, party
+membership, narrated turn handoffs, and role-filtered context. It is a future
+benchmark generation rather than part of the frozen nine-stage or runnable
+16-stage matrix; see
+[`docs/roadmap/018-100-ticket-campaign-expansion.md`](docs/roadmap/018-100-ticket-campaign-expansion.md).
+
 REST/API tasks are evaluated only through a central black-box HTTP evaluator.
 This keeps scoring independent of implementation language and lets the same
 feature roadmap exercise toolchain feedback, dependency choices, routing,

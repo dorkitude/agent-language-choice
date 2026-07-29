@@ -72,8 +72,10 @@ Each agent invocation counts as one shot. Stage suites are cumulative, so a
 maintenance agent must preserve all previous behavior.
 
 Completed results to date used stages `core` through `dm-tools`. The default
-roadmap now has 16 stages total: one initial creative build plus 15 fresh
-maintenance inheritances.
+roadmap now has 30 stages total: one initial creative build plus 29 fresh
+maintenance inheritances. The added stages 017-030 introduce an authenticated
+DM/player campaign-play loop; they are runnable but not yet part of the frozen
+nine-stage result set.
 
 Current lifecycle stages:
 
