@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -975,6 +975,157 @@ func ReferenceHandler() http.Handler {
 			content = append(content, record.json())
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"content": content})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			NoteID     string `json:"note_id"`
+			Text       string `json:"text"`
+			Visibility string `json:"visibility"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !nonEmptyString(req.NoteID) || !nonEmptyString(req.Text) || (req.Visibility != "private" && req.Visibility != "party") {
+			http.Error(w, "invalid note", http.StatusBadRequest)
+			return
+		}
+		if _, exists := campaign.NoteIndex[req.NoteID]; exists {
+			http.Error(w, "duplicate note", http.StatusConflict)
+			return
+		}
+		note := referenceNote{NoteID: req.NoteID, Text: req.Text, Visibility: req.Visibility, Owner: actor.Username}
+		campaign.NoteIndex[note.NoteID] = len(campaign.Notes)
+		campaign.Notes = append(campaign.Notes, note)
+		writeJSON(w, http.StatusCreated, note.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		notes := make([]any, 0, len(campaign.Notes))
+		for _, note := range campaign.Notes {
+			if referenceNoteReadable(campaign, actor, note) {
+				notes = append(notes, note.json())
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"notes": notes})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/notes/{note_id}", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		index, exists := campaign.NoteIndex[r.PathValue("note_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		note := campaign.Notes[index]
+		if !referenceNoteReadable(campaign, actor, note) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		writeJSON(w, http.StatusOK, note.json())
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/notes/{note_id}", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		index, exists := campaign.NoteIndex[r.PathValue("note_id")]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if campaign.Notes[index].Owner != actor.Username {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			Text       string `json:"text"`
+			Visibility string `json:"visibility"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !nonEmptyString(req.Text) || (req.Visibility != "private" && req.Visibility != "party") {
+			http.Error(w, "invalid note", http.StatusBadRequest)
+			return
+		}
+		campaign.Notes[index].Text = req.Text
+		campaign.Notes[index].Visibility = req.Visibility
+		writeJSON(w, http.StatusOK, campaign.Notes[index].json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/whispers", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		member, exists := campaign.Members[actor.Username]
+		if !exists {
+			http.Error(w, "player character required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			WhisperID     string `json:"whisper_id"`
+			ToCharacterID string `json:"to_character_id"`
+			Text          string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !nonEmptyString(req.WhisperID) || !nonEmptyString(req.ToCharacterID) || !nonEmptyString(req.Text) {
+			http.Error(w, "invalid whisper", http.StatusBadRequest)
+			return
+		}
+		if _, exists := campaign.CharacterOwner[req.ToCharacterID]; !exists {
+			http.Error(w, "invalid recipient", http.StatusBadRequest)
+			return
+		}
+		if _, exists := campaign.WhisperIndex[req.WhisperID]; exists {
+			http.Error(w, "duplicate whisper", http.StatusConflict)
+			return
+		}
+		whisper := referenceWhisper{WhisperID: req.WhisperID, FromCharacterID: member.CharacterID, ToCharacterID: req.ToCharacterID, Text: req.Text}
+		campaign.WhisperIndex[whisper.WhisperID] = len(campaign.Whispers)
+		campaign.Whispers = append(campaign.Whispers, whisper)
+		writeJSON(w, http.StatusCreated, whisper.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/whispers", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		whispers := make([]any, 0, len(campaign.Whispers))
+		for _, whisper := range campaign.Whispers {
+			if referenceWhisperReadable(campaign, actor, whisper) {
+				whispers = append(whispers, whisper.json())
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"whispers": whispers})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/sheet", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		owner, exists := campaign.CharacterOwner[characterID]
+		if !exists {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if actor.Username != campaign.Owner && actor.Username != owner {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		member := campaign.Members[owner]
+		writeJSON(w, http.StatusOK, map[string]any{
+			"character_id":      characterID,
+			"owner":             owner,
+			"name":              member.Name,
+			"class":             member.Class,
+			"level":             1,
+			"proficiency_bonus": 2,
+			"hp_max":            10,
+			"armor_class":       10,
+		})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/narrations", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -3791,8 +3942,34 @@ type referencePlayCampaign struct {
 	SessionZero           *referenceSessionZeroSettings
 	Content               []referenceContent
 	ContentIndex          map[string]int
+	Notes                 []referenceNote
+	NoteIndex             map[string]int
+	Whispers              []referenceWhisper
+	WhisperIndex          map[string]int
 	DeathSaves            int
 	DeathStable           bool
+}
+
+type referenceNote struct {
+	NoteID     string
+	Text       string
+	Visibility string
+	Owner      string
+}
+
+func (note referenceNote) json() map[string]any {
+	return map[string]any{"note_id": note.NoteID, "text": note.Text, "visibility": note.Visibility, "owner": note.Owner}
+}
+
+type referenceWhisper struct {
+	WhisperID       string
+	FromCharacterID string
+	ToCharacterID   string
+	Text            string
+}
+
+func (whisper referenceWhisper) json() map[string]any {
+	return map[string]any{"whisper_id": whisper.WhisperID, "from_character_id": whisper.FromCharacterID, "to_character_id": whisper.ToCharacterID, "text": whisper.Text}
 }
 
 type referenceLoot struct {
@@ -4782,6 +4959,21 @@ func (campaign *referencePlayCampaign) hasCharacter(characterID string) bool {
 
 func (campaign *referencePlayCampaign) hasEntity(entityID string) bool {
 	return campaign.hasCharacter(entityID) || campaign.NPCs[entityID] != nil
+}
+
+func referenceNoteReadable(campaign *referencePlayCampaign, actor referenceUser, note referenceNote) bool {
+	return actor.Username == campaign.Owner || note.Visibility == "party" || note.Owner == actor.Username
+}
+
+func referenceWhisperReadable(campaign *referencePlayCampaign, actor referenceUser, whisper referenceWhisper) bool {
+	if actor.Username == campaign.Owner {
+		return true
+	}
+	member, exists := campaign.Members[actor.Username]
+	if !exists {
+		return false
+	}
+	return member.CharacterID == whisper.FromCharacterID || member.CharacterID == whisper.ToCharacterID
 }
 
 func (campaign *referencePlayCampaign) appendEvent(kind string, actor string, eventType string, text string) referencePlayEvent {

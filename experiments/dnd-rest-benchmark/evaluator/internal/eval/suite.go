@@ -95,6 +95,7 @@ func Suites() []Suite {
 		recurringDowntimeSuite(),
 		sessionZeroSettingsSuite(),
 		contentTagsSuite(),
+		privacyControlsSuite(),
 	}
 }
 

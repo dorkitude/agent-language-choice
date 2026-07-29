@@ -619,6 +619,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Tag scenes/events and filter role-appropriate content",
     ),
+    LifecycleStage(
+        id="075-privacy-controls",
+        suite="075-privacy-controls",
+        spec_path=BENCH_DIR / "challenges" / "075-privacy-controls.md",
+        kind="maintenance",
+        description="Restrict private notes, whispers, and character sheets by role",
+    ),
 ]
 
 
