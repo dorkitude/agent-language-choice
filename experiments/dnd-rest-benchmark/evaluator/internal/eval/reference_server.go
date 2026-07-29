@@ -808,7 +808,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}, RelationshipIndex: map[string]int{}, ClueIndex: map[string]bool{}, PlayQuestIndex: map[string]int{}, QuestRewardXP: map[string]int{}, QuestRewardItems: map[string]map[string]int{}, WorldEventIndex: map[string]int{}, RumorIndex: map[string]int{}, RumorTextIndex: map[string]bool{}, SettlementIndex: map[string]int{}, RecipeIndex: map[string]int{}, DowntimeActivityIndex: map[string]int{}, DowntimeAllocations: map[string]map[string]*referenceDowntimeAllocation{}, ContentIndex: map[string]int{}, NoteIndex: map[string]int{}, WhisperIndex: map[string]int{}, InvitationIndex: map[string]int{}, Delegations: map[string]referenceDelegation{}, AuditCorrelationIndex: map[string]bool{}, ProjectionEventIndex: map[string]bool{}, IdempotencyKeys: map[string]referenceIdempotentEvent{}, IdempotentEventIndex: map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1240,6 +1240,66 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, campaign.rebuildProjection())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/idempotent-events", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+		if idempotencyKey == "" {
+			http.Error(w, "Idempotency-Key required", http.StatusBadRequest)
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			http.Error(w, "invalid idempotent event", http.StatusBadRequest)
+			return
+		}
+		eventID, ok := requiredString(raw, "event_id")
+		if !ok {
+			http.Error(w, "invalid idempotent event", http.StatusBadRequest)
+			return
+		}
+		value, ok := requiredString(raw, "value")
+		if !ok {
+			http.Error(w, "invalid idempotent event", http.StatusBadRequest)
+			return
+		}
+		if campaign.IdempotencyKeys == nil {
+			campaign.IdempotencyKeys = map[string]referenceIdempotentEvent{}
+		}
+		if campaign.IdempotentEventIndex == nil {
+			campaign.IdempotentEventIndex = map[string]bool{}
+		}
+		if existing, exists := campaign.IdempotencyKeys[idempotencyKey]; exists {
+			if existing.EventID != eventID || existing.Value != value {
+				http.Error(w, "idempotency key conflict", http.StatusConflict)
+				return
+			}
+			writeJSON(w, http.StatusOK, existing.json())
+			return
+		}
+		if campaign.IdempotentEventIndex[eventID] {
+			http.Error(w, "duplicate event_id", http.StatusConflict)
+			return
+		}
+		event := referenceIdempotentEvent{EventID: eventID, Value: value, Sequence: len(campaign.IdempotentEvents) + 1, IdempotencyKey: idempotencyKey}
+		campaign.IdempotentEventIndex[eventID] = true
+		campaign.IdempotencyKeys[idempotencyKey] = event
+		campaign.IdempotentEvents = append(campaign.IdempotentEvents, event)
+		writeJSON(w, http.StatusCreated, event.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/idempotent-events", func(w http.ResponseWriter, r *http.Request) {
+		campaign, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		events := make([]any, 0, len(campaign.IdempotentEvents))
+		for _, event := range campaign.IdempotentEvents {
+			events = append(events, event.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"events": events})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
@@ -4223,6 +4283,9 @@ type referencePlayCampaign struct {
 	ProjectionStory       string
 	ProjectionDanger      int
 	ProjectionAppliedIDs  []string
+	IdempotentEvents      []referenceIdempotentEvent
+	IdempotencyKeys       map[string]referenceIdempotentEvent
+	IdempotentEventIndex  map[string]bool
 	DeathSaves            int
 	DeathStable           bool
 }
@@ -4270,6 +4333,17 @@ func (event referenceProjectionEvent) json() map[string]any {
 		payload["value"] = event.Value
 	}
 	return payload
+}
+
+type referenceIdempotentEvent struct {
+	EventID        string
+	Value          string
+	Sequence       int
+	IdempotencyKey string
+}
+
+func (event referenceIdempotentEvent) json() map[string]any {
+	return map[string]any{"event_id": event.EventID, "value": event.Value, "sequence": event.Sequence, "idempotency_key": event.IdempotencyKey}
 }
 
 type referenceNote struct {

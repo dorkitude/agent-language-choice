@@ -654,6 +654,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Rebuild campaign story and danger projection from ordered event logs",
     ),
+    LifecycleStage(
+        id="080-idempotency-keys",
+        suite="080-idempotency-keys",
+        spec_path=BENCH_DIR / "challenges" / "080-idempotency-keys.md",
+        kind="maintenance",
+        description="Ensure duplicate keyed mutating requests create one public effect",
+    ),
 ]
 
 

@@ -100,6 +100,7 @@ func Suites() []Suite {
 		gmDelegationSuite(),
 		actorAuditTrailSuite(),
 		eventProjectionsSuite(),
+		idempotencyKeysSuite(),
 	}
 }
 
