@@ -147,4 +147,8 @@ Published preview:
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+Original code is licensed under the [MIT License](LICENSE). Original non-code
+content—including benchmark specifications, prompts, documentation, reports,
+and result data—is licensed under [CC BY 4.0](LICENSE-CONTENT). Third-party
+material is subject to its own notices; see [NOTICE](NOTICE), including the
+required attribution for SRD 5.1-derived benchmark material.
