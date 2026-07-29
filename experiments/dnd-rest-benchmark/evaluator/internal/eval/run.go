@@ -126,6 +126,11 @@ func runTest(ctx context.Context, client *http.Client, baseURL string, test Test
 		return result
 	}
 	if test.WantJSON == nil {
+		if len(test.ExactJSONKeys) > 0 {
+			result.ResponseBody = string(payload)
+			result.Error = "JSON key assertions require a JSON expectation"
+			return result
+		}
 		result.Passed = true
 		return result
 	}
@@ -137,6 +142,11 @@ func runTest(ctx context.Context, client *http.Client, baseURL string, test Test
 		return result
 	}
 	if err := jsonContains(got, normalizeJSONValue(test.WantJSON)); err != nil {
+		result.ResponseBody = string(payload)
+		result.Error = err.Error()
+		return result
+	}
+	if err := jsonHasExactKeys(got, test.ExactJSONKeys); err != nil {
 		result.ResponseBody = string(payload)
 		result.Error = err.Error()
 		return result
@@ -203,6 +213,25 @@ func jsonContains(got any, want any) error {
 		}
 		return nil
 	}
+}
+
+func jsonHasExactKeys(got any, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	gotMap, ok := normalizeJSONValue(got).(map[string]any)
+	if !ok {
+		return fmt.Errorf("JSON type mismatch: got %T, want object", got)
+	}
+	if len(gotMap) != len(keys) {
+		return fmt.Errorf("JSON object has %d keys, want %d", len(gotMap), len(keys))
+	}
+	for _, key := range keys {
+		if _, exists := gotMap[key]; !exists {
+			return fmt.Errorf("missing JSON key %q", key)
+		}
+	}
+	return nil
 }
 
 func normalizeJSONValue(value any) any {

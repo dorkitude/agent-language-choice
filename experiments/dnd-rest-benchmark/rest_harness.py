@@ -507,6 +507,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Distribute loot by immutable party vote and DM assignment",
     ),
+    LifecycleStage(
+        id="059-npc-agendas",
+        suite="059-npc-agendas",
+        spec_path=BENCH_DIR / "challenges" / "059-npc-agendas.md",
+        kind="maintenance",
+        description="Manage DM-private NPC agendas with player-visible status",
+    ),
 ]
 
 

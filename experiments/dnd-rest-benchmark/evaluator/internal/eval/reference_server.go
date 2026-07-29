@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2117,6 +2117,75 @@ func ReferenceHandler() http.Handler {
 			"status":                 loot.Status,
 		})
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/npcs", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			NPCID        string `json:"npc_id"`
+			Name         string `json:"name"`
+			Agenda       string `json:"agenda"`
+			PublicStatus string `json:"public_status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !nonEmptyString(q.NPCID) || !nonEmptyString(q.Name) || !nonEmptyString(q.Agenda) || !nonEmptyString(q.PublicStatus) {
+			http.Error(w, "invalid npc", http.StatusBadRequest)
+			return
+		}
+		if c.NPCs[q.NPCID] != nil {
+			http.Error(w, "duplicate npc", http.StatusConflict)
+			return
+		}
+		npc := &referencePlayNPC{NPCID: q.NPCID, Name: q.Name, Agenda: q.Agenda, PublicStatus: q.PublicStatus}
+		c.NPCs[npc.NPCID] = npc
+		writeJSON(w, http.StatusCreated, npc.dmJSON())
+	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/npcs/{npc_id}/agenda", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		npc := c.NPCs[r.PathValue("npc_id")]
+		if npc == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var q struct {
+			Agenda       string `json:"agenda"`
+			PublicStatus string `json:"public_status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !nonEmptyString(q.Agenda) || !nonEmptyString(q.PublicStatus) {
+			http.Error(w, "invalid npc agenda", http.StatusBadRequest)
+			return
+		}
+		npc.Agenda = q.Agenda
+		npc.PublicStatus = q.PublicStatus
+		writeJSON(w, http.StatusOK, npc.dmJSON())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/npcs/{npc_id}", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		npc := c.NPCs[r.PathValue("npc_id")]
+		if npc == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if a.Username == c.Owner {
+			writeJSON(w, http.StatusOK, npc.dmJSON())
+			return
+		}
+		writeJSON(w, http.StatusOK, npc.playerJSON())
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -2421,6 +2490,7 @@ type referencePlayCampaign struct {
 	Currency       map[string]int
 	TransferSeq    int
 	Loot           map[string]*referenceLoot
+	NPCs           map[string]*referencePlayNPC
 	DeathSaves     int
 	DeathStable    bool
 }
@@ -2432,6 +2502,27 @@ type referenceLoot struct {
 	Status               string
 	RecipientCharacterID string
 	Voters               map[string]string
+}
+
+type referencePlayNPC struct {
+	NPCID        string
+	Name         string
+	Agenda       string
+	PublicStatus string
+}
+
+func (npc *referencePlayNPC) dmJSON() map[string]any {
+	payload := npc.playerJSON()
+	payload["agenda"] = npc.Agenda
+	return payload
+}
+
+func (npc *referencePlayNPC) playerJSON() map[string]any {
+	return map[string]any{
+		"npc_id":        npc.NPCID,
+		"name":          npc.Name,
+		"public_status": npc.PublicStatus,
+	}
 }
 
 func (loot *referenceLoot) summaryJSON() map[string]any {
@@ -2522,6 +2613,10 @@ func concentrationJSON(campaign *referencePlayCampaign, characterID string) any 
 
 func validInventoryItem(itemID string) bool {
 	return itemID == "healing-potion" || itemID == "torch" || itemID == "leather-armor" || itemID == "ring-of-protection" || itemID == "amulet-of-health"
+}
+
+func nonEmptyString(value string) bool {
+	return strings.TrimSpace(value) != ""
 }
 
 type referenceEquipmentItem struct {

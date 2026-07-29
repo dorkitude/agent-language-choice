@@ -14,6 +14,12 @@ func playTest(id, name, method, path string, body map[string]any, headers map[st
 	return Test{ID: id, Name: name, Method: method, Path: path, Body: body, Headers: headers, WantStatus: wantStatus, WantJSON: wantJSON}
 }
 
+func playTestExactKeys(id, name, method, path string, body map[string]any, headers map[string]string, wantStatus int, wantJSON any, exactJSONKeys []string) Test {
+	test := playTest(id, name, method, path, body, headers, wantStatus, wantJSON)
+	test.ExactJSONKeys = exactJSONKeys
+	return test
+}
+
 func dmCampaignOwnershipSuite() Suite {
 	base := analyticsReportingSuite()
 	return Suite{ID: "017-dm-campaign-ownership", Name: "Campaign Play 017: DM Campaign Ownership", Tests: append(base.Tests,

@@ -7,14 +7,15 @@ type Suite struct {
 }
 
 type Test struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Method     string            `json:"method"`
-	Path       string            `json:"path"`
-	Body       map[string]any    `json:"body,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	WantStatus int               `json:"want_status"`
-	WantJSON   any               `json:"want_json,omitempty"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Method        string            `json:"method"`
+	Path          string            `json:"path"`
+	Body          map[string]any    `json:"body,omitempty"`
+	Headers       map[string]string `json:"headers,omitempty"`
+	WantStatus    int               `json:"want_status"`
+	WantJSON      any               `json:"want_json,omitempty"`
+	ExactJSONKeys []string          `json:"exact_json_keys,omitempty"`
 }
 
 func Suites() []Suite {
@@ -77,6 +78,7 @@ func Suites() []Suite {
 		consumablesSuite(),
 		currencyAndTradeSuite(),
 		lootDistributionSuite(),
+		npcAgendasSuite(),
 	}
 }
 
