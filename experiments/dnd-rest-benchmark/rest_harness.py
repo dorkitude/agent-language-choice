@@ -682,6 +682,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Export immutable, versioned campaign story snapshots",
     ),
+    LifecycleStage(
+        id="084-import-validation",
+        suite="084-import-validation",
+        spec_path=BENCH_DIR / "challenges" / "084-import-validation.md",
+        kind="maintenance",
+        description="Import only valid compatible campaign snapshots atomically",
+    ),
 ]
 
 

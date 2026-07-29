@@ -104,6 +104,7 @@ func Suites() []Suite {
 		concurrentTurnSafetySuite(),
 		transactionRecoverySuite(),
 		versionedExportSuite(),
+		importValidationSuite(),
 	}
 }
 

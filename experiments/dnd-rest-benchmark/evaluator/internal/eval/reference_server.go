@@ -1470,6 +1470,45 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, campaign.Exports[version-1].json())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/imports", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			Version int    `json:"version"`
+			Story   string `json:"story"`
+			Status  string `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Version != 1 || req.Story == "" || (req.Status != "lobby" && req.Status != "started") {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		imported := referenceCampaignImport{Version: req.Version, Story: req.Story, Status: req.Status}
+		campaign.Story = imported.Story
+		campaign.Status = imported.Status
+		campaign.ImportedState = &imported
+		writeJSON(w, http.StatusOK, imported.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/import-state", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		if campaign.ImportedState == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, campaign.ImportedState.json())
+	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)
 		if !ok {
@@ -4460,6 +4499,7 @@ type referencePlayCampaign struct {
 	SafeSubmissionIndex    map[string]bool
 	TransactionalTransfers []referenceTransactionalTransfer
 	Exports                []referenceCampaignExport
+	ImportedState          *referenceCampaignImport
 	DeathSaves             int
 	DeathStable            bool
 }
@@ -4568,6 +4608,16 @@ type referenceCampaignExport struct {
 
 func (export referenceCampaignExport) json() map[string]any {
 	return map[string]any{"version": export.Version, "story": export.Story, "status": export.Status}
+}
+
+type referenceCampaignImport struct {
+	Version int
+	Story   string
+	Status  string
+}
+
+func (imported referenceCampaignImport) json() map[string]any {
+	return map[string]any{"version": imported.Version, "story": imported.Story, "status": imported.Status}
 }
 
 type referenceNote struct {
