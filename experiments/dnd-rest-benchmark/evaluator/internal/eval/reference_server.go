@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1846,6 +1846,82 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, inventoryItemJSON(characterID, itemID, q.Quantity, held-q.Quantity))
 	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/characters/{character_id}/equipment/{slot}", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		slot := r.PathValue("slot")
+		var q struct {
+			ItemID string `json:"item_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || equipmentSlot(q.ItemID) != slot || !validEquipmentSlot(slot) || c.Inventory[characterID][q.ItemID] < 1 {
+			http.Error(w, "invalid equipment item", http.StatusBadRequest)
+			return
+		}
+		if c.Equipment[characterID] == nil {
+			c.Equipment[characterID] = map[string]referenceEquipmentItem{}
+		}
+		c.Equipment[characterID][slot] = referenceEquipmentItem{ItemID: q.ItemID, Attuned: c.AttunedItems[characterID][q.ItemID]}
+		writeJSON(w, http.StatusOK, equipmentItemJSON(characterID, slot, c.Equipment[characterID][slot]))
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/equipment/{slot}", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		slot := r.PathValue("slot")
+		if !c.hasCharacter(characterID) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if !validEquipmentSlot(slot) {
+			http.Error(w, "invalid equipment slot", http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, equipmentItemJSON(characterID, slot, c.Equipment[characterID][slot]))
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/characters/{character_id}/equipment/{slot}/attune", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "character owner required", http.StatusForbidden)
+			return
+		}
+		slot := r.PathValue("slot")
+		if !validEquipmentSlot(slot) {
+			http.Error(w, "invalid equipment slot", http.StatusBadRequest)
+			return
+		}
+		item := c.Equipment[characterID][slot]
+		if slot != "accessory" || !attunableEquipmentItem(item.ItemID) {
+			http.Error(w, "attunable accessory required", http.StatusBadRequest)
+			return
+		}
+		if equipmentAttunementCount(c, characterID) >= 1 {
+			http.Error(w, "attunement limit reached", http.StatusConflict)
+			return
+		}
+		item.Attuned = true
+		c.Equipment[characterID][slot] = item
+		if c.AttunedItems[characterID] == nil {
+			c.AttunedItems[characterID] = map[string]bool{}
+		}
+		c.AttunedItems[characterID][item.ItemID] = true
+		response := equipmentItemJSON(characterID, slot, item)
+		response["attunement_count"] = equipmentAttunementCount(c, characterID)
+		response["max_attunements"] = 1
+		writeJSON(w, http.StatusOK, response)
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -2145,6 +2221,8 @@ type referencePlayCampaign struct {
 	SpellCasts     map[string][]referenceSpellCast
 	Concentration  map[string]*referenceConcentration
 	Inventory      map[string]map[string]int
+	Equipment      map[string]map[string]referenceEquipmentItem
+	AttunedItems   map[string]map[string]bool
 	DeathSaves     int
 	DeathStable    bool
 }
@@ -2192,7 +2270,50 @@ func concentrationJSON(campaign *referencePlayCampaign, characterID string) any 
 }
 
 func validInventoryItem(itemID string) bool {
-	return itemID == "healing-potion" || itemID == "torch"
+	return itemID == "healing-potion" || itemID == "torch" || itemID == "leather-armor" || itemID == "ring-of-protection" || itemID == "amulet-of-health"
+}
+
+type referenceEquipmentItem struct {
+	ItemID  string
+	Attuned bool
+}
+
+func validEquipmentSlot(slot string) bool {
+	return slot == "armor" || slot == "accessory"
+}
+
+func equipmentSlot(itemID string) string {
+	switch itemID {
+	case "leather-armor":
+		return "armor"
+	case "ring-of-protection", "amulet-of-health":
+		return "accessory"
+	default:
+		return ""
+	}
+}
+
+func attunableEquipmentItem(itemID string) bool {
+	return itemID == "ring-of-protection" || itemID == "amulet-of-health"
+}
+
+func equipmentItemJSON(characterID string, slot string, item referenceEquipmentItem) map[string]any {
+	return map[string]any{
+		"character_id": characterID,
+		"slot":         slot,
+		"item_id":      item.ItemID,
+		"attuned":      item.Attuned,
+	}
+}
+
+func equipmentAttunementCount(campaign *referencePlayCampaign, characterID string) int {
+	count := 0
+	for _, attuned := range campaign.AttunedItems[characterID] {
+		if attuned {
+			count++
+		}
+	}
+	return count
 }
 
 func inventoryItemJSON(characterID string, itemID string, quantity int, totalQuantity int) map[string]any {

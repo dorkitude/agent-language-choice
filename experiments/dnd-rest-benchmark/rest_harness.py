@@ -479,6 +479,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add owner-controlled character inventory item stacks",
     ),
+    LifecycleStage(
+        id="055-equipment-and-attunement",
+        suite="055-equipment-and-attunement",
+        spec_path=BENCH_DIR / "challenges" / "055-equipment-and-attunement.md",
+        kind="maintenance",
+        description="Equip legal inventory items and enforce attunement limits",
+    ),
 ]
 
 
