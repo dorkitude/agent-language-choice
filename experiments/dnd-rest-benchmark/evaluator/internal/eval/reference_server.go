@@ -17,8 +17,19 @@ func ReferenceHandler() http.Handler {
 	items := map[string]map[string]any{}
 	campaigns := map[string]*referenceCampaign{}
 	playCampaigns := map[string]*referencePlayCampaign{}
+	maintenanceMode := false
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if maintenanceMode {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "maintenance", "schema_version": 2})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ready", "schema_version": 2})
 	})
 	mux.HandleFunc("POST /v1/dice/stats", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -1680,6 +1691,25 @@ func ReferenceHandler() http.Handler {
 			"projection_events":    campaign.MetricProjectionEvents,
 			"uptime_ticks":         1,
 		})
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/service-mode", func(w http.ResponseWriter, r *http.Request) {
+		campaign, actor, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if actor.Username != campaign.Owner || actor.Role != "dm" {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var req struct {
+			Maintenance bool `json:"maintenance"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		maintenanceMode = req.Maintenance
+		writeJSON(w, http.StatusOK, map[string]any{"maintenance": maintenanceMode})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/notes", func(w http.ResponseWriter, r *http.Request) {
 		campaign, actor, ok := playCampaign(w, r)

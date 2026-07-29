@@ -109,6 +109,7 @@ func Suites() []Suite {
 		paginationSearchSuite(),
 		rateLimitsSuite(),
 		serviceMetricsSuite(),
+		readinessHealthSuite(),
 	}
 }
 

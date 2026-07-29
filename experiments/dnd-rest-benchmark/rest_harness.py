@@ -717,6 +717,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Expose owner-only safe campaign service metrics",
     ),
+    LifecycleStage(
+        id="089-readiness-health",
+        suite="089-readiness-health",
+        spec_path=BENCH_DIR / "challenges" / "089-readiness-health.md",
+        kind="maintenance",
+        description="Add public liveness and readiness with DM-controlled maintenance mode",
+    ),
 ]
 
 
