@@ -90,6 +90,22 @@ subproject, such as `evaluations/001-01.json`, alongside copied evaluator,
 server, setup, and agent logs. If a stage fails, its next bug-fix prompt directs
 the agent to inspect that record rather than embedding a truncated failure log.
 
+For unattended progress, run the repository shortcut:
+
+```sh
+./make-progress
+```
+
+It resumes incomplete cells first, skips completed cells, starts new cells as
+workers become free, and defaults to ten concurrent lifecycle cells. Limit the
+models or omit targets/frameworks when desired:
+
+```sh
+./make-progress --workers 4 \
+  --exclude-models claude-opus-latest,claude-sonnet-latest \
+  --exclude-frameworks typescript,rails
+```
+
 A self-contained HTML findings report can be generated from embedded JSON with:
 
 ```sh

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import datetime as dt
 import hashlib
 import json
@@ -16,6 +17,7 @@ import sqlite3
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -34,6 +36,7 @@ CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
 INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit"}
+EVALUATOR_BUILD_LOCK = threading.Lock()
 
 LATEST = {
     "go": "1.26.5",
@@ -1700,7 +1703,9 @@ def wait_health(base_url: str, timeout: float) -> tuple[bool, str]:
 def build_evaluator() -> Path:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     binary = CACHE_DIR / "dndeval"
-    subprocess.run(["go", "build", "-o", str(binary), "."], cwd=EVALUATOR_DIR, env=benchmark_env(), check=True)
+    # Matrix workers share this one output path, so serialize the short build.
+    with EVALUATOR_BUILD_LOCK:
+        subprocess.run(["go", "build", "-o", str(binary), "."], cwd=EVALUATOR_DIR, env=benchmark_env(), check=True)
     return binary
 
 
@@ -1782,6 +1787,36 @@ def selected_models(value: str | None) -> list[dict[str, str]]:
     labels = split_csv(value, [m["label"] for m in MODELS])
     by_label = {m["label"]: m for m in MODELS}
     return [by_label[label] for label in labels]
+
+
+def progress_models(value: str | None, excluded_value: str | None) -> list[dict[str, str]]:
+    selected = selected_models(value)
+    excluded = set(split_csv(excluded_value, []))
+    known = {model["label"] for model in MODELS} | {model["model"] for model in MODELS}
+    unknown = sorted(excluded - known)
+    if unknown:
+        raise SystemExit(f"unknown model exclusion(s): {', '.join(unknown)}")
+    models = [model for model in selected if model["label"] not in excluded and model["model"] not in excluded]
+    if not models:
+        raise SystemExit("model exclusions leave no lifecycle cells to run")
+    return models
+
+
+def progress_targets(excluded_value: str | None) -> list[str]:
+    all_targets = targets()
+    excluded = set(split_csv(excluded_value, []))
+    known = set(all_targets) | {target.language for target in all_targets.values()} | {target.framework for target in all_targets.values()}
+    unknown = sorted(excluded - known)
+    if unknown:
+        raise SystemExit(f"unknown framework/target exclusion(s): {', '.join(unknown)}")
+    selected = [
+        target_id
+        for target_id, target in all_targets.items()
+        if target_id not in excluded and target.language not in excluded and target.framework not in excluded
+    ]
+    if not selected:
+        raise SystemExit("framework exclusions leave no lifecycle cells to run")
+    return selected
 
 
 def run_one(args: argparse.Namespace) -> int:
@@ -2069,7 +2104,8 @@ def persist_lifecycle_state(run_dir: Path, final: dict[str, Any]) -> None:
     """Make completed shots/stages queryable immediately, even if a run stops."""
     result_path = run_dir / "lifecycle-result.json"
     result_path.write_text(json.dumps(final, indent=2) + "\n")
-    with sqlite3.connect(EXPERIMENT_DB) as conn:
+    with sqlite3.connect(EXPERIMENT_DB, timeout=30) as conn:
+        conn.execute("PRAGMA busy_timeout = 30000")
         init_state_db(conn)
         conn.execute("PRAGMA foreign_keys = ON")
         upsert_run(conn, result_path, "lifecycle")
@@ -2107,23 +2143,96 @@ def find_resumable_lifecycle_run(
 def lifecycle_matrix(args: argparse.Namespace) -> int:
     target_ids = split_csv(args.targets, list(targets().keys()))
     model_specs = selected_models(args.models)
-    failures = 0
     pairs = [(t, m) for t in target_ids for m in model_specs]
+    stages = selected_stages(args.stages)
+
+    if args.resume and getattr(args, "prioritize_resumable", False):
+        pairs.sort(
+            key=lambda item: 0
+            if find_resumable_lifecycle_run(item[1]["provider"], item[1]["model"], item[0], stages) is not None
+            else 1
+        )
+
+    if args.workers < 1:
+        raise SystemExit("--workers must be at least 1")
+
+    if args.workers == 1:
+        failures = 0
+        for index, (target_id, model_spec) in enumerate(pairs, start=1):
+            if args.skip_existing and completed_lifecycle_exists(model_spec["provider"], model_spec["model"], target_id, args.stages):
+                print(f"[{index}/{len(pairs)}] skip existing lifecycle {model_spec['label']} {target_id}", flush=True)
+                continue
+            print(f"[{index}/{len(pairs)}] lifecycle {model_spec['label']} {target_id}", flush=True)
+            run_args = argparse.Namespace(**vars(args))
+            run_args.target = target_id
+            run_args.provider = model_spec["provider"]
+            run_args.model = model_spec["model"]
+            if args.resume and find_resumable_lifecycle_run(model_spec["provider"], model_spec["model"], target_id, stages) is None:
+                run_args.resume = False
+                print(f"[{index}/{len(pairs)}] no incomplete lifecycle; starting new {model_spec['label']} {target_id}", flush=True)
+            code = run_lifecycle_one(run_args)
+            if code:
+                failures += 1
+                if not args.continue_on_fail:
+                    return code
+        return 1 if failures else 0
+
+    if not args.continue_on_fail:
+        raise SystemExit("--workers greater than 1 requires --continue-on-fail")
+
+    runnable: list[tuple[int, str, dict[str, str]]] = []
     for index, (target_id, model_spec) in enumerate(pairs, start=1):
         if args.skip_existing and completed_lifecycle_exists(model_spec["provider"], model_spec["model"], target_id, args.stages):
             print(f"[{index}/{len(pairs)}] skip existing lifecycle {model_spec['label']} {target_id}", flush=True)
             continue
+        runnable.append((index, target_id, model_spec))
+
+    print(
+        f"[matrix] launching {len(runnable)} lifecycle cells with {args.workers} workers "
+        f"({len(pairs) - len(runnable)} skipped)",
+        flush=True,
+    )
+
+    def run_cell(index: int, target_id: str, model_spec: dict[str, str]) -> int:
         print(f"[{index}/{len(pairs)}] lifecycle {model_spec['label']} {target_id}", flush=True)
         run_args = argparse.Namespace(**vars(args))
         run_args.target = target_id
         run_args.provider = model_spec["provider"]
         run_args.model = model_spec["model"]
-        code = run_lifecycle_one(run_args)
-        if code:
-            failures += 1
-            if not args.continue_on_fail:
-                return code
+        if args.resume and find_resumable_lifecycle_run(model_spec["provider"], model_spec["model"], target_id, stages) is None:
+            run_args.resume = False
+            print(f"[{index}/{len(pairs)}] no incomplete lifecycle; starting new {model_spec['label']} {target_id}", flush=True)
+        try:
+            return run_lifecycle_one(run_args)
+        except SystemExit as error:
+            print(f"[{index}/{len(pairs)}] lifecycle setup failed: {error}", flush=True)
+            return 1
+
+    failures = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = [executor.submit(run_cell, index, target_id, model_spec) for index, target_id, model_spec in runnable]
+        for future in concurrent.futures.as_completed(futures):
+            failures += int(future.result() != 0)
     return 1 if failures else 0
+
+
+def make_progress(args: argparse.Namespace) -> int:
+    """Continuously advance unfinished lifecycle cells, bounded by a worker pool."""
+    models = progress_models(args.models, args.exclude_models)
+    target_ids = progress_targets(args.exclude_frameworks)
+    run_args = argparse.Namespace(**vars(args))
+    run_args.models = ",".join(model["label"] for model in models)
+    run_args.targets = ",".join(target_ids)
+    run_args.resume = True
+    run_args.skip_existing = True
+    run_args.continue_on_fail = True
+    run_args.prioritize_resumable = True
+    print(
+        f"[make-progress] models={run_args.models} targets={run_args.targets} "
+        f"workers={run_args.workers} max_fix_shots={run_args.max_fix_shots}",
+        flush=True,
+    )
+    return lifecycle_matrix(run_args)
 
 
 def completed_lifecycle_exists(provider: str, model: str, target: str, stages_value: str | None) -> bool:
@@ -2763,10 +2872,38 @@ def main(argv: list[str]) -> int:
     lifecycle_matrix_parser.add_argument("--targets")
     lifecycle_matrix_parser.add_argument("--stages")
     lifecycle_matrix_parser.add_argument("--max-fix-shots", type=int, default=1)
-    lifecycle_matrix_parser.add_argument("--resume", action="store_true", help="Resume matching incomplete lifecycle cells")
+    lifecycle_matrix_parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Concurrent lifecycle cells; stages remain serial within each cell (default: 1)",
+    )
+    lifecycle_matrix_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume matching incomplete cells and start new cells for the rest",
+    )
     lifecycle_matrix_parser.add_argument("--continue-on-fail", action="store_true")
     lifecycle_matrix_parser.add_argument("--skip-existing", action="store_true")
     lifecycle_matrix_parser.set_defaults(func=lifecycle_matrix)
+
+    progress_parser = sub.add_parser(
+        "make-progress",
+        parents=[common],
+        help="Resume unfinished lifecycle cells and start the next unfinished cells automatically",
+    )
+    progress_parser.add_argument("--models", help="Optional comma-separated model allowlist")
+    progress_parser.add_argument("--exclude-models", help="Comma-separated model labels or model IDs to skip")
+    progress_parser.add_argument(
+        "--exclude-frameworks",
+        "--exclude-targets",
+        dest="exclude_frameworks",
+        help="Comma-separated target IDs, languages, or framework names to skip",
+    )
+    progress_parser.add_argument("--stages", help="Optional comma-separated stage allowlist")
+    progress_parser.add_argument("--workers", type=int, default=10, help="Concurrent lifecycle cells (default: 10)")
+    progress_parser.add_argument("--max-fix-shots", type=int, default=5, help="Bug-fix retries after a failed evaluation (default: 5)")
+    progress_parser.set_defaults(func=make_progress)
 
     recheck_parser = sub.add_parser("recheck", parents=[common])
     recheck_parser.set_defaults(func=recheck)

@@ -137,6 +137,18 @@ python3 experiments/dnd-rest-benchmark/rest_harness.py run-lifecycle-matrix \
   --server-timeout 60
 ```
 
+Keep the matrix moving unattended with the repository-level shortcut:
+
+```sh
+./make-progress
+```
+
+It defaults to ten workers, resumes incomplete lifecycle cells before starting
+new ones, and skips completed cells. Use `--workers N`, `--models LABELS`,
+`--exclude-models LABELS`, and `--exclude-frameworks VALUES` to control the
+queue; framework exclusions accept target IDs, language names, or framework
+names.
+
 ## First Full Matrix
 
 The first full 5 model x 10 language/framework run is summarized in
