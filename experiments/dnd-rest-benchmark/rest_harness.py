@@ -514,6 +514,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Manage DM-private NPC agendas with player-visible status",
     ),
+    LifecycleStage(
+        id="060-faction-reputation",
+        suite="060-faction-reputation",
+        spec_path=BENCH_DIR / "challenges" / "060-faction-reputation.md",
+        kind="maintenance",
+        description="Add bounded faction reputation and role-filtered history",
+    ),
 ]
 
 

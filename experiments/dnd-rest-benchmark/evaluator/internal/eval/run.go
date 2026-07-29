@@ -141,7 +141,18 @@ func runTest(ctx context.Context, client *http.Client, baseURL string, test Test
 		result.Error = fmt.Sprintf("invalid JSON response: %v", err)
 		return result
 	}
-	if err := jsonContains(got, normalizeJSONValue(test.WantJSON)); err != nil {
+	got = normalizeJSONValue(got)
+	want := normalizeJSONValue(test.WantJSON)
+	if test.ExactJSON {
+		if !reflect.DeepEqual(got, want) {
+			result.ResponseBody = string(payload)
+			result.Error = fmt.Sprintf("JSON %v, want exact %v", got, want)
+			return result
+		}
+		result.Passed = true
+		return result
+	}
+	if err := jsonContains(got, want); err != nil {
 		result.ResponseBody = string(payload)
 		result.Error = err.Error()
 		return result

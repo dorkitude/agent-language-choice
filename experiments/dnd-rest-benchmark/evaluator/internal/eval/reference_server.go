@@ -807,7 +807,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}, SpellSlots: map[string]int{}, SpellCasts: map[string][]referenceSpellCast{}, Concentration: map[string]*referenceConcentration{}, Inventory: map[string]map[string]int{}, Equipment: map[string]map[string]referenceEquipmentItem{}, AttunedItems: map[string]map[string]bool{}, Currency: map[string]int{}, Loot: map[string]*referenceLoot{}, NPCs: map[string]*referencePlayNPC{}, Factions: map[string]*referencePlayFaction{}, Reputation: map[string]map[string]int{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -2186,6 +2186,87 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, npc.playerJSON())
 	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/factions", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		var q struct {
+			FactionID string `json:"faction_id"`
+			Name      string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !nonEmptyString(q.FactionID) || !nonEmptyString(q.Name) {
+			http.Error(w, "invalid faction", http.StatusBadRequest)
+			return
+		}
+		if c.Factions[q.FactionID] != nil {
+			http.Error(w, "duplicate faction", http.StatusConflict)
+			return
+		}
+		faction := &referencePlayFaction{FactionID: q.FactionID, Name: q.Name}
+		c.Factions[faction.FactionID] = faction
+		writeJSON(w, http.StatusCreated, faction.json())
+	})
+	mux.HandleFunc("POST /v1/play/campaigns/{id}/factions/{faction_id}/reputation", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		if a.Username != c.Owner {
+			http.Error(w, "DM role required", http.StatusForbidden)
+			return
+		}
+		factionID := r.PathValue("faction_id")
+		faction := c.Factions[factionID]
+		if faction == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		var q struct {
+			CharacterID string `json:"character_id"`
+			Delta       int    `json:"delta"`
+			Reason      string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&q); err != nil || !c.hasCharacter(q.CharacterID) || q.Delta == 0 || q.Delta < -25 || q.Delta > 25 || !nonEmptyString(q.Reason) {
+			http.Error(w, "invalid reputation change", http.StatusBadRequest)
+			return
+		}
+		if c.Reputation[factionID] == nil {
+			c.Reputation[factionID] = map[string]int{}
+		}
+		total := boundedReputation(c.Reputation[factionID][q.CharacterID] + q.Delta)
+		c.Reputation[factionID][q.CharacterID] = total
+		entry := referenceReputationEntry{FactionID: factionID, CharacterID: q.CharacterID, Reputation: total, Delta: q.Delta, Reason: q.Reason}
+		faction.History = append(faction.History, entry)
+		writeJSON(w, http.StatusCreated, entry.json())
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/factions/{faction_id}/reputation", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		factionID := r.PathValue("faction_id")
+		faction := c.Factions[factionID]
+		if faction == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		entries := make([]any, 0, len(faction.History))
+		for _, entry := range faction.History {
+			if a.Username != c.Owner {
+				member := c.Members[a.Username]
+				if entry.CharacterID != member.CharacterID {
+					continue
+				}
+			}
+			entries = append(entries, entry.json())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"faction_id": factionID, "entries": entries})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -2491,6 +2572,8 @@ type referencePlayCampaign struct {
 	TransferSeq    int
 	Loot           map[string]*referenceLoot
 	NPCs           map[string]*referencePlayNPC
+	Factions       map[string]*referencePlayFaction
+	Reputation     map[string]map[string]int
 	DeathSaves     int
 	DeathStable    bool
 }
@@ -2509,6 +2592,37 @@ type referencePlayNPC struct {
 	Name         string
 	Agenda       string
 	PublicStatus string
+}
+
+type referencePlayFaction struct {
+	FactionID string
+	Name      string
+	History   []referenceReputationEntry
+}
+
+type referenceReputationEntry struct {
+	FactionID   string
+	CharacterID string
+	Reputation  int
+	Delta       int
+	Reason      string
+}
+
+func (faction *referencePlayFaction) json() map[string]any {
+	return map[string]any{
+		"faction_id": faction.FactionID,
+		"name":       faction.Name,
+	}
+}
+
+func (entry referenceReputationEntry) json() map[string]any {
+	return map[string]any{
+		"faction_id":   entry.FactionID,
+		"character_id": entry.CharacterID,
+		"reputation":   entry.Reputation,
+		"delta":        entry.Delta,
+		"reason":       entry.Reason,
+	}
 }
 
 func (npc *referencePlayNPC) dmJSON() map[string]any {
@@ -2617,6 +2731,16 @@ func validInventoryItem(itemID string) bool {
 
 func nonEmptyString(value string) bool {
 	return strings.TrimSpace(value) != ""
+}
+
+func boundedReputation(value int) int {
+	if value < -100 {
+		return -100
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
 }
 
 type referenceEquipmentItem struct {

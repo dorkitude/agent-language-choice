@@ -16,6 +16,7 @@ type Test struct {
 	WantStatus    int               `json:"want_status"`
 	WantJSON      any               `json:"want_json,omitempty"`
 	ExactJSONKeys []string          `json:"exact_json_keys,omitempty"`
+	ExactJSON     bool              `json:"exact_json,omitempty"`
 }
 
 func Suites() []Suite {
@@ -79,6 +80,7 @@ func Suites() []Suite {
 		currencyAndTradeSuite(),
 		lootDistributionSuite(),
 		npcAgendasSuite(),
+		factionReputationSuite(),
 	}
 }
 
