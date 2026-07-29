@@ -783,7 +783,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "duplicate campaign", http.StatusConflict)
 			return
 		}
-		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}}
+		campaign := &referencePlayCampaign{ID: req.ID, Name: req.Name, Owner: actor.Username, MaxPlayers: req.MaxPlayers, Status: "lobby", Members: map[string]referencePlayMember{}, Scenes: map[string]string{}, SceneNames: map[string]string{}, Locations: map[string]string{}, Edges: map[string]bool{}, CharacterOwner: map[string]string{}, Spells: map[string][]string{}, PreparedSpells: map[string][]string{}}
 		playCampaigns[req.ID] = campaign
 		writeJSON(w, http.StatusCreated, map[string]any{"id": campaign.ID, "name": campaign.Name, "owner": campaign.Owner, "status": campaign.Status, "max_players": campaign.MaxPlayers})
 	})
@@ -1568,6 +1568,57 @@ func ReferenceHandler() http.Handler {
 		}
 		writeJSON(w, 200, map[string]any{"spells": c.Spells[id]})
 	})
+	mux.HandleFunc("PUT /v1/play/campaigns/{id}/characters/{character_id}/prepared-spells", func(w http.ResponseWriter, r *http.Request) {
+		c, a, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		if c.CharacterOwner[characterID] != a.Username {
+			http.Error(w, "not owner", 403)
+			return
+		}
+		member, exists := c.Members[a.Username]
+		if !exists || member.Class != "wizard" {
+			http.Error(w, "not a spellcaster", 400)
+			return
+		}
+		var q struct {
+			SpellIDs []string `json:"spell_ids"`
+		}
+		if json.NewDecoder(r.Body).Decode(&q) != nil {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		known := map[string]bool{}
+		for _, spell := range c.Spells[characterID] {
+			known[spell] = true
+		}
+		if len(q.SpellIDs) > 1 {
+			http.Error(w, "too many spells", 400)
+			return
+		}
+		for _, spell := range q.SpellIDs {
+			if !known[spell] {
+				http.Error(w, "unknown spell", 400)
+				return
+			}
+		}
+		c.PreparedSpells[characterID] = q.SpellIDs
+		writeJSON(w, 200, map[string]any{"character_id": characterID, "prepared_spells": q.SpellIDs, "max_prepared": 1})
+	})
+	mux.HandleFunc("GET /v1/play/campaigns/{id}/characters/{character_id}/prepared-spells", func(w http.ResponseWriter, r *http.Request) {
+		c, _, ok := playCampaign(w, r)
+		if !ok {
+			return
+		}
+		characterID := r.PathValue("character_id")
+		prepared := c.PreparedSpells[characterID]
+		if prepared == nil {
+			prepared = []string{}
+		}
+		writeJSON(w, 200, map[string]any{"character_id": characterID, "prepared_spells": prepared, "max_prepared": 1})
+	})
 	// Compatibility routes for the richer 031-050 contracts. They remain
 	// black-box HTTP endpoints and use the same authenticated campaign state.
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter", func(w http.ResponseWriter, r *http.Request) {
@@ -1862,6 +1913,7 @@ type referencePlayCampaign struct {
 	Encounter      *referencePlayEncounter
 	CharacterOwner map[string]string
 	Spells         map[string][]string
+	PreparedSpells map[string][]string
 	DeathSaves     int
 	DeathStable    bool
 }

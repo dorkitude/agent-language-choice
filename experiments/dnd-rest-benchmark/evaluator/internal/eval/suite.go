@@ -69,6 +69,7 @@ func Suites() []Suite {
 		levelProgressionSuite(),
 		skillsAndProficienciesSuite(),
 		spellbookStateSuite(),
+		spellPreparationSuite(),
 	}
 }
 

@@ -451,6 +451,13 @@ LIFECYCLE_STAGES = [
         kind="maintenance",
         description="Add class-validated known spellbook state",
     ),
+    LifecycleStage(
+        id="051-spell-preparation",
+        suite="051-spell-preparation",
+        spec_path=BENCH_DIR / "challenges" / "051-spell-preparation.md",
+        kind="maintenance",
+        description="Add owner-controlled prepared spells for spellcasting characters",
+    ),
 ]
 
 
