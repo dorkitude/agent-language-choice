@@ -37,9 +37,6 @@ DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
 INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended"}
 EVALUATOR_BUILD_LOCK = threading.Lock()
-FIREWORKS_API_KEY_LOCK = threading.Lock()
-FIREWORKS_API_KEY_CACHE: str | None = None
-FIREWORKS_API_KEY_OP_REFERENCE = "op://Employee/fireworks-dorkitude-endgame-research/credential"
 
 LATEST = {
     "go": "1.26.5",
@@ -1299,29 +1296,7 @@ def benchmark_env() -> dict[str, str]:
 
 
 def resolve_fireworks_api_key() -> str | None:
-    explicit_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
-    if explicit_key:
-        return explicit_key
-
-    global FIREWORKS_API_KEY_CACHE
-    with FIREWORKS_API_KEY_LOCK:
-        if FIREWORKS_API_KEY_CACHE:
-            return FIREWORKS_API_KEY_CACHE
-        reference = os.environ.get("FIREWORKS_API_KEY_OP_REFERENCE", FIREWORKS_API_KEY_OP_REFERENCE)
-        try:
-            result = subprocess.run(
-                ["op", "read", reference],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return None
-        key = result.stdout.strip() if result.returncode == 0 else ""
-        if key:
-            FIREWORKS_API_KEY_CACHE = key
-        return key or None
+    return os.environ.get("FIREWORKS_API_KEY", "").strip() or None
 
 
 def slug(value: str) -> str:
