@@ -35,7 +35,7 @@ LIFECYCLE_RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "lifecycle-runs"
 CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
-INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit"}
+INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended"}
 EVALUATOR_BUILD_LOCK = threading.Lock()
 
 LATEST = {
@@ -1464,6 +1464,12 @@ def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: i
         return "timeout"
     text = f"{stdout}\n{stderr}".lower()
     if (
+        "account endgame is suspended" in text
+        or "monthly spending limit" in text
+        or "failure to pay past invoices" in text
+    ):
+        return "billing_suspended"
+    if (
         "session limit" in text
         or "usage limit" in text
         or "usage credits" in text
@@ -2030,6 +2036,13 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
                 f"({shot['evaluation_record']})",
                 flush=True,
             )
+            if shot_exit_class(shot) in INFRA_EXIT_CLASSES:
+                print(
+                    f"[{progress_name}] BLOCKED by agent infrastructure: "
+                    f"{shot_exit_class(shot)}; not retrying this cell",
+                    flush=True,
+                )
+                break
             previous_failure = shot
             previous_failure_record = str(shot["evaluation_record"])
 
