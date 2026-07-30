@@ -2157,11 +2157,22 @@ def lifecycle_matrix(args: argparse.Namespace) -> int:
     stages = selected_stages(args.stages)
 
     if args.resume and getattr(args, "prioritize_resumable", False):
-        pairs.sort(
-            key=lambda item: 0
-            if find_resumable_lifecycle_run(item[1]["provider"], item[1]["model"], item[0], stages) is not None
-            else 1
-        )
+        is_resumable = lambda item: find_resumable_lifecycle_run(
+            item[1]["provider"], item[1]["model"], item[0], stages
+        ) is not None
+        if getattr(args, "round_robin_models", False):
+            model_queues = []
+            for model_spec in model_specs:
+                queue = [(target_id, model_spec) for target_id in target_ids]
+                queue.sort(key=lambda item: 0 if is_resumable(item) else 1)
+                model_queues.append(queue)
+            pairs = []
+            while any(model_queues):
+                for queue in model_queues:
+                    if queue:
+                        pairs.append(queue.pop(0))
+        else:
+            pairs.sort(key=lambda item: 0 if is_resumable(item) else 1)
 
     if args.workers < 1:
         raise SystemExit("--workers must be at least 1")
@@ -2237,9 +2248,10 @@ def make_progress(args: argparse.Namespace) -> int:
     run_args.skip_existing = True
     run_args.continue_on_fail = True
     run_args.prioritize_resumable = True
+    run_args.round_robin_models = True
     print(
         f"[make-progress] models={run_args.models} targets={run_args.targets} "
-        f"workers={run_args.workers} max_fix_shots={run_args.max_fix_shots}",
+        f"workers={run_args.workers} max_fix_shots={run_args.max_fix_shots} policy=model-round-robin",
         flush=True,
     )
     return lifecycle_matrix(run_args)
