@@ -10,7 +10,7 @@ combatant may call it. Return 201 with the action event:
 
 ```json
 {
-  "sequence": 10,
+  "sequence": 9,
   "kind": "combat_action",
   "actor": "player-a",
   "type": "attack",

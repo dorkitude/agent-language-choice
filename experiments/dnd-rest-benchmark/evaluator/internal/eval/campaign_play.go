@@ -113,22 +113,8 @@ func turnTimeoutSuite() Suite {
 	)}
 }
 
-func partyChatSuite() Suite {
-	base := turnTimeoutSuite()
-	return Suite{ID: "028-party-chat", Name: "Campaign Play 028: Party Chat", Tests: append(base.Tests,
-		playTest("play-party-chat", "Party member posts chat without advancing turn", "POST", "/v1/play/campaigns/play-1/messages", map[string]any{"text": "I can tend the wound after we search."}, map[string]string{"Authorization": playerBAuth}, 201, map[string]any{"sequence": 5, "kind": "chat", "actor": "player-b", "text": "I can tend the wound after we search.", "current_actor": "player-b"}),
-	)}
-}
-
-func partyObservationSuite() Suite {
-	base := partyChatSuite()
-	return Suite{ID: "029-party-observations", Name: "Campaign Play 029: Party Observations", Tests: append(base.Tests,
-		playTest("play-party-observation", "Party member records an attributed observation", "POST", "/v1/play/campaigns/play-1/observations", map[string]any{"type": "world", "text": "The arrow bears goblin fletching."}, map[string]string{"Authorization": playerBAuth}, 201, map[string]any{"sequence": 6, "kind": "observation", "actor": "player-b", "type": "world", "text": "The arrow bears goblin fletching."}),
-	)}
-}
-
 func campaignDocumentSuite() Suite {
-	base := partyObservationSuite()
+	base := turnTimeoutSuite()
 	return Suite{ID: "030-campaign-document", Name: "Campaign Play 030: Campaign Document", Tests: append(base.Tests,
 		playTest("play-document-player-update-forbidden", "Player cannot update DM campaign document", "PUT", "/v1/play/campaigns/play-1/document", map[string]any{"story": "Nope", "dm_notes": "Nope"}, map[string]string{"Authorization": playerBAuth}, 403, nil),
 		playTest("play-document-dm-update", "DM updates public story and private notes", "PUT", "/v1/play/campaigns/play-1/document", map[string]any{"story": "Aria found a goblin arrow on the Ashen Road.", "dm_notes": "The goblins watch from the ridge."}, map[string]string{"Authorization": dmAuth}, 200, map[string]any{"story": "Aria found a goblin arrow on the Ashen Road.", "dm_notes": "The goblins watch from the ridge."}),

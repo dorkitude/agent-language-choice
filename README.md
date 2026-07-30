@@ -62,16 +62,17 @@ after the 2026-07-12/13 Claude reruns.
 | Research design status | Citation verification, qualitative target scoring, 24-stage roadmap, and venue plan complete | [`RESEARCH-DESIGN.md`](RESEARCH-DESIGN.md) |
 
 The default D&D REST roadmap now has 100 total cumulative stages: one initial
-creative build followed by 99 maintenance inheritances. The stage-100 capstone
-proves an authenticated DM/player campaign lifecycle through turns, combat,
+creative build, 96 feature-maintenance inheritances, and three dedicated
+refactoring checkpoints (turns 10, 30, and 50). The stage-100 capstone proves
+an authenticated DM/player campaign lifecycle through turns, combat,
 private-state redaction, versioned export, deterministic replay, and a
 load-safe event feed.
 
 ## Full 100-Stage Matrix
 
-The next matrix is three-dimensional: **5 models × 15 language/framework
-targets × 100 tickets = 7,500 ticket-cells**. Operationally, it consists of
-75 independent model×target lifecycle cells. A lifecycle cell owns one evolving
+The next matrix is three-dimensional: **5 models × 16 language/framework
+targets × 100 tickets = 8,000 ticket-cells**. Operationally, it consists of
+80 independent model×target lifecycle cells. A lifecycle cell owns one evolving
 subproject and advances strictly in order from stage 001 through 100; a stage is
 evaluated over external REST before the next stage is attempted.
 
@@ -96,9 +97,12 @@ For unattended progress, run the repository shortcut:
 ./make-progress
 ```
 
-It resumes incomplete cells first, skips completed cells, starts new cells as
-workers become free, and defaults to ten concurrent lifecycle cells. Limit the
-models or omit targets/frameworks when desired:
+It skips completed cells and defaults to ten concurrent lifecycle cells. Its
+default queue completes the Kimi batch before Sonnet, then follows with the
+remaining declared model batches. The first Kimi wave is Go, Next.js, Rails,
+PHP stdlib, Flask, Django, Rust, TypeScript/Node, and plain JavaScript/Node;
+within each batch, a cell resumes from its saved checkpoint when one exists.
+Limit the models or omit targets/frameworks when desired:
 
 ```sh
 ./make-progress --workers 4 \

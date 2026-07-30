@@ -1,7 +1,7 @@
 package eval
 
 func calendarAndWeatherSuite() Suite {
-	base := rumorsSuite()
+	base := worldEventsSuite()
 	return Suite{ID: "068-calendar-and-weather", Name: "Campaign Play 068: Calendar and Weather", Tests: append(base.Tests,
 		playTest("play-calendar-get-uninitialized", "Uninitialized calendar returns 404", "GET", "/v1/play/campaigns/play-1/calendar", nil, map[string]string{"Authorization": playerAAuth}, 404, nil),
 		playTest("play-calendar-advance-uninitialized", "Uninitialized calendar cannot advance", "POST", "/v1/play/campaigns/play-1/calendar/advance", map[string]any{"days": 1}, map[string]string{"Authorization": dmAuth}, 404, nil),

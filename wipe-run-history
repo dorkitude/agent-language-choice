@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=$(cd "$(dirname "$0")" && pwd)
+harness_path="$repo_dir/experiments/dnd-rest-benchmark/rest_harness.py"
+results_dir="$repo_dir/results/dnd-rest-benchmark"
+
+active_pids=()
+
+add_active_pid() {
+  local pid="$1"
+  local command_line
+  local known_pid
+  [[ "$pid" =~ ^[0-9]+$ ]] || return
+  command_line=$(ps -p "$pid" -o command= 2>/dev/null || true)
+  [[ -n "$command_line" && "$command_line" != *"pgrep -f"* && "$command_line" != *"lsof "* ]] || return
+  for known_pid in "${active_pids[@]}"; do
+    [[ "$known_pid" == "$pid" ]] && return
+  done
+  active_pids+=("$pid")
+}
+
+# Command-line matching finds the harness itself.  lsof is also required here:
+# an interrupted harness can leave a plain `node server.js` or `python server.py`
+# process whose argv contains neither the harness nor the results path but whose
+# working directory or open files remain inside a generated run directory.
+if command -v lsof >/dev/null 2>&1; then
+  for generated_dir in "$results_dir/lifecycle-runs" "$results_dir/runs"; do
+    [[ -d "$generated_dir" ]] || continue
+    while IFS= read -r pid; do
+      add_active_pid "$pid"
+    done < <(lsof -t +D "$generated_dir" 2>/dev/null || true)
+  done
+fi
+
+if command -v pgrep >/dev/null 2>&1; then
+  for pattern in "$harness_path" "$results_dir/lifecycle-runs" "$results_dir/runs"; do
+    while IFS= read -r pid; do
+      add_active_pid "$pid"
+    done < <(pgrep -f "$pattern" || true)
+  done
+fi
+
+if (( ${#active_pids[@]} > 0 )); then
+  echo "[wipe-run-history] benchmark processes are still using generated run directories; refusing to wipe history" >&2
+  echo "[wipe-run-history] stop these processes and run the command again:" >&2
+  for pid in "${active_pids[@]}"; do
+    ps -p "$pid" -o pid= -o ppid= -o etime= -o command= >&2 2>/dev/null || true
+  done
+  exit 1
+fi
+
+paths=(
+  "$results_dir/runs"
+  "$results_dir/lifecycle-runs"
+  "$results_dir/.lifecycle-locks"
+  "$results_dir/experiment-state.sqlite3"
+  "$results_dir/experiment-state.sqlite3-shm"
+  "$results_dir/experiment-state.sqlite3-wal"
+  "$results_dir/dashboard-data.json"
+  "$results_dir/findings-data.json"
+  "$results_dir/dnd-rest-findings.html"
+)
+
+deleted=0
+for path in "${paths[@]}"; do
+  if [[ -e "$path" ]]; then
+    rm -rf "$path"
+    deleted=$((deleted + 1))
+  fi
+done
+
+echo "[wipe-run-history] deleted $deleted generated benchmark item(s)"

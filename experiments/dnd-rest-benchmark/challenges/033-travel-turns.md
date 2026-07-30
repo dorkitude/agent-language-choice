@@ -10,7 +10,7 @@ event:
 
 ```json
 {
-  "sequence": 8,
+  "sequence": 6,
   "kind": "travel",
   "actor": "player-b",
   "destination_id": "cave",

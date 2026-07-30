@@ -24,15 +24,15 @@ func locationGraphSuite() Suite {
 func travelTurnsSuite() Suite {
 	base := locationGraphSuite()
 	return Suite{ID: "033-travel-turns", Name: "Campaign Play 033: Travel Turns", Tests: append(base.Tests,
-		playTest("play-travel-turn", "Active player travels along a valid edge", "POST", "/v1/play/campaigns/play-1/turn/travel", map[string]any{"destination_id": "cave"}, map[string]string{"Authorization": playerBAuth}, 201, map[string]any{"sequence": 8, "kind": "travel", "actor": "player-b", "destination_id": "cave", "travel_turns": 1, "next_actor": "dm"}),
+		playTest("play-travel-turn", "Active player travels along a valid edge", "POST", "/v1/play/campaigns/play-1/turn/travel", map[string]any{"destination_id": "cave"}, map[string]string{"Authorization": playerBAuth}, 201, map[string]any{"sequence": 6, "kind": "travel", "actor": "player-b", "destination_id": "cave", "travel_turns": 1, "next_actor": "dm"}),
 	)}
 }
 
 func restTurnsSuite() Suite {
 	base := travelTurnsSuite()
 	return Suite{ID: "034-rest-turns", Name: "Campaign Play 034: Rest Turns", Tests: append(base.Tests,
-		playTest("play-dm-advance-to-rest", "DM advances queue to next player", "POST", "/v1/play/campaigns/play-1/resolutions", map[string]any{"text": "The road narrows as you approach the cave."}, map[string]string{"Authorization": dmAuth}, 201, map[string]any{"sequence": 9, "kind": "resolution", "actor": "dm", "next_actor": "player-a", "turn_number": 3}),
-		playTest("play-rest-turn", "Active player takes a long rest", "POST", "/v1/play/campaigns/play-1/turn/rest", map[string]any{"type": "long"}, map[string]string{"Authorization": playerAAuth}, 201, map[string]any{"sequence": 10, "kind": "rest", "actor": "player-a", "type": "long", "hp_current": 20, "hp_max": 20, "next_actor": "dm"}),
+		playTest("play-dm-advance-to-rest", "DM advances queue to next player", "POST", "/v1/play/campaigns/play-1/resolutions", map[string]any{"text": "The road narrows as you approach the cave."}, map[string]string{"Authorization": dmAuth}, 201, map[string]any{"sequence": 7, "kind": "resolution", "actor": "dm", "next_actor": "player-a", "turn_number": 3}),
+		playTest("play-rest-turn", "Active player takes a long rest", "POST", "/v1/play/campaigns/play-1/turn/rest", map[string]any{"type": "long"}, map[string]string{"Authorization": playerAAuth}, 201, map[string]any{"sequence": 8, "kind": "rest", "actor": "player-a", "type": "long", "hp_current": 20, "hp_max": 20, "next_actor": "dm"}),
 	)}
 }
 
@@ -73,7 +73,7 @@ func combatTurnAuthoritySuite() Suite {
 func playerCombatActionsSuite() Suite {
 	base := combatTurnAuthoritySuite()
 	return Suite{ID: "039-player-combat-actions", Name: "Campaign Play 039: Player Combat Actions", Tests: append(base.Tests,
-		playTest("play-player-combat-action", "Current combatant submits an attack", "POST", "/v1/play/campaigns/play-1/encounters/enc-road/actions", map[string]any{"type": "attack", "target": "goblin-1", "text": "I strike with my rapier."}, map[string]string{"Authorization": playerAAuth}, 201, map[string]any{"sequence": 11, "kind": "combat_action", "actor": "player-a", "type": "attack", "target": "goblin-1", "text": "I strike with my rapier."}),
+		playTest("play-player-combat-action", "Current combatant submits an attack", "POST", "/v1/play/campaigns/play-1/encounters/enc-road/actions", map[string]any{"type": "attack", "target": "goblin-1", "text": "I strike with my rapier."}, map[string]string{"Authorization": playerAAuth}, 201, map[string]any{"sequence": 9, "kind": "combat_action", "actor": "player-a", "type": "attack", "target": "goblin-1", "text": "I strike with my rapier."}),
 	)}
 }
 

@@ -69,15 +69,22 @@ The lifecycle harness simulates a long-lived codebase:
    adds the next feature stage.
 
 Each agent invocation counts as one shot. Stage suites are cumulative, so a
-maintenance agent must preserve all previous behavior.
+maintenance or refactoring agent must preserve all previous behavior.
 
-Completed results to date used stages `core` through `dm-tools`. The default
-roadmap now has 30 stages total: one initial creative build plus 29 fresh
-maintenance inheritances. The added stages 017-030 introduce an authenticated
-DM/player campaign-play loop; they are runnable but not yet part of the frozen
-nine-stage result set.
+The current 100-stage specification includes dedicated codebase-refactoring
+checkpoints at turns 10, 30, and 50. They add no HTTP behavior: each re-runs the
+preceding cumulative suite and also requires a nonempty `CODEBASE.md` at the
+project root. That document must be kept current as an architecture and
+maintenance map. In the active roadmap, the checkpoints replace the former
+party-chat, party-observations, and rumors features.
 
-Current lifecycle stages:
+Completed results to date used stages `core` through `dm-tools`; that remains
+the frozen nine-stage result set. The active lifecycle roadmap has 100 stages:
+one initial creative build, feature-maintenance stages, and three refactoring
+checkpoints. The later stages introduce an authenticated DM/player campaign
+loop and its subsequent systems.
+
+The first sixteen feature stages are:
 
 - `core`: initial D&D REST API creation, evaluated with suite `core`.
 - `characters`: adds character-rule endpoints, evaluated with cumulative suite
@@ -143,11 +150,15 @@ Keep the matrix moving unattended with the repository-level shortcut:
 ./make-progress
 ```
 
-It defaults to ten workers, resumes incomplete lifecycle cells before starting
-new ones, and skips completed cells. Use `--workers N`, `--models LABELS`,
-`--exclude-models LABELS`, and `--exclude-frameworks VALUES` to control the
-queue; framework exclusions accept target IDs, language names, or framework
-names.
+It defaults to ten workers and skips completed cells. Its default queue runs
+every Kimi cell before every Sonnet cell, then continues with the remaining
+declared model batches; a queued cell resumes from its saved checkpoint when
+one exists. The Kimi first wave is Go, Next.js, Rails, PHP stdlib, Flask,
+Django, Rust, TypeScript/Node, and JavaScript/Node. Use
+`--workers N`, `--models LABELS`, `--exclude-models LABELS`, and
+`--exclude-frameworks VALUES` to control the queue; framework exclusions accept
+target IDs, language names, or framework names. An explicit `--models` list
+keeps its supplied model order.
 
 ## First Full Matrix
 

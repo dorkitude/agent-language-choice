@@ -8,7 +8,7 @@ Only the current actor may call it. Return 201 with a rest event:
 
 ```json
 {
-  "sequence": 9,
+  "sequence": 8,
   "kind": "rest",
   "actor": "player-a",
   "type": "long",

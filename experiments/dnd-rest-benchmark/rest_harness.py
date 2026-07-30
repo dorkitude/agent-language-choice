@@ -41,6 +41,11 @@ DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
 INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended"}
 EVALUATOR_BUILD_LOCK = threading.Lock()
+# A lifecycle matrix advances several independent cells in worker threads, but all
+# cells publish into this one SQLite database.  SQLite permits one writer at a
+# time, so keep those relatively large upserts out of contention in this process.
+STATE_DB_LOCK = threading.RLock()
+STATE_DB_RETRY_ATTEMPTS = 6
 INTERRUPT_REQUESTED = threading.Event()
 
 
@@ -136,6 +141,28 @@ MODELS = [
     {"label": "glm-5p2", "provider": "pi", "model": "glm-5p2"},
 ]
 
+# The unattended queue starts with the broad Kimi sweep, then gives Sonnet the
+# same target coverage.  The remaining models retain the matrix's declaration
+# order.  Explicit --models allowlists keep the caller's order instead.
+DEFAULT_PROGRESS_MODEL_ORDER = (
+    "kimi-k2p7-code",
+    "claude-sonnet-5-medium",
+)
+
+# These are deliberately language/framework-diverse and must occupy the first
+# Kimi wave before the rest of the target matrix is scheduled.
+DEFAULT_KIMI_FIRST_WAVE_TARGETS = (
+    "go-stdlib",
+    "typescript-nextjs",
+    "ruby-rails",
+    "php-stdlib",
+    "python-flask",
+    "python-django",
+    "rust-stdlib",
+    "typescript-node",
+    "javascript-node",
+)
+
 
 @dataclass(frozen=True)
 class Target:
@@ -220,6 +247,13 @@ LIFECYCLE_STAGES = [
         spec_path=BENCH_DIR / "challenges" / "dm-tools.md",
         kind="maintenance",
         description="Add DM-facing encounter, loot, and recap helpers over stored campaign data",
+    ),
+    LifecycleStage(
+        id="010-codebase-refactor",
+        suite="dm-tools",
+        spec_path=BENCH_DIR / "challenges" / "010-codebase-refactor.md",
+        kind="refactor",
+        description="Refactor the inherited codebase and document its current architecture without changing behavior",
     ),
     LifecycleStage(
         id="quest-tracker",
@@ -348,25 +382,18 @@ LIFECYCLE_STAGES = [
         description="Add deterministic turn timeout and nudge policy",
     ),
     LifecycleStage(
-        id="028-party-chat",
-        suite="028-party-chat",
-        spec_path=BENCH_DIR / "challenges" / "028-party-chat.md",
-        kind="maintenance",
-        description="Add non-turn-advancing party chat",
-    ),
-    LifecycleStage(
-        id="029-party-observations",
-        suite="029-party-observations",
-        spec_path=BENCH_DIR / "challenges" / "029-party-observations.md",
-        kind="maintenance",
-        description="Add attributed party observations",
-    ),
-    LifecycleStage(
         id="030-campaign-document",
         suite="030-campaign-document",
         spec_path=BENCH_DIR / "challenges" / "030-campaign-document.md",
         kind="maintenance",
         description="Add durable role-filtered campaign narrative memory",
+    ),
+    LifecycleStage(
+        id="030-codebase-refactor",
+        suite="030-campaign-document",
+        spec_path=BENCH_DIR / "challenges" / "030-codebase-refactor.md",
+        kind="refactor",
+        description="Refactor the inherited codebase and update its architecture documentation without changing behavior",
     ),
     LifecycleStage(
         id="031-scene-state",
@@ -502,6 +529,13 @@ LIFECYCLE_STAGES = [
         description="Resolve skill-check modifiers with proficiency",
     ),
     LifecycleStage(
+        id="050-codebase-refactor",
+        suite="049-skills-and-proficiencies",
+        spec_path=BENCH_DIR / "challenges" / "050-codebase-refactor.md",
+        kind="refactor",
+        description="Refactor the inherited codebase and refresh its architecture documentation without changing behavior",
+    ),
+    LifecycleStage(
         id="050-spellbook-state",
         suite="050-spellbook-state",
         spec_path=BENCH_DIR / "challenges" / "050-spellbook-state.md",
@@ -619,13 +653,6 @@ LIFECYCLE_STAGES = [
         spec_path=BENCH_DIR / "challenges" / "066-world-events.md",
         kind="maintenance",
         description="Schedule and resolve campaign-level world events in turn order",
-    ),
-    LifecycleStage(
-        id="067-rumors",
-        suite="067-rumors",
-        spec_path=BENCH_DIR / "challenges" / "067-rumors.md",
-        kind="maintenance",
-        description="Publish, discover, and deduplicate campaign rumors",
     ),
     LifecycleStage(
         id="068-calendar-and-weather",
@@ -889,6 +916,25 @@ def targets() -> dict[str, Target]:
             ),
             setup=[["npm", "install"]],
             markers=["src/server.ts"],
+        ),
+        "javascript-node": Target(
+            id="javascript-node",
+            language="javascript",
+            framework="node-stdlib",
+            guidance=(
+                "Use Node 26.4.0 built-in HTTP APIs and plain JavaScript modules. "
+                "Do not use TypeScript, frameworks, or third-party packages."
+            ),
+            starter_files={
+                "package.json": json.dumps(
+                    {"private": True, "type": "module", "scripts": {"start": "bash ./run.sh"}},
+                    indent=2,
+                )
+                + "\n",
+                "run.sh": "#!/usr/bin/env bash\nset -euo pipefail\nnode server.js\n",
+            },
+            setup=[],
+            markers=["server.js"],
         ),
         "typescript-vite": Target(
             id="typescript-vite",
@@ -1428,6 +1474,11 @@ def build_lifecycle_prompt(
 
     if shot_kind == "creative":
         role = "Create the first implementation from the seeded starter files."
+    elif shot_kind == "maintenance" and stage.kind == "refactor":
+        role = (
+            "You are a fresh refactoring agent inheriting this existing codebase. "
+            "Improve its internal structure and documentation while preserving all observable behavior."
+        )
     elif shot_kind == "maintenance":
         role = (
             "You are a fresh maintenance agent inheriting this existing codebase. "
@@ -2009,6 +2060,17 @@ def evaluate(run_dir: Path, evaluator: Path, port: int, server_timeout: int, sui
         (run_dir / "server_stderr.txt").write_text(stderr or "")
 
 
+def validate_refactor_checkpoint(run_dir: Path, evaluation: dict[str, Any]) -> dict[str, Any]:
+    """Require the durable architecture map promised by each refactor stage."""
+    codebase = run_dir / "CODEBASE.md"
+    if not codebase.is_file() or not codebase.read_text(errors="replace").strip():
+        result = dict(evaluation)
+        result["passed"] = False
+        result["error"] = "refactor checkpoint requires a nonempty CODEBASE.md at the project root"
+        return result
+    return evaluation
+
+
 def terminate_process_group(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
@@ -2061,6 +2123,21 @@ def progress_targets(excluded_value: str | None) -> list[str]:
     if not selected:
         raise SystemExit("framework exclusions leave no lifecycle cells to run")
     return selected
+
+
+def default_progress_models(models: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Put the requested default provider waves ahead of the remaining matrix."""
+    order = {label: index for index, label in enumerate(DEFAULT_PROGRESS_MODEL_ORDER)}
+    return sorted(
+        models,
+        key=lambda model: order.get(model["label"], len(order) + MODELS.index(model)),
+    )
+
+
+def default_progress_targets(target_ids: list[str]) -> list[str]:
+    """Keep the named Kimi first-wave targets ahead of the remaining targets."""
+    order = {target_id: index for index, target_id in enumerate(DEFAULT_KIMI_FIRST_WAVE_TARGETS)}
+    return sorted(target_ids, key=lambda target_id: order.get(target_id, len(order) + target_ids.index(target_id)))
 
 
 def run_one(args: argparse.Namespace) -> int:
@@ -2130,7 +2207,16 @@ def selected_stages(value: str | None) -> list[LifecycleStage]:
     unknown = [stage_id for stage_id in ids if stage_id not in by_id]
     if unknown:
         raise SystemExit(f"unknown lifecycle stage(s): {', '.join(unknown)}")
-    return [by_id[stage_id] for stage_id in ids]
+    stages = [by_id[stage_id] for stage_id in ids]
+    if any(stage.kind == "refactor" for stage in stages):
+        final_index = max(LIFECYCLE_STAGES.index(stage) for stage in stages)
+        required_prefix = [stage.id for stage in LIFECYCLE_STAGES[: final_index + 1]]
+        if ids != required_prefix:
+            raise SystemExit(
+                "a refactor checkpoint requires its complete chronological stage prefix; "
+                f"use --stages {','.join(required_prefix)}"
+            )
+    return stages
 
 
 @lifecycle_locked
@@ -2256,6 +2342,8 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             if setup_ok and agent_ok(agent):
                 print(f"[{progress_name}] evaluating {stage.suite}", flush=True)
                 evaluation = evaluate(run_dir, evaluator, free_port(), args.server_timeout, stage.suite)
+                if stage.kind == "refactor":
+                    evaluation = validate_refactor_checkpoint(run_dir, evaluation)
             else:
                 evaluation = {"passed": False, "error": "setup or agent failed"}
             copy_if_exists(run_dir / f"dndeval-{stage.suite}-report.json", shot_dir / f"dndeval-{stage.suite}-report.json")
@@ -2390,12 +2478,42 @@ def persist_lifecycle_state(run_dir: Path, final: dict[str, Any]) -> None:
     """Make completed shots/stages queryable immediately, even if a run stops."""
     result_path = run_dir / "lifecycle-result.json"
     result_path.write_text(json.dumps(final, indent=2) + "\n")
-    with sqlite3.connect(EXPERIMENT_DB, timeout=30) as conn:
-        conn.execute("PRAGMA busy_timeout = 30000")
-        init_state_db(conn)
-        conn.execute("PRAGMA foreign_keys = ON")
-        upsert_run(conn, result_path, "lifecycle")
-        conn.commit()
+    write_state_db(EXPERIMENT_DB, lambda conn: upsert_run(conn, result_path, "lifecycle"))
+
+
+def sqlite_is_locked(error: sqlite3.OperationalError) -> bool:
+    """Return whether SQLite reported transient writer contention."""
+    return "locked" in str(error).lower() or "busy" in str(error).lower()
+
+
+def write_state_db(db: Path, operation: Any) -> Any:
+    """Run one state-database transaction with local serialization and retries.
+
+    The process-local lock handles lifecycle-matrix worker threads.  Retrying a
+    fresh connection also covers a dashboard or a second harness briefly holding
+    the database lock.
+    """
+    with STATE_DB_LOCK:
+        for attempt in range(STATE_DB_RETRY_ATTEMPTS):
+            try:
+                with sqlite3.connect(db, timeout=30) as conn:
+                    conn.execute("PRAGMA busy_timeout = 30000")
+                    init_state_db(conn)
+                    conn.execute("PRAGMA foreign_keys = ON")
+                    result = operation(conn)
+                    conn.commit()
+                    return result
+            except sqlite3.OperationalError as error:
+                if not sqlite_is_locked(error) or attempt == STATE_DB_RETRY_ATTEMPTS - 1:
+                    raise
+                delay = min(0.25 * (2**attempt), 4.0)
+                print(
+                    f"[state-db] database busy; retrying in {delay:.2f}s "
+                    f"({attempt + 1}/{STATE_DB_RETRY_ATTEMPTS - 1})",
+                    flush=True,
+                )
+                time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 def find_resumable_lifecycle_run(
@@ -2429,14 +2547,21 @@ def find_resumable_lifecycle_run(
 def lifecycle_matrix(args: argparse.Namespace) -> int:
     target_ids = split_csv(args.targets, list(targets().keys()))
     model_specs = selected_models(args.models)
-    pairs = [(t, m) for t in target_ids for m in model_specs]
+    if getattr(args, "model_batch_queue", False):
+        pairs = [(target_id, model_spec) for model_spec in model_specs for target_id in target_ids]
+    else:
+        pairs = [(target_id, model_spec) for target_id in target_ids for model_spec in model_specs]
     stages = selected_stages(args.stages)
 
     if args.resume and getattr(args, "prioritize_resumable", False):
         is_resumable = lambda item: find_resumable_lifecycle_run(
             item[1]["provider"], item[1]["model"], item[0], stages
         ) is not None
-        if getattr(args, "round_robin_models", False):
+        if getattr(args, "model_batch_queue", False):
+            # Model batches and their first-wave target order are deliberate:
+            # do not let a resumable cell from a later model jump this queue.
+            pass
+        elif getattr(args, "round_robin_models", False):
             model_queues = []
             for model_spec in model_specs:
                 queue = [(target_id, model_spec) for target_id in target_ids]
@@ -2542,6 +2667,9 @@ def make_progress(args: argparse.Namespace) -> int:
     """Continuously advance unfinished lifecycle cells, bounded by a worker pool."""
     models = progress_models(args.models, args.exclude_models)
     target_ids = progress_targets(args.exclude_frameworks)
+    if not args.models:
+        models = default_progress_models(models)
+        target_ids = default_progress_targets(target_ids)
     run_args = argparse.Namespace(**vars(args))
     run_args.models = ",".join(model["label"] for model in models)
     run_args.targets = ",".join(target_ids)
@@ -2549,10 +2677,10 @@ def make_progress(args: argparse.Namespace) -> int:
     run_args.skip_existing = True
     run_args.continue_on_fail = True
     run_args.prioritize_resumable = True
-    run_args.round_robin_models = True
+    run_args.model_batch_queue = True
     print(
         f"[make-progress] models={run_args.models} targets={run_args.targets} "
-        f"workers={run_args.workers} max_fix_shots={run_args.max_fix_shots} policy=model-round-robin",
+        f"workers={run_args.workers} max_fix_shots={run_args.max_fix_shots} policy=model-batches",
         flush=True,
     )
     return lifecycle_matrix(run_args)
@@ -3167,14 +3295,12 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
 def sync_state_db(args: argparse.Namespace) -> int:
     db = Path(args.db) if getattr(args, "db", None) else EXPERIMENT_DB
     db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
-        init_state_db(conn)
-        conn.execute("PRAGMA foreign_keys = ON")
+
+    def sync(conn: sqlite3.Connection) -> tuple[int, int, int, int]:
         for path in sorted(RUNS_DIR.glob("*/result.json")):
             upsert_run(conn, path, "flat")
         for path in sorted(LIFECYCLE_RUNS_DIR.glob("*/lifecycle-result.json")):
             upsert_run(conn, path, "lifecycle")
-        conn.commit()
         counts = conn.execute(
             """
             SELECT
@@ -3185,16 +3311,19 @@ def sync_state_db(args: argparse.Namespace) -> int:
             FROM runs
             """
         ).fetchone()
+        return (counts[0] or 0, counts[1] or 0, counts[2] or 0, counts[3] or 0)
+
+    counts = write_state_db(db, sync)
     if getattr(args, "quiet", False):
         return 0
     print(
         json.dumps(
             {
                 "db": str(db),
-                "runs": counts[0] or 0,
-                "blocked_runs": counts[1] or 0,
-                "shots": counts[2] or 0,
-                "artifacts": counts[3] or 0,
+                "runs": counts[0],
+                "blocked_runs": counts[1],
+                "shots": counts[2],
+                "artifacts": counts[3],
             },
             indent=2,
         )

@@ -2848,7 +2848,7 @@ func ReferenceHandler() http.Handler {
 			http.Error(w, "not current combatant", 409)
 			return
 		}
-		writeJSON(w, 201, map[string]any{"sequence": 11, "kind": "combat_action", "type": q.Type, "actor": a.Username, "target": q.Target, "text": q.Text})
+		writeJSON(w, 201, map[string]any{"sequence": 9, "kind": "combat_action", "type": q.Type, "actor": a.Username, "target": q.Target, "text": q.Text})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/damage", func(w http.ResponseWriter, r *http.Request) {
 		_, e, a, ok := encounter(w, r)
@@ -4957,8 +4957,8 @@ func ReferenceHandler() http.Handler {
 		}
 		c.CurrentActor = c.Owner
 		c.Phase = "gm"
-		c.appendEvent("travel", a.Username, "", q.Destination)
-		writeJSON(w, 201, map[string]any{"sequence": 8, "kind": "travel", "actor": a.Username, "destination_id": q.Destination, "travel_turns": 1, "next_actor": "dm"})
+		event := c.appendEvent("travel", a.Username, "", q.Destination)
+		writeJSON(w, 201, map[string]any{"sequence": event.Sequence, "kind": "travel", "actor": a.Username, "destination_id": q.Destination, "travel_turns": 1, "next_actor": "dm"})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/turn/rest", func(w http.ResponseWriter, r *http.Request) {
 		c, a, ok := playCampaign(w, r)
@@ -4973,8 +4973,8 @@ func ReferenceHandler() http.Handler {
 			return
 		}
 		c.CurrentActor = "dm"
-		c.appendEvent("rest", a.Username, q.Type, "")
-		writeJSON(w, 201, map[string]any{"sequence": 10, "kind": "rest", "actor": "player-a", "type": "long", "hp_current": 20, "hp_max": 20, "next_actor": "dm"})
+		event := c.appendEvent("rest", a.Username, q.Type, "")
+		writeJSON(w, 201, map[string]any{"sequence": event.Sequence, "kind": "rest", "actor": "player-a", "type": "long", "hp_current": 20, "hp_max": 20, "next_actor": "dm"})
 	})
 	mux.HandleFunc("POST /v1/play/campaigns/{id}/encounters/{encounter_id}/turn/advance", func(w http.ResponseWriter, r *http.Request) {
 		_, e, a, ok := encounter(w, r)
