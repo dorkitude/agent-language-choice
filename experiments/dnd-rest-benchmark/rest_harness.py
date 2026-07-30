@@ -75,9 +75,9 @@ PI_MODEL_ALIASES = {
 }
 
 MODELS = [
-    {"label": "claude-opus-latest", "provider": "claude", "model": "opus"},
-    {"label": "claude-sonnet-latest", "provider": "claude", "model": "sonnet"},
-    {"label": "gpt-5.5-medium", "provider": "codex", "model": "gpt-5.5"},
+    {"label": "claude-opus-5-medium", "provider": "claude", "model": "claude-opus-5"},
+    {"label": "claude-sonnet-5-medium", "provider": "claude", "model": "claude-sonnet-5"},
+    {"label": "gpt-5.6-terra-medium", "provider": "codex", "model": "gpt-5.6-terra"},
     {"label": "kimi-k2p7-code", "provider": "pi", "model": "kimi-k2p7-code"},
     {"label": "glm-5p2", "provider": "pi", "model": "glm-5p2"},
 ]

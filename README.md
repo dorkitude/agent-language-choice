@@ -79,7 +79,7 @@ The harness can run this unattended, one lifecycle cell at a time:
 
 ```sh
 python3 experiments/dnd-rest-benchmark/rest_harness.py run-lifecycle-matrix \
-  --models gpt-5.5-medium \
+  --models gpt-5.6-terra-medium \
   --targets go-stdlib \
   --max-fix-shots 1 \
   --continue-on-fail
@@ -102,7 +102,7 @@ models or omit targets/frameworks when desired:
 
 ```sh
 ./make-progress --workers 4 \
-  --exclude-models claude-opus-latest,claude-sonnet-latest \
+  --exclude-models claude-opus-5-medium,claude-sonnet-5-medium \
   --exclude-frameworks typescript,rails
 ```
 
