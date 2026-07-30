@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import datetime as dt
+import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -32,11 +35,62 @@ EVALUATOR_DIR = BENCH_DIR / "evaluator"
 CHALLENGE_SPEC = BENCH_DIR / "challenges" / "core.md"
 RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "runs"
 LIFECYCLE_RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "lifecycle-runs"
+LIFECYCLE_LOCKS_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".lifecycle-locks"
 CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
 INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended"}
 EVALUATOR_BUILD_LOCK = threading.Lock()
+INTERRUPT_REQUESTED = threading.Event()
+
+
+def interrupt_requested() -> bool:
+    """Whether the user has asked the harness to stop at a safe checkpoint."""
+    return INTERRUPT_REQUESTED.is_set()
+
+
+def handle_sigint(_signum: int, _frame: Any) -> None:
+    """Turn the first Ctrl-C into cooperative cancellation; a second one is forceful."""
+    if INTERRUPT_REQUESTED.is_set():
+        raise KeyboardInterrupt
+    INTERRUPT_REQUESTED.set()
+    print("[harness] Ctrl-C received; cancelling active agents and preserving completed checkpoints...", flush=True)
+
+
+@contextlib.contextmanager
+def lifecycle_cell_lock(args: argparse.Namespace) -> Any:
+    """Prevent two harnesses from advancing the same lifecycle cell concurrently."""
+    identity = "\0".join(
+        [
+            args.provider,
+            args.model,
+            args.target,
+            args.stages or ",".join(stage.id for stage in LIFECYCLE_STAGES),
+        ]
+    )
+    lock_name = hashlib.sha256(identity.encode("utf-8")).hexdigest() + ".lock"
+    LIFECYCLE_LOCKS_DIR.mkdir(parents=True, exist_ok=True)
+    with (LIFECYCLE_LOCKS_DIR / lock_name).open("a+") as lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise SystemExit(
+                f"lifecycle cell already active for {args.model}/{args.target}; "
+                "wait for it to stop before resuming"
+            ) from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def lifecycle_locked(func: Any) -> Any:
+    @functools.wraps(func)
+    def wrapped(args: argparse.Namespace) -> int:
+        with lifecycle_cell_lock(args):
+            return func(args)
+
+    return wrapped
 
 LATEST = {
     "go": "1.26.5",
@@ -1579,6 +1633,14 @@ def run_setup(run_dir: Path, target: Target, timeout: int) -> list[dict[str, Any
 
 
 def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_name: str) -> dict[str, Any]:
+    if interrupt_requested():
+        return {
+            "timed_out": False,
+            "returncode": None,
+            "exit_class": "interrupted",
+            "elapsed_seconds": 0.0,
+            "command": [],
+        }
     env = benchmark_env()
     command: list[str]
     if args.provider == "pi":
@@ -1637,6 +1699,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
     stdout_path = run_dir / "agent_stdout.txt"
     stderr_path = run_dir / "agent_stderr.txt"
     timed_out = False
+    interrupted = False
     with stdout_path.open("w") as stdout_file, stderr_path.open("w") as stderr_file:
         process = subprocess.Popen(
             command,
@@ -1651,6 +1714,16 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
         deadline = started + args.agent_timeout if args.agent_timeout > 0 else None
         next_heartbeat = 60
         while process.poll() is None:
+            if interrupt_requested():
+                interrupted = True
+                print(f"[agent {progress_name}] interrupted; stopping process", flush=True)
+                terminate_process_group(process)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    kill_process_group(process)
+                    process.wait(timeout=5)
+                break
             remaining = deadline - time.time() if deadline is not None else None
             if remaining is not None and remaining <= 0:
                 timed_out = True
@@ -1664,7 +1737,10 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
                 break
             try:
                 until_heartbeat = max(0.1, next_heartbeat - (time.time() - started))
-                process.wait(timeout=min(until_heartbeat, remaining) if remaining is not None else until_heartbeat)
+                poll_interval = min(until_heartbeat, 1.0)
+                if remaining is not None:
+                    poll_interval = min(poll_interval, remaining)
+                process.wait(timeout=poll_interval)
             except subprocess.TimeoutExpired:
                 elapsed = time.time() - started
                 while elapsed >= next_heartbeat:
@@ -1679,7 +1755,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
         flush=True,
     )
 
-    exit_class = classify_agent_exit(stdout, stderr, timed_out, returncode)
+    exit_class = "interrupted" if interrupted else classify_agent_exit(stdout, stderr, timed_out, returncode)
     return {
         "timed_out": timed_out,
         "returncode": returncode,
@@ -1900,6 +1976,7 @@ def selected_stages(value: str | None) -> list[LifecycleStage]:
     return [by_id[stage_id] for stage_id in ids]
 
 
+@lifecycle_locked
 def run_lifecycle_one(args: argparse.Namespace) -> int:
     target = targets()[args.target]
     stages = selected_stages(args.stages)
@@ -1910,6 +1987,17 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             raise SystemExit("no matching incomplete lifecycle run to resume")
         run_dir, final = resumed
         print(f"[lifecycle] resuming {run_dir}", flush=True)
+        # An interrupted stage has no durable stage result.  Older partial
+        # states may have one failed result, however; discard that summary so
+        # the existing failed shots are retried as attempts 2..N rather than
+        # being relabelled as a fresh maintenance attempt.
+        final["stage_results"] = [
+            result for result in final.get("stage_results", []) if result.get("passed")
+        ]
+        final["completed_stages"] = len(final["stage_results"])
+        final.pop("failed_stage", None)
+        final.pop("completed_at_utc", None)
+        final.pop("status", None)
     else:
         run_dir = LIFECYCLE_RUNS_DIR / "_".join(
             [
@@ -1940,6 +2028,12 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
             "completed_stages": 0,
             "total_shots": 0,
         }
+    # This makes a just-created cell discoverable by --resume even if Ctrl-C
+    # arrives while its first agent turn is running.
+    persist_lifecycle_state(run_dir, final)
+    if interrupt_requested():
+        return 130
+
     evaluator = build_evaluator()
 
     previous_failure: dict[str, Any] | None = None
@@ -1948,9 +2042,15 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
     start_stage_index = len([result for result in final["stage_results"] if result.get("passed")])
     for stage_index, stage in enumerate(stages[start_stage_index:], start=start_stage_index):
         stage_passed = False
-        stage_shots: list[dict[str, Any]] = []
+        stage_shots = [shot for shot in final["shots"] if shot.get("stage") == stage.id]
         max_attempts = 1 + args.max_fix_shots
-        for attempt in range(max_attempts):
+        if stage_shots:
+            previous_failure = stage_shots[-1]
+            previous_failure_record = str(previous_failure.get("evaluation_record", "")) or None
+        else:
+            previous_failure = None
+            previous_failure_record = None
+        for attempt in range(len(stage_shots), max_attempts):
             shot_number += 1
             if stage_index == 0 and attempt == 0:
                 shot_kind = "creative"
@@ -1983,11 +2083,17 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
                 flush=True,
             )
             agent = run_agent(args, run_dir, prompt, progress_name)
+            if agent.get("exit_class") == "interrupted":
+                print(f"[{progress_name}] interrupted; checkpoint preserved without recording a failed shot", flush=True)
+                return 130
             copy_if_exists(run_dir / "agent_stdout.txt", shot_dir / "agent_stdout.txt")
             copy_if_exists(run_dir / "agent_stderr.txt", shot_dir / "agent_stderr.txt")
             copy_if_exists(run_dir / "agent_last_message.txt", shot_dir / "agent_last_message.txt")
 
             setup = run_setup(run_dir, target, args.setup_timeout)
+            if interrupt_requested():
+                print(f"[{progress_name}] interrupted; checkpoint preserved without recording a failed shot", flush=True)
+                return 130
             copy_if_exists(run_dir / "setup.json", shot_dir / "setup.json")
             setup_ok = all(item["returncode"] == 0 for item in setup)
             if setup_ok and agent_ok(agent):
@@ -2193,6 +2299,8 @@ def lifecycle_matrix(args: argparse.Namespace) -> int:
     if args.workers == 1:
         failures = 0
         for index, (target_id, model_spec) in enumerate(pairs, start=1):
+            if interrupt_requested():
+                return 130
             if args.skip_existing and completed_lifecycle_exists(model_spec["provider"], model_spec["model"], target_id, args.stages):
                 print(f"[{index}/{len(pairs)}] skip existing lifecycle {model_spec['label']} {target_id}", flush=True)
                 continue
@@ -2205,6 +2313,8 @@ def lifecycle_matrix(args: argparse.Namespace) -> int:
                 run_args.resume = False
                 print(f"[{index}/{len(pairs)}] no incomplete lifecycle; starting new {model_spec['label']} {target_id}", flush=True)
             code = run_lifecycle_one(run_args)
+            if code == 130:
+                return 130
             if code:
                 failures += 1
                 if not args.continue_on_fail:
@@ -2228,6 +2338,8 @@ def lifecycle_matrix(args: argparse.Namespace) -> int:
     )
 
     def run_cell(index: int, target_id: str, model_spec: dict[str, str]) -> int:
+        if interrupt_requested():
+            return 130
         print(f"[{index}/{len(pairs)}] lifecycle {model_spec['label']} {target_id}", flush=True)
         run_args = argparse.Namespace(**vars(args))
         run_args.target = target_id
@@ -2243,10 +2355,29 @@ def lifecycle_matrix(args: argparse.Namespace) -> int:
             return 1
 
     failures = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = [executor.submit(run_cell, index, target_id, model_spec) for index, target_id, model_spec in runnable]
-        for future in concurrent.futures.as_completed(futures):
-            failures += int(future.result() != 0)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=args.workers)
+    futures = [executor.submit(run_cell, index, target_id, model_spec) for index, target_id, model_spec in runnable]
+    pending = set(futures)
+    try:
+        while pending:
+            done, pending = concurrent.futures.wait(
+                pending,
+                timeout=0.25,
+                return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            for future in done:
+                code = future.result()
+                if code != 130:
+                    failures += int(code != 0)
+            if interrupt_requested():
+                print(f"[matrix] cancelling {len(pending)} queued or active lifecycle cells...", flush=True)
+                for future in pending:
+                    future.cancel()
+                return 130
+    finally:
+        # Active workers observe INTERRUPT_REQUESTED within one second and
+        # terminate their provider process groups before this wait completes.
+        executor.shutdown(wait=True, cancel_futures=True)
     return 1 if failures else 0
 
 
@@ -2980,7 +3111,12 @@ def main(argv: list[str]) -> int:
     infra_blocks.set_defaults(func=list_infra_blocks)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    INTERRUPT_REQUESTED.clear()
+    previous_sigint_handler = signal.signal(signal.SIGINT, handle_sigint)
+    try:
+        return args.func(args)
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint_handler)
 
 
 if __name__ == "__main__":
