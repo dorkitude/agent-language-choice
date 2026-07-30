@@ -1640,6 +1640,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             "exit_class": "interrupted",
             "elapsed_seconds": 0.0,
             "command": [],
+            "usage": None,
         }
     env = benchmark_env()
     command: list[str]
@@ -1656,6 +1657,8 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             PI_MODEL_ALIASES.get(args.model, args.model),
             "--thinking",
             "medium",
+            "--mode",
+            "json",
             "-p",
             prompt,
         ]
@@ -1670,6 +1673,8 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             "--permission-mode",
             "bypassPermissions",
             "--no-session-persistence",
+            "--output-format",
+            "json",
             prompt,
         ]
     elif args.provider == "codex":
@@ -1682,6 +1687,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             "--ephemeral",
             "--model",
             args.model,
+            "--json",
             "-c",
             f'model_reasoning_effort="{args.codex_reasoning_effort}"',
             "-o",
@@ -1762,7 +1768,158 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
         "exit_class": exit_class,
         "elapsed_seconds": round(time.time() - started, 3),
         "command": command[:8] + ["..."],
+        "usage": extract_agent_usage(args.provider, stdout),
     }
+
+
+def parse_json_output(text: str) -> list[dict[str, Any]]:
+    """Parse a CLI's JSON result or JSONL event stream without trusting log noise."""
+    try:
+        parsed = json.loads(text)
+        return [parsed] if isinstance(parsed, dict) else []
+    except json.JSONDecodeError:
+        pass
+    records = []
+    for line in text.splitlines():
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            records.append(parsed)
+    return records
+
+
+def usage_number(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    return 0
+
+
+def usage_cost(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def first_usage_number(record: dict[str, Any], *keys: str) -> int:
+    for key in keys:
+        if key in record:
+            return usage_number(record[key])
+    return 0
+
+
+def normalise_usage(record: dict[str, Any], cost_usd: float | None = None) -> dict[str, Any]:
+    """Map Pi, Claude, and Codex naming conventions into one durable schema."""
+    input_tokens = first_usage_number(record, "input_tokens", "inputTokens", "input")
+    cached_input_tokens = first_usage_number(
+        record,
+        "cached_input_tokens",
+        "cachedInputTokens",
+        "cache_read_input_tokens",
+        "cacheRead",
+    )
+    cache_write_input_tokens = first_usage_number(
+        record,
+        "cache_write_input_tokens",
+        "cacheWriteInputTokens",
+        "cache_creation_input_tokens",
+        "cacheWrite",
+    )
+    output_tokens = first_usage_number(record, "output_tokens", "outputTokens", "output")
+    reasoning_output_tokens = first_usage_number(
+        record, "reasoning_output_tokens", "reasoningOutputTokens"
+    )
+    total_tokens = first_usage_number(record, "total_tokens", "totalTokens", "total")
+    if not total_tokens:
+        total_tokens = (
+            input_tokens
+            + cached_input_tokens
+            + cache_write_input_tokens
+            + output_tokens
+            + reasoning_output_tokens
+        )
+    return {
+        "input_tokens": input_tokens,
+        "cached_input_tokens": cached_input_tokens,
+        "cache_write_input_tokens": cache_write_input_tokens,
+        "output_tokens": output_tokens,
+        "reasoning_output_tokens": reasoning_output_tokens,
+        "total_tokens": total_tokens,
+        "cost_usd": cost_usd,
+    }
+
+
+def combine_usage(records: list[dict[str, Any]], cost_source: str) -> dict[str, Any] | None:
+    if not records:
+        return None
+    fields = (
+        "input_tokens",
+        "cached_input_tokens",
+        "cache_write_input_tokens",
+        "output_tokens",
+        "reasoning_output_tokens",
+        "total_tokens",
+    )
+    result = {field: sum(int(record.get(field, 0)) for record in records) for field in fields}
+    costs = [record.get("cost_usd") for record in records]
+    result["cost_usd"] = round(sum(float(cost) for cost in costs), 8) if all(cost is not None for cost in costs) else None
+    result["cost_source"] = cost_source if result["cost_usd"] is not None else "unavailable"
+    return result
+
+
+def extract_pi_usage(stdout: str) -> dict[str, Any] | None:
+    records = []
+    for event in parse_json_output(stdout):
+        if event.get("type") != "agent_end":
+            continue
+        for message in event.get("messages", []):
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            raw_usage = message.get("usage")
+            if not isinstance(raw_usage, dict):
+                continue
+            raw_cost = raw_usage.get("cost")
+            cost = usage_cost(raw_cost.get("total")) if isinstance(raw_cost, dict) else None
+            records.append(normalise_usage(raw_usage, cost))
+    return combine_usage(records, "pi_model_registry_pricing")
+
+
+def extract_claude_usage(stdout: str) -> dict[str, Any] | None:
+    result = None
+    for event in parse_json_output(stdout):
+        if isinstance(event.get("usage"), dict):
+            result = event
+    if result is None:
+        return None
+    return combine_usage(
+        [normalise_usage(result["usage"], usage_cost(result.get("total_cost_usd")))],
+        "claude_cli_reported",
+    )
+
+
+def extract_codex_usage(stdout: str) -> dict[str, Any] | None:
+    records = []
+    for event in parse_json_output(stdout):
+        if event.get("type") not in {"turn.completed", "turn/completed"}:
+            continue
+        raw_usage = event.get("usage") or event.get("token_usage") or event.get("tokenUsage")
+        if not isinstance(raw_usage, dict):
+            continue
+        records.append(normalise_usage(raw_usage))
+    return combine_usage(records, "unavailable_for_chatgpt_auth")
+
+
+def extract_agent_usage(provider: str, stdout: str) -> dict[str, Any] | None:
+    if provider == "pi":
+        return extract_pi_usage(stdout)
+    if provider == "claude":
+        return extract_claude_usage(stdout)
+    if provider == "codex":
+        return extract_codex_usage(stdout)
+    return None
 
 
 def free_port() -> int:
@@ -2773,6 +2930,14 @@ def init_state_db(conn: sqlite3.Connection) -> None:
             eval_returncode INTEGER,
             passed_count INTEGER,
             total_count INTEGER,
+            input_tokens INTEGER,
+            cached_input_tokens INTEGER,
+            cache_write_input_tokens INTEGER,
+            output_tokens INTEGER,
+            reasoning_output_tokens INTEGER,
+            total_tokens INTEGER,
+            cost_usd REAL,
+            cost_source TEXT,
             artifacts_dir TEXT,
             PRIMARY KEY (run_id, shot),
             FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
@@ -2794,6 +2959,20 @@ def init_state_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_shots_exit_class ON shots(agent_exit_class);
         """
     )
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(shots)")}
+    migrations = {
+        "input_tokens": "INTEGER",
+        "cached_input_tokens": "INTEGER",
+        "cache_write_input_tokens": "INTEGER",
+        "output_tokens": "INTEGER",
+        "reasoning_output_tokens": "INTEGER",
+        "total_tokens": "INTEGER",
+        "cost_usd": "REAL",
+        "cost_source": "TEXT",
+    }
+    for column, column_type in migrations.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE shots ADD COLUMN {column} {column_type}")
 
 
 def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
@@ -2865,6 +3044,7 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
 
     if kind == "flat":
         agent = data.get("agent") or {}
+        usage = agent.get("usage") or {}
         exit_class = infer_agent_exit_class(agent, run_dir)
         report = data.get("evaluation", {}).get("report") or {}
         summary = test_summary(report)
@@ -2874,9 +3054,12 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 run_id, shot, stage, suite, kind, attempt, status, passed,
                 setup_ok, agent_exit_class, agent_returncode, agent_timed_out,
                 eval_passed, eval_returncode, passed_count, total_count,
+                input_tokens, cached_input_tokens, cache_write_input_tokens,
+                output_tokens, reasoning_output_tokens, total_tokens, cost_usd,
+                cost_source,
                 artifacts_dir
             )
-            VALUES (?, 0, 'core', 'core', 'flat', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, 0, 'core', 'core', 'flat', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -2890,6 +3073,14 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 data.get("evaluation", {}).get("returncode"),
                 summary["passed_count"],
                 summary["total_count"],
+                usage.get("input_tokens"),
+                usage.get("cached_input_tokens"),
+                usage.get("cache_write_input_tokens"),
+                usage.get("output_tokens"),
+                usage.get("reasoning_output_tokens"),
+                usage.get("total_tokens"),
+                usage.get("cost_usd"),
+                usage.get("cost_source"),
                 str(run_dir),
             ),
         )
@@ -2908,6 +3099,7 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
         summary = test_summary(report)
         shot_status = "pass" if shot.get("passed") else ("blocked" if exit_class in INFRA_EXIT_CLASSES else "fail")
         agent = shot.get("agent") or {}
+        usage = agent.get("usage") or {}
         evaluation = shot.get("evaluation") or {}
         conn.execute(
             """
@@ -2915,9 +3107,12 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 run_id, shot, stage, suite, kind, attempt, status, passed,
                 setup_ok, agent_exit_class, agent_returncode, agent_timed_out,
                 eval_passed, eval_returncode, passed_count, total_count,
+                input_tokens, cached_input_tokens, cache_write_input_tokens,
+                output_tokens, reasoning_output_tokens, total_tokens, cost_usd,
+                cost_source,
                 artifacts_dir
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -2936,6 +3131,14 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 evaluation.get("returncode"),
                 summary["passed_count"],
                 summary["total_count"],
+                usage.get("input_tokens"),
+                usage.get("cached_input_tokens"),
+                usage.get("cache_write_input_tokens"),
+                usage.get("output_tokens"),
+                usage.get("reasoning_output_tokens"),
+                usage.get("total_tokens"),
+                usage.get("cost_usd"),
+                usage.get("cost_source"),
                 str(shot_dir),
             ),
         )

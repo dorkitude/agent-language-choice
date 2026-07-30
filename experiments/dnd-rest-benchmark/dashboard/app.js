@@ -291,6 +291,7 @@ function renderDetail() {
     badge(status, status.toUpperCase()),
     badge("", state.mode === "lifecycle" ? `${run.completed_stages}/${run.stage_count} stages` : testText(run)),
     badge("", state.mode === "lifecycle" ? `${run.total_shots} shots` : `${Math.round(run.agent?.elapsed_seconds || 0)}s`),
+    usageBadge(run.shots || [flatAsShot(run)]),
   ].join("");
 
   const shots = state.mode === "lifecycle" ? run.shots || [] : [flatAsShot(run)];
@@ -320,7 +321,7 @@ function renderShotRail(shots) {
     const summary = shot.test_summary || {};
     return `<button class="shot-button${selected}" type="button" data-shot="${index}">
       <span class="shot-title"><span>Shot ${shot.shot}: ${escapeHtml(shot.stage)}</span>${badge(status, shot.passed ? "PASS" : "FAIL")}</span>
-      <span class="shot-meta">${escapeHtml(shot.kind)} · ${summary.passed_count || 0}/${summary.total_count || 0} tests · ${Math.round(shot.agent?.elapsed_seconds || 0)}s</span>
+      <span class="shot-meta">${escapeHtml(shot.kind)} · ${summary.passed_count || 0}/${summary.total_count || 0} tests · ${Math.round(shot.agent?.elapsed_seconds || 0)}s${usageText(shot.agent)}</span>
     </button>`;
   }).join("");
   el.shotRail.querySelectorAll("[data-shot]").forEach((button) => {
@@ -370,6 +371,25 @@ function renderArtifacts(shot) {
 
 function badge(status, text) {
   return `<span class="badge ${escapeAttr(status)}">${escapeHtml(text)}</span>`;
+}
+
+function usageText(agent) {
+  const usage = agent?.usage;
+  if (!usage || !Number.isFinite(usage.total_tokens)) return "";
+  const tokens = `${usage.total_tokens.toLocaleString()} tok`;
+  const cost = Number.isFinite(usage.cost_usd) ? ` $${usage.cost_usd.toFixed(4)}` : "";
+  return ` · ${tokens}${cost}`;
+}
+
+function usageBadge(shots) {
+  const usage = shots.map((shot) => shot.agent?.usage).filter(Boolean);
+  if (!usage.length) return "";
+  const tokens = usage.reduce((sum, item) => sum + (Number(item.total_tokens) || 0), 0);
+  const knownCosts = usage.map((item) => item.cost_usd).filter(Number.isFinite);
+  const cost = knownCosts.length === usage.length
+    ? ` · $${knownCosts.reduce((sum, item) => sum + item, 0).toFixed(4)}`
+    : " · cost n/a";
+  return badge("", `${tokens.toLocaleString()} tok${cost}`);
 }
 
 function unique(values) {

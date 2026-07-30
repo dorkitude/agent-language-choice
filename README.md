@@ -106,6 +106,16 @@ models or omit targets/frameworks when desired:
   --exclude-frameworks typescript,rails
 ```
 
+To permanently clear all generated benchmark runs, lifecycle state, SQLite
+state, and dashboard exports before a fresh start, first stop the harness and
+run:
+
+```sh
+./wipe-run-history
+```
+
+It preserves benchmark specifications and Git history.
+
 A self-contained HTML findings report can be generated from embedded JSON with:
 
 ```sh
