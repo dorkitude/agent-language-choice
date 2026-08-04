@@ -70,9 +70,9 @@ load-safe event feed.
 
 ## Full 100-Stage Matrix
 
-The next matrix is three-dimensional: **5 models × 16 language/framework
-targets × 100 tickets = 8,000 ticket-cells**. Operationally, it consists of
-80 independent model×target lifecycle cells. A lifecycle cell owns one evolving
+The next matrix is three-dimensional: **5 models × 17 language/framework
+targets × 100 tickets = 8,500 ticket-cells**. Operationally, it consists of
+85 independent model×target lifecycle cells. A lifecycle cell owns one evolving
 subproject and advances strictly in order from stage 001 through 100; a stage is
 evaluated over external REST before the next stage is attempted.
 
@@ -97,10 +97,11 @@ For unattended progress, run the repository shortcut:
 ./make-progress
 ```
 
-It skips completed cells and defaults to ten concurrent lifecycle cells. Its
+It skips completed cells and defaults to five concurrent lifecycle cells. Its
 default queue completes the Kimi batch before Sonnet, then follows with the
-remaining declared model batches. The first Kimi wave is Go, Next.js, Rails,
-PHP stdlib, Flask, Django, Rust, TypeScript/Node, and plain JavaScript/Node;
+remaining declared model batches. The first Kimi wave is Go/stdlib, Go/open,
+Next.js, Rails, PHP stdlib, Flask, Django, Rust, TypeScript/Node, and plain
+JavaScript/Node;
 within each batch, a cell resumes from its saved checkpoint when one exists.
 Limit the models or omit targets/frameworks when desired:
 

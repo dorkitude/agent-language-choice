@@ -22,6 +22,7 @@ import sys
 import textwrap
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ CHALLENGE_SPEC = BENCH_DIR / "challenges" / "core.md"
 RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "runs"
 LIFECYCLE_RUNS_DIR = ROOT / "results" / "dnd-rest-benchmark" / "lifecycle-runs"
 LIFECYCLE_LOCKS_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".lifecycle-locks"
+LIFECYCLE_AGENT_LOGS_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".agent-logs"
 CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
@@ -46,6 +48,11 @@ EVALUATOR_BUILD_LOCK = threading.Lock()
 # time, so keep those relatively large upserts out of contention in this process.
 STATE_DB_LOCK = threading.RLock()
 STATE_DB_RETRY_ATTEMPTS = 6
+# Pi can emit multi-gigabyte tool transcripts.  Keep the final portion, which
+# contains its JSON result and usage, without allowing one agent to exhaust the
+# filesystem shared by the whole lifecycle matrix.
+AGENT_STDOUT_LOG_LIMIT = 4 * 1024 * 1024
+AGENT_STDERR_LOG_LIMIT = 1 * 1024 * 1024
 INTERRUPT_REQUESTED = threading.Event()
 
 
@@ -153,6 +160,7 @@ DEFAULT_PROGRESS_MODEL_ORDER = (
 # Kimi wave before the rest of the target matrix is scheduled.
 DEFAULT_KIMI_FIRST_WAVE_TARGETS = (
     "go-stdlib",
+    "go-open",
     "typescript-nextjs",
     "ruby-rails",
     "php-stdlib",
@@ -902,6 +910,24 @@ def targets() -> dict[str, Target]:
             setup=[],
             markers=["*.go"],
         ),
+        "go-open": Target(
+            id="go-open",
+            language="go",
+            framework="open-modules",
+            guidance=(
+                "Use Go 1.26.5. Third-party Go modules are allowed and should be "
+                "recorded in go.mod/go.sum. Choose idiomatic libraries where they "
+                "reduce implementation risk; for real SQLite support, prefer the "
+                "pure-Go modernc.org/sqlite driver (or another compatible driver) "
+                "rather than requiring CGO. Runtime network access remains forbidden."
+            ),
+            starter_files={
+                "go.mod": "module dndrest\n\ngo 1.26\n",
+                "run.sh": "#!/usr/bin/env bash\nset -euo pipefail\ngo run .\n",
+            },
+            setup=[["go", "mod", "download"]],
+            markers=["*.go", "go.mod"],
+        ),
         "typescript-node": Target(
             id="typescript-node",
             language="typescript",
@@ -1565,9 +1591,22 @@ def failure_summary(failure: dict[str, Any]) -> str:
 
 
 def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: int | None) -> str:
+    """Classify an infrastructure failure without treating agent content as one.
+
+    Agent transcripts contain the prompt, tool output, and sometimes arbitrary
+    fixture names.  In particular, this benchmark has a stage named
+    ``087-rate-limits``.  Searching all stdout for provider-error phrases can
+    therefore turn an otherwise successful agent process into a false
+    infrastructure block and skip its evaluator run.  JSON CLI output gives us
+    explicit error events; use those (plus stderr) as the error channel.
+    """
     if timed_out:
         return "timeout"
-    text = f"{stdout}\n{stderr}".lower()
+    structured_errors = structured_agent_error_text(stdout)
+    # A successful custom-model invocation can emit a harmless CLI warning on
+    # stderr (for example, that the model is not in Pi's static registry), so
+    # stderr is evidence only when the process itself failed.
+    text = f"{structured_errors}\n{stderr if returncode not in (0, None) else ''}".lower()
     if (
         "account endgame is suspended" in text
         or "monthly spending limit" in text
@@ -1587,8 +1626,10 @@ def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: i
         or "needs authentication" in text
     ):
         return "auth_error"
-    if "rate limit" in text or "too many requests" in text:
+    if "rate limit" in text or "too many requests" in text or re.search(r"\b429\b", text):
         return "rate_limit"
+    if structured_errors.strip():
+        return "agent_error"
     if returncode == 0:
         return "ok"
     return "agent_error"
@@ -1603,17 +1644,25 @@ def agent_ok(agent: dict[str, Any]) -> bool:
 
 
 def infer_agent_exit_class(agent: dict[str, Any], artifact_dir: Path | None = None) -> str:
-    if agent.get("exit_class"):
-        return str(agent["exit_class"])
     stdout = ""
     stderr = ""
+    found_log = False
     if artifact_dir:
         stdout_path = artifact_dir / "agent_stdout.txt"
         stderr_path = artifact_dir / "agent_stderr.txt"
         if stdout_path.exists():
             stdout = stdout_path.read_text(errors="replace")
+            found_log = True
         if stderr_path.exists():
             stderr = stderr_path.read_text(errors="replace")
+            found_log = True
+    # Re-evaluate persisted classifications when their transcripts are present.
+    # This lets classification fixes correct old snapshots; fall back to the
+    # recorded class only when the underlying evidence is unavailable.
+    if found_log:
+        return classify_agent_exit(stdout, stderr, bool(agent.get("timed_out")), agent.get("returncode"))
+    if agent.get("exit_class"):
+        return str(agent["exit_class"])
     return classify_agent_exit(stdout, stderr, bool(agent.get("timed_out")), agent.get("returncode"))
 
 
@@ -1622,6 +1671,22 @@ def shot_exit_class(shot: dict[str, Any], run_dir: Path | None = None) -> str:
     if run_dir and shot.get("shot") and shot.get("stage") and shot.get("kind"):
         artifact_dir = run_dir / "shots" / f"{shot['shot']:02d}_{shot['stage']}_{shot['kind']}"
     return infer_agent_exit_class(shot.get("agent") or {}, artifact_dir)
+
+
+def needs_reclassified_agent_retry(data: dict[str, Any], run_dir: Path | None = None) -> bool:
+    """Whether an old false infrastructure classification needs one real retry.
+
+    Earlier snapshots may have skipped evaluation solely because the broad
+    transcript matcher labelled ordinary benchmark text as an infrastructure
+    error.  Resume precisely those terminal shots after reclassification, but
+    do not reopen ordinary feature failures that already exhausted their shots.
+    """
+    shots = data.get("shots") or []
+    if not shots:
+        return False
+    terminal = shots[-1]
+    stored = (terminal.get("agent") or {}).get("exit_class")
+    return stored in INFRA_EXIT_CLASSES and shot_exit_class(terminal, run_dir) not in INFRA_EXIT_CLASSES
 
 
 def run_status(data: dict[str, Any], run_dir: Path | None = None) -> str:
@@ -1681,6 +1746,27 @@ def run_setup(run_dir: Path, target: Target, timeout: int) -> list[dict[str, Any
             break
     (run_dir / "setup.json").write_text(json.dumps(results, indent=2) + "\n")
     return results
+
+
+def capture_agent_stream(stream: Any, output_path: Path, byte_limit: int) -> dict[str, int]:
+    """Drain a process stream while retaining a bounded tail for diagnostics."""
+    tail = bytearray()
+    total_bytes = 0
+    while True:
+        chunk = stream.read(64 * 1024)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        tail.extend(chunk)
+        if len(tail) > byte_limit:
+            del tail[: len(tail) - byte_limit]
+    with output_path.open("wb") as output:
+        if total_bytes > byte_limit:
+            output.write(
+                f"[harness retained final {byte_limit} of {total_bytes} bytes]\\n".encode("utf-8")
+            )
+        output.write(tail)
+    return {"total_bytes": total_bytes, "retained_bytes": len(tail)}
 
 
 def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_name: str) -> dict[str, Any]:
@@ -1753,20 +1839,43 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
         raise SystemExit(f"unknown provider {args.provider}")
 
     started = time.time()
-    stdout_path = run_dir / "agent_stdout.txt"
-    stderr_path = run_dir / "agent_stderr.txt"
+    # Keep active CLI transcripts outside the agent's writable project.  Agents
+    # occasionally clean their project root broadly enough to unlink a
+    # harness-owned `agent_*.txt` file while the CLI still has it open.
+    log_dir = LIFECYCLE_AGENT_LOGS_DIR / run_dir.name
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = log_dir / "agent_stdout.txt"
+    stderr_path = log_dir / "agent_stderr.txt"
     timed_out = False
     interrupted = False
-    with stdout_path.open("w") as stdout_file, stderr_path.open("w") as stderr_file:
-        process = subprocess.Popen(
-            command,
-            cwd=run_dir,
-            env=env,
-            stdout=stdout_file,
-            stderr=stderr_file,
-            text=True,
-            start_new_session=True,
-        )
+    process = subprocess.Popen(
+        command,
+        cwd=run_dir,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    stream_results: dict[str, dict[str, int]] = {}
+
+    def drain(name: str, stream: Any, output_path: Path, byte_limit: int) -> None:
+        stream_results[name] = capture_agent_stream(stream, output_path, byte_limit)
+
+    stdout_thread = threading.Thread(
+        target=drain,
+        args=("stdout", process.stdout, stdout_path, AGENT_STDOUT_LOG_LIMIT),
+        daemon=True,
+    )
+    stderr_thread = threading.Thread(
+        target=drain,
+        args=("stderr", process.stderr, stderr_path, AGENT_STDERR_LOG_LIMIT),
+        daemon=True,
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+    try:
         print(f"[agent {progress_name}] started provider={args.provider}", flush=True)
         deadline = started + args.agent_timeout if args.agent_timeout > 0 else None
         next_heartbeat = 60
@@ -1804,15 +1913,50 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
                     print(f"[agent {progress_name}] still running ({next_heartbeat}s elapsed)", flush=True)
                     next_heartbeat *= 2
         returncode = process.returncode
+    finally:
+        # wait() above ensures EOF unless process creation/evaluation raised;
+        # closing the pipes lets the drain threads finish in either case.
+        if process.poll() is None:
+            terminate_process_group(process)
+            process.wait()
+        stdout_thread.join()
+        stderr_thread.join()
+        process.stdout.close()
+        process.stderr.close()
 
-    stdout = stdout_path.read_text(errors="replace")
-    stderr = stderr_path.read_text(errors="replace")
+    # Preserve the standard per-run artifact locations after the agent exits.
+    # These copies occur after the agent can no longer modify its workspace.
+    for log_path in (stdout_path, stderr_path):
+        if log_path.exists():
+            shutil.copyfile(log_path, run_dir / log_path.name)
+
+    # A missing transcript must not take down every concurrent lifecycle cell.
+    # Treat it as a retryable harness failure rather than accepting an agent
+    # exit code with incomplete evidence.
+    missing_logs: list[str] = []
+    try:
+        stdout = stdout_path.read_text(errors="replace")
+    except FileNotFoundError:
+        stdout = ""
+        missing_logs.append(stdout_path.name)
+    try:
+        stderr = stderr_path.read_text(errors="replace")
+    except FileNotFoundError:
+        stderr = ""
+        missing_logs.append(stderr_path.name)
+    if missing_logs:
+        print(f"[agent {progress_name}] missing harness log(s): {', '.join(missing_logs)}", flush=True)
     print(
         f"[agent {progress_name}] finished exit={returncode} elapsed={round(time.time() - started, 1)}s",
         flush=True,
     )
 
-    exit_class = "interrupted" if interrupted else classify_agent_exit(stdout, stderr, timed_out, returncode)
+    if interrupted:
+        exit_class = "interrupted"
+    elif missing_logs:
+        exit_class = "harness_log_missing"
+    else:
+        exit_class = classify_agent_exit(stdout, stderr, timed_out, returncode)
     return {
         "timed_out": timed_out,
         "returncode": returncode,
@@ -1820,6 +1964,8 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
         "elapsed_seconds": round(time.time() - started, 3),
         "command": command[:8] + ["..."],
         "usage": extract_agent_usage(args.provider, stdout),
+        "missing_logs": missing_logs,
+        "log_bytes": stream_results,
     }
 
 
@@ -1839,6 +1985,37 @@ def parse_json_output(text: str) -> list[dict[str, Any]]:
         if isinstance(parsed, dict):
             records.append(parsed)
     return records
+
+
+def structured_agent_error_text(stdout: str) -> str:
+    """Return only explicit provider/CLI errors from a JSON or JSONL transcript.
+
+    Do not inspect assistant messages or tool results: both are normal benchmark
+    content and can legitimately contain terms such as "rate limit" or 429.
+    """
+    errors: list[str] = []
+    def add_terminal_message(message: Any) -> None:
+        if not isinstance(message, dict) or message.get("stopReason") != "error":
+            return
+        for key in ("errorMessage", "error", "errors"):
+            if key in message:
+                errors.append(json.dumps(message[key], ensure_ascii=False))
+
+    for record in parse_json_output(stdout):
+        event_type = record.get("type")
+        if event_type in {"error", "agent_error", "agent-error"}:
+            errors.append(json.dumps(record, ensure_ascii=False))
+            continue
+        if record.get("is_error") is True or record.get("isError") is True:
+            errors.append(json.dumps(record, ensure_ascii=False))
+            continue
+        for key in ("error", "errors"):
+            if key in record:
+                errors.append(json.dumps(record[key], ensure_ascii=False))
+        add_terminal_message(record.get("message"))
+        for message in record.get("messages", []):
+            add_terminal_message(message)
+    return "\n".join(errors)
 
 
 def usage_number(value: Any) -> int:
@@ -2535,7 +2712,16 @@ def find_resumable_lifecycle_run(
             and meta.get("model") == model
             and meta.get("target") == target
             and meta.get("stages") == wanted_stages
-            and not data.get("completed_at_utc")
+            # Infrastructure-blocked cells are recorded as terminal snapshots
+            # for reporting, but their implementation and failed-stage shots
+            # are valid checkpoints once the transient provider limit clears.
+            # Also recover snapshots that an older broad transcript matcher
+            # incorrectly labelled as infrastructure failures.
+            and (
+                not data.get("completed_at_utc")
+                or run_status(data, path.parent) == "blocked"
+                or needs_reclassified_agent_retry(data, path.parent)
+            )
         ):
             candidates.append((path.stat().st_mtime, path.parent, data))
     if not candidates:
@@ -2634,6 +2820,13 @@ def lifecycle_matrix(args: argparse.Namespace) -> int:
             return run_lifecycle_one(run_args)
         except SystemExit as error:
             print(f"[{index}/{len(pairs)}] lifecycle setup failed: {error}", flush=True)
+            return 1
+        except Exception:
+            # A single malformed artifact or provider edge case must not abort
+            # the rest of an unattended matrix.  The cell's last persisted
+            # checkpoint remains available for a later resume.
+            print(f"[{index}/{len(pairs)}] lifecycle worker crashed; continuing other cells", flush=True)
+            traceback.print_exc()
             return 1
 
     failures = 0
@@ -3404,7 +3597,7 @@ def main(argv: list[str]) -> int:
         help="Comma-separated target IDs, languages, or framework names to skip",
     )
     progress_parser.add_argument("--stages", help="Optional comma-separated stage allowlist")
-    progress_parser.add_argument("--workers", type=int, default=10, help="Concurrent lifecycle cells (default: 10)")
+    progress_parser.add_argument("--workers", type=int, default=5, help="Concurrent lifecycle cells (default: 5)")
     progress_parser.add_argument("--max-fix-shots", type=int, default=5, help="Bug-fix retries after a failed evaluation (default: 5)")
     progress_parser.set_defaults(func=make_progress)
 

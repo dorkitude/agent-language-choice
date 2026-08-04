@@ -150,11 +150,11 @@ Keep the matrix moving unattended with the repository-level shortcut:
 ./make-progress
 ```
 
-It defaults to ten workers and skips completed cells. Its default queue runs
+It defaults to five workers and skips completed cells. Its default queue runs
 every Kimi cell before every Sonnet cell, then continues with the remaining
 declared model batches; a queued cell resumes from its saved checkpoint when
-one exists. The Kimi first wave is Go, Next.js, Rails, PHP stdlib, Flask,
-Django, Rust, TypeScript/Node, and JavaScript/Node. Use
+one exists. The Kimi first wave is Go/stdlib, Go/open, Next.js, Rails, PHP
+stdlib, Flask, Django, Rust, TypeScript/Node, and JavaScript/Node. Use
 `--workers N`, `--models LABELS`, `--exclude-models LABELS`, and
 `--exclude-frameworks VALUES` to control the queue; framework exclusions accept
 target IDs, language names, or framework names. An explicit `--models` list
