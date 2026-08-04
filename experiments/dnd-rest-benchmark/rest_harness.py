@@ -3398,6 +3398,10 @@ def init_state_db(conn: sqlite3.Connection) -> None:
         "total_tokens": "INTEGER",
         "cost_usd": "REAL",
         "cost_source": "TEXT",
+        # Whether the shot's evaluation failed only on evaluator deadlines
+        # (environment/performance event, not a model answer). Analyses must
+        # exclude these rows from retry statistics.
+        "eval_timed_out": "INTEGER",
     }
     for column, column_type in migrations.items():
         if column not in existing:
@@ -3486,9 +3490,9 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 input_tokens, cached_input_tokens, cache_write_input_tokens,
                 output_tokens, reasoning_output_tokens, total_tokens, cost_usd,
                 cost_source,
-                artifacts_dir
+                artifacts_dir, eval_timed_out
             )
-            VALUES (?, 0, 'core', 'core', 'flat', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, 0, 'core', 'core', 'flat', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -3511,6 +3515,7 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 usage.get("cost_usd"),
                 usage.get("cost_source"),
                 str(run_dir),
+                int(shot_eval_timed_out({"passed": data.get("passed"), "evaluation": data.get("evaluation") or {}})),
             ),
         )
         artifact_names = ["PROMPT.md", "agent_stdout.txt", "agent_stderr.txt", "agent_last_message.txt", "server_stdout.txt", "server_stderr.txt", "result.json"]
@@ -3539,9 +3544,9 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 input_tokens, cached_input_tokens, cache_write_input_tokens,
                 output_tokens, reasoning_output_tokens, total_tokens, cost_usd,
                 cost_source,
-                artifacts_dir
+                artifacts_dir, eval_timed_out
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -3569,6 +3574,7 @@ def upsert_run(conn: sqlite3.Connection, path: Path, kind: str) -> None:
                 usage.get("cost_usd"),
                 usage.get("cost_source"),
                 str(shot_dir),
+                int(shot_eval_timed_out(shot)),
             ),
         )
         names = [
