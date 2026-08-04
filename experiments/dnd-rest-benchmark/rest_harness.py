@@ -41,7 +41,7 @@ LIFECYCLE_AGENT_LOGS_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".agent-log
 CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
-INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended"}
+INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended", "agent_killed", "harness_log_missing"}
 EVALUATOR_BUILD_LOCK = threading.Lock()
 # A lifecycle matrix advances several independent cells in worker threads, but all
 # cells publish into this one SQLite database.  SQLite permits one writer at a
@@ -1628,6 +1628,11 @@ def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: i
         return "auth_error"
     if "rate limit" in text or "too many requests" in text or re.search(r"\b429\b", text):
         return "rate_limit"
+    if returncode is not None and returncode < 0 and not stdout.strip() and not stderr.strip():
+        # The CLI died on a signal before producing any output: the model was
+        # never consulted, so this is harness/CLI infrastructure rather than a
+        # model failure (e.g. pi 0.65 SIGKILLs itself on >1KB argv prompts).
+        return "agent_killed"
     if structured_errors.strip():
         return "agent_error"
     if returncode == 0:
@@ -1782,11 +1787,18 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             "usage": None,
         }
     env = benchmark_env()
+    log_dir = LIFECYCLE_AGENT_LOGS_DIR / run_dir.name
+    log_dir.mkdir(parents=True, exist_ok=True)
     command: list[str]
     if args.provider == "pi":
         key = resolve_fireworks_api_key()
         if key:
             env["FIREWORKS_API_KEY"] = key
+        # pi 0.65 SIGKILLs itself at startup when a positional prompt message
+        # exceeds ~1KB (every lifecycle prompt does). Feeding the prompt
+        # through pi's @file syntax avoids the crash entirely.
+        pi_prompt_path = log_dir / "prompt.txt"
+        pi_prompt_path.write_text(prompt)
         command = [
             "pi",
             "--no-session",
@@ -1799,7 +1811,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             "--mode",
             "json",
             "-p",
-            prompt,
+            f"@{pi_prompt_path}",
         ]
     elif args.provider == "claude":
         command = [
@@ -1844,8 +1856,6 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
     # Keep active CLI transcripts outside the agent's writable project.  Agents
     # occasionally clean their project root broadly enough to unlink a
     # harness-owned `agent_*.txt` file while the CLI still has it open.
-    log_dir = LIFECYCLE_AGENT_LOGS_DIR / run_dir.name
-    log_dir.mkdir(parents=True, exist_ok=True)
     stdout_path = log_dir / "agent_stdout.txt"
     stderr_path = log_dir / "agent_stderr.txt"
     timed_out = False
