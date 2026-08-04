@@ -1697,6 +1697,8 @@ def run_status(data: dict[str, Any], run_dir: Path | None = None) -> str:
         terminal = shots[-1]
         if shot_exit_class(terminal, run_dir) in INFRA_EXIT_CLASSES:
             return "blocked"
+        if shot_eval_timed_out(terminal):
+            return "timeout"
     agent = data.get("agent") or {}
     if infer_agent_exit_class(agent, run_dir) in INFRA_EXIT_CLASSES:
         return "blocked"
@@ -2181,7 +2183,76 @@ def build_evaluator() -> Path:
     return binary
 
 
+# Per-request evaluator deadline. The original 3s budget tripped on slow-but-
+# correct servers once cumulative suites grew past ~70 stages, recording model
+# failures that were really performance/timeout events.
+EVAL_REQUEST_TIMEOUT = "30s"
+EVAL_SUITE_TIMEOUT_SECONDS = 900
+
+# Evaluations are serialized machine-wide: concurrent suites (each a booted
+# server plus a Go evaluator firing hundreds of checks) starve one another into
+# deadline failures — observed directly when four cells evaluated at once and
+# all four timed out, while the same suites pass solo. Agents stay concurrent;
+# only the measurement window is exclusive. The file lock also guards against
+# a second harness process evaluating at the same time.
+EVAL_SERIALIZE_THREAD_LOCK = threading.Lock()
+EVAL_SERIALIZE_LOCK_PATH = ROOT / "results" / "dnd-rest-benchmark" / ".eval-serialize.lock"
+
+
+@contextlib.contextmanager
+def exclusive_evaluation() -> Any:
+    if not EVAL_SERIALIZE_THREAD_LOCK.acquire(blocking=False):
+        print("[eval] waiting for the exclusive evaluation slot", flush=True)
+        EVAL_SERIALIZE_THREAD_LOCK.acquire()
+    try:
+        EVAL_SERIALIZE_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with EVAL_SERIALIZE_LOCK_PATH.open("w") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+    finally:
+        EVAL_SERIALIZE_THREAD_LOCK.release()
+
+DEADLINE_ERROR_MARKERS = ("context deadline exceeded", "Client.Timeout")
+
+
+def report_failed_checks(report: dict[str, Any] | None) -> list[dict[str, Any]]:
+    checks = (report or {}).get("checks") or (report or {}).get("results") or []
+    return [c for c in checks if not (c.get("passed") or c.get("ok"))]
+
+
+def report_timeout_only(report: dict[str, Any] | None) -> bool:
+    """Whether every failed check in an evaluator report is a deadline error."""
+    fails = report_failed_checks(report)
+    return bool(fails) and all(
+        any(marker in str(c.get("error", "")) for marker in DEADLINE_ERROR_MARKERS)
+        for c in fails
+    )
+
+
+def shot_eval_timed_out(shot: dict[str, Any]) -> bool:
+    """Whether a failed shot's evaluation failed only on evaluator deadlines.
+
+    Timeout shots are environment/performance events, not model answers: they
+    do not consume fix shots and leave the cell resumable. Works on both new
+    shots (explicit flag) and historical snapshots (inline report analysis).
+    """
+    if shot.get("passed"):
+        return False
+    evaluation = shot.get("evaluation") or {}
+    if evaluation.get("timed_out_only"):
+        return True
+    return report_timeout_only(evaluation.get("report"))
+
+
 def evaluate(run_dir: Path, evaluator: Path, port: int, server_timeout: int, suite: str = "core") -> dict[str, Any]:
+    with exclusive_evaluation():
+        return evaluate_exclusive(run_dir, evaluator, port, server_timeout, suite)
+
+
+def evaluate_exclusive(run_dir: Path, evaluator: Path, port: int, server_timeout: int, suite: str = "core") -> dict[str, Any]:
     run_sh = run_dir / "run.sh"
     if not run_sh.exists():
         return {"passed": False, "error": "run.sh missing"}
@@ -2208,23 +2279,32 @@ def evaluate(run_dir: Path, evaluator: Path, port: int, server_timeout: int, sui
                 "server_returncode": server.poll(),
             }
         report_path = run_dir / f"dndeval-{suite}-report.json"
-        completed = subprocess.run(
-            [str(evaluator), "run", "--base-url", base_url, "--suite", suite, "--timeout", "3s", "--json-out", str(report_path)],
-            cwd=run_dir,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        try:
+            completed = subprocess.run(
+                [str(evaluator), "run", "--base-url", base_url, "--suite", suite, "--timeout", EVAL_REQUEST_TIMEOUT, "--json-out", str(report_path)],
+                cwd=run_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=EVAL_SUITE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "passed": False,
+                "error": f"evaluator suite exceeded {EVAL_SUITE_TIMEOUT_SECONDS}s",
+                "timed_out_only": True,
+            }
         report = None
         if report_path.exists():
             report = json.loads(report_path.read_text())
+        passed = completed.returncode == 0
         return {
-            "passed": completed.returncode == 0,
+            "passed": passed,
             "returncode": completed.returncode,
             "stdout": completed.stdout,
             "stderr": completed.stderr,
             "report": report,
+            "timed_out_only": (not passed) and report_timeout_only(report),
         }
     finally:
         terminate_process_group(server)
@@ -2462,7 +2542,13 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
     start_stage_index = len([result for result in final["stage_results"] if result.get("passed")])
     for stage_index, stage in enumerate(stages[start_stage_index:], start=start_stage_index):
         stage_passed = False
-        stage_shots = [shot for shot in final["shots"] if shot.get("stage") == stage.id]
+        # Timeout shots are environment events, not model attempts: they do not
+        # consume the stage's fix-shot budget, so a resumed cell gets its full
+        # complement of bug-fix turns.
+        stage_shots = [
+            shot for shot in final["shots"]
+            if shot.get("stage") == stage.id and not shot_eval_timed_out(shot)
+        ]
         max_attempts = 1 + args.max_fix_shots
         if stage_shots:
             previous_failure = stage_shots[-1]
@@ -2558,6 +2644,14 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
                     flush=True,
                 )
                 stage_passed = True
+                break
+            if shot_eval_timed_out(shot):
+                print(
+                    f"[{progress_name}] TIMEOUT: evaluator deadline failures only; "
+                    f"pausing cell without consuming fix shots "
+                    f"({shot['evaluation_record']})",
+                    flush=True,
+                )
                 break
             print(
                 f"[{progress_name}] FAIL "
@@ -2719,7 +2813,7 @@ def find_resumable_lifecycle_run(
             # incorrectly labelled as infrastructure failures.
             and (
                 not data.get("completed_at_utc")
-                or run_status(data, path.parent) == "blocked"
+                or run_status(data, path.parent) in ("blocked", "timeout")
                 or needs_reclassified_agent_retry(data, path.parent)
             )
         ):
@@ -2893,7 +2987,7 @@ def completed_lifecycle_exists(provider: str, model: str, target: str, stages_va
             and meta.get("model") == model
             and meta.get("target") == target
             and meta.get("stages") == wanted_stages
-            and run_status(data, path.parent) != "blocked"
+            and run_status(data, path.parent) not in ("blocked", "timeout")
             # A snapshot whose terminal shot was falsely classified as an
             # infrastructure failure never received a real evaluation; it is
             # resumable work, not a completed cell, and must not be skipped.
