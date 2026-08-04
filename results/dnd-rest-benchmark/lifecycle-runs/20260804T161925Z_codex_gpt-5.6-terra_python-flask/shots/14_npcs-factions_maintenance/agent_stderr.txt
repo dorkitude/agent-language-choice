@@ -1,0 +1,23 @@
+2026-08-04T16:38:03.529137Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'python3 -m py_compile app.py && bash -n run.sh && temp_dir=$(mktemp -d /private/tmp/npcs-factions.XXXXXX) && cp app.py "$temp_dir/app.py" && TEMP_DIR="$temp_dir" python3 - <<'"'PY'
+import importlib.util
+import os
+from pathlib import Path
+
+path = Path(os.environ[\"TEMP_DIR\"]) / \"app.py\"
+spec = importlib.util.spec_from_file_location(\"isolated_app\", path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+client = module.app.test_client()
+
+assert client.post(\"/v1/campaigns\", json={\"id\": \"camp-1\", \"name\": \"Lost Mine\", \"dm\": \"Gundren\"}).status_code == 201
+faction = client.post(\"/v1/campaigns/camp-1/factions\", json={\"id\": \"faction-1\", \"name\": \"Stonehill Inn\", \"stance\": \"friendly\"})
+assert faction.status_code == 201 and faction.get_json() == {\"id\": \"faction-1\", \"name\": \"Stonehill Inn\", \"stance\": \"friendly\"}
+npc = client.post(\"/v1/campaigns/camp-1/npcs\", json={\"id\": \"npc-1\", \"name\": \"Toblen Stonehill\", \"faction_id\": \"faction-1\", \"disposition\": 2})
+assert npc.status_code == 201 and npc.get_json() == {\"id\": \"npc-1\", \"name\": \"Toblen Stonehill\", \"faction_id\": \"faction-1\", \"disposition\": 2}
+summary = client.get(\"/v1/campaigns/camp-1/relationships\")
+assert summary.status_code == 200 and summary.get_json() == {\"campaign_id\": \"camp-1\", \"factions\": 1, \"npcs\": 1, \"friendly_npcs\": 1}
+assert client.post(\"/v1/campaigns/camp-1/npcs\", json={\"id\": \"npc-2\", \"name\": \"Bad\", \"faction_id\": \"missing\", \"disposition\": 0}).status_code == 404
+assert client.get(\"/v1/campaigns/missing/relationships\").status_code == 404
+PY
+rm -rf \""'$temp_dir"
+git diff --check && git diff -- app.py run.sh'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'python3 -m py_compile app.py && bash -n run.sh && temp_dir=$(mktemp -d /private/tmp/npcs-factions.XXXXXX) && cp app.py \\\"$temp_dir/app.py\\\" && TEMP_DIR=\\\"$temp_dir\\\" python3 - <<'\\\"'PY'\\nimport importlib.util\\nimport os\\nfrom pathlib import Path\\n\\npath = Path(os.environ[\\\\\\\"TEMP_DIR\\\\\\\"]) / \\\\\\\"app.py\\\\\\\"\\nspec = importlib.util.spec_from_file_location(\\\\\\\"isolated_app\\\\\\\", path)\\nmodule = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(module)\\nclient = module.app.test_client()\\n\\nassert client.post(\\\\\\\"/v1/campaigns\\\\\\\", json={\\\\\\\"id\\\\\\\": \\\\\\\"camp-1\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Lost Mine\\\\\\\", \\\\\\\"dm\\\\\\\": \\\\\\\"Gundren\\\\\\\"}).status_code == 201\\nfaction = client.post(\\\\\\\"/v1/campaigns/camp-1/factions\\\\\\\", json={\\\\\\\"id\\\\\\\": \\\\\\\"faction-1\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Stonehill Inn\\\\\\\", \\\\\\\"stance\\\\\\\": \\\\\\\"friendly\\\\\\\"})\\nassert faction.status_code == 201 and faction.get_json() == {\\\\\\\"id\\\\\\\": \\\\\\\"faction-1\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Stonehill Inn\\\\\\\", \\\\\\\"stance\\\\\\\": \\\\\\\"friendly\\\\\\\"}\\nnpc = client.post(\\\\\\\"/v1/campaigns/camp-1/npcs\\\\\\\", json={\\\\\\\"id\\\\\\\": \\\\\\\"npc-1\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Toblen Stonehill\\\\\\\", \\\\\\\"faction_id\\\\\\\": \\\\\\\"faction-1\\\\\\\", \\\\\\\"disposition\\\\\\\": 2})\\nassert npc.status_code == 201 and npc.get_json() == {\\\\\\\"id\\\\\\\": \\\\\\\"npc-1\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Toblen Stonehill\\\\\\\", \\\\\\\"faction_id\\\\\\\": \\\\\\\"faction-1\\\\\\\", \\\\\\\"disposition\\\\\\\": 2}\\nsummary = client.get(\\\\\\\"/v1/campaigns/camp-1/relationships\\\\\\\")\\nassert summary.status_code == 200 and summary.get_json() == {\\\\\\\"campaign_id\\\\\\\": \\\\\\\"camp-1\\\\\\\", \\\\\\\"factions\\\\\\\": 1, \\\\\\\"npcs\\\\\\\": 1, \\\\\\\"friendly_npcs\\\\\\\": 1}\\nassert client.post(\\\\\\\"/v1/campaigns/camp-1/npcs\\\\\\\", json={\\\\\\\"id\\\\\\\": \\\\\\\"npc-2\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Bad\\\\\\\", \\\\\\\"faction_id\\\\\\\": \\\\\\\"missing\\\\\\\", \\\\\\\"disposition\\\\\\\": 0}).status_code == 404\\nassert client.get(\\\\\\\"/v1/campaigns/missing/relationships\\\\\\\").status_code == 404\\nPY\\nrm -rf \\\\\\\"\\\"'$temp_dir\\\"\\ngit diff --check && git diff -- app.py run.sh'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

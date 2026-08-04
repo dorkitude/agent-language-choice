@@ -1,0 +1,28 @@
+2026-08-04T16:09:36.941560Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_dir=$(mktemp -d)
+cp app.rb "$test_dir/app.rb"
+TEST_DIR="$test_dir" ruby <<'"'RUBY'
+require \"rack/mock\"
+require File.join(ENV.fetch(\"TEST_DIR\"), \"app\")
+request = Rack::MockRequest.new(Rails.application)
+json = { \"CONTENT_TYPE\" => \"application/json\" }
+
+def call(request, method, path, body = nil, headers = {})
+  request.request(method, path, headers.merge(input: body && JSON.generate(body)))
+end
+
+monster = { slug: \"goblin\", name: \"Goblin\", cr: \"1/4\", armor_class: 15, hit_points: 7, tags: [\"humanoid\", \"goblinoid\"] }
+item = { slug: \"healing-potion\", name: \"Potion of Healing\", type: \"potion\", rarity: \"common\", cost_gp: 50 }
+created_monster = call(request, \"POST\", \"/v1/compendium/monsters\", monster, json)
+raise created_monster.body unless created_monster.status == 200 && JSON.parse(created_monster.body) == monster.reject { |key, _| key == :tags }.transform_keys(&:to_s)
+read_monster = call(request, \"GET\", \"/v1/compendium/monsters/goblin\")
+raise read_monster.body unless read_monster.status == 200 && JSON.parse(read_monster.body) == monster.transform_keys(&:to_s)
+raise \"duplicate monster\" unless call(request, \"POST\", \"/v1/compendium/monsters\", monster, json).status == 409
+created_item = call(request, \"POST\", \"/v1/compendium/items\", item, json)
+raise created_item.body unless created_item.status == 200 && JSON.parse(created_item.body) == item.transform_keys(&:to_s)
+read_item = call(request, \"GET\", \"/v1/compendium/items/healing-potion\")
+raise read_item.body unless read_item.status == 200 && JSON.parse(read_item.body) == item.transform_keys(&:to_s)
+raise \"missing item\" unless call(request, \"GET\", \"/v1/compendium/items/nope\").status == 404
+raise \"invalid monster\" unless call(request, \"POST\", \"/v1/compendium/monsters\", { slug: \"bad\" }, json).status == 400
+puts \"compendium routes verified\"
+RUBY
+rm -rf \""'$test_dir"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_dir=$(mktemp -d)\\ncp app.rb \\\"$test_dir/app.rb\\\"\\nTEST_DIR=\\\"$test_dir\\\" ruby <<'\\\"'RUBY'\\nrequire \\\\\\\"rack/mock\\\\\\\"\\nrequire File.join(ENV.fetch(\\\\\\\"TEST_DIR\\\\\\\"), \\\\\\\"app\\\\\\\")\\nrequest = Rack::MockRequest.new(Rails.application)\\njson = { \\\\\\\"CONTENT_TYPE\\\\\\\" => \\\\\\\"application/json\\\\\\\" }\\n\\ndef call(request, method, path, body = nil, headers = {})\\n  request.request(method, path, headers.merge(input: body && JSON.generate(body)))\\nend\\n\\nmonster = { slug: \\\\\\\"goblin\\\\\\\", name: \\\\\\\"Goblin\\\\\\\", cr: \\\\\\\"1/4\\\\\\\", armor_class: 15, hit_points: 7, tags: [\\\\\\\"humanoid\\\\\\\", \\\\\\\"goblinoid\\\\\\\"] }\\nitem = { slug: \\\\\\\"healing-potion\\\\\\\", name: \\\\\\\"Potion of Healing\\\\\\\", type: \\\\\\\"potion\\\\\\\", rarity: \\\\\\\"common\\\\\\\", cost_gp: 50 }\\ncreated_monster = call(request, \\\\\\\"POST\\\\\\\", \\\\\\\"/v1/compendium/monsters\\\\\\\", monster, json)\\nraise created_monster.body unless created_monster.status == 200 && JSON.parse(created_monster.body) == monster.reject { |key, _| key == :tags }.transform_keys(&:to_s)\\nread_monster = call(request, \\\\\\\"GET\\\\\\\", \\\\\\\"/v1/compendium/monsters/goblin\\\\\\\")\\nraise read_monster.body unless read_monster.status == 200 && JSON.parse(read_monster.body) == monster.transform_keys(&:to_s)\\nraise \\\\\\\"duplicate monster\\\\\\\" unless call(request, \\\\\\\"POST\\\\\\\", \\\\\\\"/v1/compendium/monsters\\\\\\\", monster, json).status == 409\\ncreated_item = call(request, \\\\\\\"POST\\\\\\\", \\\\\\\"/v1/compendium/items\\\\\\\", item, json)\\nraise created_item.body unless created_item.status == 200 && JSON.parse(created_item.body) == item.transform_keys(&:to_s)\\nread_item = call(request, \\\\\\\"GET\\\\\\\", \\\\\\\"/v1/compendium/items/healing-potion\\\\\\\")\\nraise read_item.body unless read_item.status == 200 && JSON.parse(read_item.body) == item.transform_keys(&:to_s)\\nraise \\\\\\\"missing item\\\\\\\" unless call(request, \\\\\\\"GET\\\\\\\", \\\\\\\"/v1/compendium/items/nope\\\\\\\").status == 404\\nraise \\\\\\\"invalid monster\\\\\\\" unless call(request, \\\\\\\"POST\\\\\\\", \\\\\\\"/v1/compendium/monsters\\\\\\\", { slug: \\\\\\\"bad\\\\\\\" }, json).status == 400\\nputs \\\\\\\"compendium routes verified\\\\\\\"\\nRUBY\\nrm -rf \\\\\\\"\\\"'$test_dir\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

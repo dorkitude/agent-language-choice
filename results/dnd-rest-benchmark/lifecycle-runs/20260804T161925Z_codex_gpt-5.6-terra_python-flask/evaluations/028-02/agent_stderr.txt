@@ -1,0 +1,35 @@
+2026-08-04T18:41:54.408461Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc "rg -n 'initialize_database|logical_deadline|deadline=|nudge_count|def resolve|current_actor' app.py && python3 -m py_compile app.py && python3 - <<'PY'
+import os
+os.environ.setdefault('PORT', '8080')
+from app import app, initialize_database, DATABASE_PATH
+
+if DATABASE_PATH.exists():
+    DATABASE_PATH.unlink()
+initialize_database()
+client = app.test_client()
+
+def request(method, path, *, token=None, body=None):
+    headers = {'Authorization': f'Bearer {token}'} if token else {}
+    return client.open(path, method=method, headers=headers, json=body)
+
+# The deterministic auth token is the registered username in this API.
+assert request('POST', '/v1/auth/register', body={'username': 'dm', 'password': 'password123', 'role': 'dm'}).status_code == 201
+for username in ('player-a', 'player-b'):
+    assert request('POST', '/v1/auth/register', body={'username': username, 'password': 'password123', 'role': 'player'}).status_code == 201
+assert request('POST', '/v1/play/campaigns', token='dm', body={'id': 'play-1', 'name': 'Test', 'max_players': 2}).status_code == 201
+for username, character_id in (('player-a', 'a'), ('player-b', 'b')):
+    assert request('POST', '/v1/play/campaigns/play-1/members', token=username, body={'character_id': character_id, 'name': character_id, 'class': 'fighter'}).status_code == 201
+assert request('POST', '/v1/play/campaigns/play-1/start', token='dm').status_code == 200
+turn = request('GET', '/v1/play/campaigns/play-1/turn', token='dm')
+assert turn.status_code == 200
+assert turn.json['overdue'] is False
+assert type(turn.json['logical_deadline']) is int
+assert 'deadline' not in turn.json
+for count in (1, 2):
+    nudge = request('POST', '/v1/play/campaigns/play-1/turn/nudge', token='dm', body={'message': 'Please act'})
+    assert nudge.status_code == 201 and nudge.json['nudge_count'] == count
+print('syntax and timeout/nudge contract checks passed')
+PY
+rm -f game.db
+git diff --check -- app.py run.sh && git diff --no-index -- /dev/null run.sh >/dev/null || true
+sed -n '1,80p' run.sh"`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc \\\"rg -n 'initialize_database|logical_deadline|deadline=|nudge_count|def resolve|current_actor' app.py && python3 -m py_compile app.py && python3 - <<'PY'\\nimport os\\nos.environ.setdefault('PORT', '8080')\\nfrom app import app, initialize_database, DATABASE_PATH\\n\\nif DATABASE_PATH.exists():\\n    DATABASE_PATH.unlink()\\ninitialize_database()\\nclient = app.test_client()\\n\\ndef request(method, path, *, token=None, body=None):\\n    headers = {'Authorization': f'Bearer {token}'} if token else {}\\n    return client.open(path, method=method, headers=headers, json=body)\\n\\n# The deterministic auth token is the registered username in this API.\\nassert request('POST', '/v1/auth/register', body={'username': 'dm', 'password': 'password123', 'role': 'dm'}).status_code == 201\\nfor username in ('player-a', 'player-b'):\\n    assert request('POST', '/v1/auth/register', body={'username': username, 'password': 'password123', 'role': 'player'}).status_code == 201\\nassert request('POST', '/v1/play/campaigns', token='dm', body={'id': 'play-1', 'name': 'Test', 'max_players': 2}).status_code == 201\\nfor username, character_id in (('player-a', 'a'), ('player-b', 'b')):\\n    assert request('POST', '/v1/play/campaigns/play-1/members', token=username, body={'character_id': character_id, 'name': character_id, 'class': 'fighter'}).status_code == 201\\nassert request('POST', '/v1/play/campaigns/play-1/start', token='dm').status_code == 200\\nturn = request('GET', '/v1/play/campaigns/play-1/turn', token='dm')\\nassert turn.status_code == 200\\nassert turn.json['overdue'] is False\\nassert type(turn.json['logical_deadline']) is int\\nassert 'deadline' not in turn.json\\nfor count in (1, 2):\\n    nudge = request('POST', '/v1/play/campaigns/play-1/turn/nudge', token='dm', body={'message': 'Please act'})\\n    assert nudge.status_code == 201 and nudge.json['nudge_count'] == count\\nprint('syntax and timeout/nudge contract checks passed')\\nPY\\nrm -f game.db\\ngit diff --check -- app.py run.sh && git diff --no-index -- /dev/null run.sh >/dev/null || true\\nsed -n '1,80p' run.sh\\\"` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

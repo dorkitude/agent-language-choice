@@ -1,0 +1,31 @@
+2026-08-04T16:52:30.982445Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'ruby -c app.rb
+tmpdir=$(mktemp -d /private/tmp/dnd-action-test.XXXXXX)
+cp app.rb "$tmpdir/app.rb"
+TEST_APP="$tmpdir/app.rb" ruby -e '"'
+  require \"rack/mock\"
+  require ENV.fetch(\"TEST_APP\")
+  app = DndApi
+  request = Rack::MockRequest.new(app)
+  def post_json(request, path, body, auth = nil)
+    headers = { \"CONTENT_TYPE\" => \"application/json\" }
+    headers[\"HTTP_AUTHORIZATION\"] = auth if auth
+    request.post(path, headers.merge(input: JSON.generate(body)))
+  end
+  post_json(request, \"/v1/storage/reset\", {})
+  dm = \"Bearer session-dm\"
+  a = \"Bearer session-player-a\"
+  b = \"Bearer session-player-b\"
+  raise unless post_json(request, \"/v1/play/campaigns\", { id: \"p\", name: \"P\", max_players: 2 }, dm).status == 201
+  raise unless post_json(request, \"/v1/play/campaigns/p/members\", { character_id: \"a\", name: \"A\", class: \"rogue\" }, a).status == 201
+  raise unless post_json(request, \"/v1/play/campaigns/p/members\", { character_id: \"b\", name: \"B\", class: \"cleric\" }, b).status == 201
+  raise unless request.post(\"/v1/play/campaigns/p/start\", \"HTTP_AUTHORIZATION\" => dm).status == 200
+  raise unless post_json(request, \"/v1/play/campaigns/p/narrations\", { text: \"Dawn.\" }, dm).status == 201
+  raise unless post_json(request, \"/v1/play/campaigns/p/actions\", { type: \"search\", text: \"I examine the trail.\" }, b).status == 409
+  action = post_json(request, \"/v1/play/campaigns/p/actions\", { type: \"search\", text: \"I examine the trail.\" }, a)
+  raise [action.status, action.body].inspect unless action.status == 201
+  expected = { \"sequence\" => 2, \"kind\" => \"action\", \"actor\" => \"player-a\", \"type\" => \"search\", \"text\" => \"I examine the trail.\", \"next_actor\" => \"dm\" }
+  raise JSON.parse(action.body).inspect unless JSON.parse(action.body) == expected
+  raise unless JSON.parse(request.get(\"/v1/play/campaigns/p/turn\", \"HTTP_AUTHORIZATION\" => dm).body)[\"current_actor\"] == \"dm\"
+  puts \"serverless action smoke test passed\"
+'
+rm -rf \""'$tmpdir"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'ruby -c app.rb\\ntmpdir=$(mktemp -d /private/tmp/dnd-action-test.XXXXXX)\\ncp app.rb \\\"$tmpdir/app.rb\\\"\\nTEST_APP=\\\"$tmpdir/app.rb\\\" ruby -e '\\\"'\\n  require \\\\\\\"rack/mock\\\\\\\"\\n  require ENV.fetch(\\\\\\\"TEST_APP\\\\\\\")\\n  app = DndApi\\n  request = Rack::MockRequest.new(app)\\n  def post_json(request, path, body, auth = nil)\\n    headers = { \\\\\\\"CONTENT_TYPE\\\\\\\" => \\\\\\\"application/json\\\\\\\" }\\n    headers[\\\\\\\"HTTP_AUTHORIZATION\\\\\\\"] = auth if auth\\n    request.post(path, headers.merge(input: JSON.generate(body)))\\n  end\\n  post_json(request, \\\\\\\"/v1/storage/reset\\\\\\\", {})\\n  dm = \\\\\\\"Bearer session-dm\\\\\\\"\\n  a = \\\\\\\"Bearer session-player-a\\\\\\\"\\n  b = \\\\\\\"Bearer session-player-b\\\\\\\"\\n  raise unless post_json(request, \\\\\\\"/v1/play/campaigns\\\\\\\", { id: \\\\\\\"p\\\\\\\", name: \\\\\\\"P\\\\\\\", max_players: 2 }, dm).status == 201\\n  raise unless post_json(request, \\\\\\\"/v1/play/campaigns/p/members\\\\\\\", { character_id: \\\\\\\"a\\\\\\\", name: \\\\\\\"A\\\\\\\", class: \\\\\\\"rogue\\\\\\\" }, a).status == 201\\n  raise unless post_json(request, \\\\\\\"/v1/play/campaigns/p/members\\\\\\\", { character_id: \\\\\\\"b\\\\\\\", name: \\\\\\\"B\\\\\\\", class: \\\\\\\"cleric\\\\\\\" }, b).status == 201\\n  raise unless request.post(\\\\\\\"/v1/play/campaigns/p/start\\\\\\\", \\\\\\\"HTTP_AUTHORIZATION\\\\\\\" => dm).status == 200\\n  raise unless post_json(request, \\\\\\\"/v1/play/campaigns/p/narrations\\\\\\\", { text: \\\\\\\"Dawn.\\\\\\\" }, dm).status == 201\\n  raise unless post_json(request, \\\\\\\"/v1/play/campaigns/p/actions\\\\\\\", { type: \\\\\\\"search\\\\\\\", text: \\\\\\\"I examine the trail.\\\\\\\" }, b).status == 409\\n  action = post_json(request, \\\\\\\"/v1/play/campaigns/p/actions\\\\\\\", { type: \\\\\\\"search\\\\\\\", text: \\\\\\\"I examine the trail.\\\\\\\" }, a)\\n  raise [action.status, action.body].inspect unless action.status == 201\\n  expected = { \\\\\\\"sequence\\\\\\\" => 2, \\\\\\\"kind\\\\\\\" => \\\\\\\"action\\\\\\\", \\\\\\\"actor\\\\\\\" => \\\\\\\"player-a\\\\\\\", \\\\\\\"type\\\\\\\" => \\\\\\\"search\\\\\\\", \\\\\\\"text\\\\\\\" => \\\\\\\"I examine the trail.\\\\\\\", \\\\\\\"next_actor\\\\\\\" => \\\\\\\"dm\\\\\\\" }\\n  raise JSON.parse(action.body).inspect unless JSON.parse(action.body) == expected\\n  raise unless JSON.parse(request.get(\\\\\\\"/v1/play/campaigns/p/turn\\\\\\\", \\\\\\\"HTTP_AUTHORIZATION\\\\\\\" => dm).body)[\\\\\\\"current_actor\\\\\\\"] == \\\\\\\"dm\\\\\\\"\\n  puts \\\\\\\"serverless action smoke test passed\\\\\\\"\\n'\\nrm -rf \\\\\\\"\\\"'$tmpdir\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
