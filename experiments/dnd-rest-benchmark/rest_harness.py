@@ -2894,6 +2894,10 @@ def completed_lifecycle_exists(provider: str, model: str, target: str, stages_va
             and meta.get("target") == target
             and meta.get("stages") == wanted_stages
             and run_status(data, path.parent) != "blocked"
+            # A snapshot whose terminal shot was falsely classified as an
+            # infrastructure failure never received a real evaluation; it is
+            # resumable work, not a completed cell, and must not be skipped.
+            and not needs_reclassified_agent_retry(data, path.parent)
         ):
             return True
     return False
