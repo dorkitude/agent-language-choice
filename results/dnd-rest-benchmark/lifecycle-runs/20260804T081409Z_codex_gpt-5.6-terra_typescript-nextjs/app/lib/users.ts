@@ -33,3 +33,8 @@ export function authenticateUser(username: string, password: string): boolean {
   const actual = hashPassword(password, user.salt);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
+
+export function userRole(username: string): "dm" | "player" | undefined {
+  const user = database.prepare("SELECT role FROM users WHERE username = ?").get(username) as Pick<User, "role"> | undefined;
+  return user?.role;
+}

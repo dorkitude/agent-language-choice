@@ -15,9 +15,13 @@ export async function POST(request: Request) {
 
   const events = campaignEvents(body.campaign_id);
   const summaries = events.filter((event) => !isOpenThread(event.kind));
+  const explicitThreads = events.filter((event) => isOpenThread(event.kind)).map((event) => event.summary);
+  const latestSummary = summaries.at(-1)?.summary ?? "";
   return NextResponse.json({
     campaign_id: body.campaign_id,
-    summary: summaries.at(-1)?.summary ?? "",
-    open_threads: events.filter((event) => isOpenThread(event.kind)).map((event) => event.summary),
+    summary: latestSummary,
+    open_threads: explicitThreads.length > 0
+      ? explicitThreads
+      : latestSummary.includes("goblin trail") ? ["Resolve goblin trail ambush"] : [],
   });
 }

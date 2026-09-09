@@ -1,0 +1,111 @@
+```text
+You are participating in a staged programming-language benchmark.
+
+        Target: typescript-nextjs
+        Language: typescript
+        Framework/runtime: nextjs
+        Lifecycle stage: 066-world-events
+        Shot kind: bugfix
+
+        You are a fresh bug-fix agent inheriting this existing codebase after a deterministic evaluator failure.
+
+        Use the exact latest runtime/framework versions already pinned in this
+        workspace. Do not downgrade packages or replace the requested framework.
+
+        Relevant version pins:
+        - @types/node: 26.1.1
+- @types/react: 19.2.17
+- @types/react-dom: 19.2.3
+- @vitejs/plugin-react: 6.0.3
+- composer: 2.10.2
+- django: 6.0.7
+- flask: 3.1.3
+- go: 1.26.5
+- next: 16.2.10
+- node: 26.4.0
+- openjdk: 26.0.1
+- php: 8.5.8
+- puma: 8.0.2
+- python: 3.14.6
+- rack: 3.2.6
+- rackup: 2.3.1
+- rails: 8.1.3
+- react: 19.2.7
+- react-dom: 19.2.7
+- ruby: 4.0.5
+- rust: 1.97.0
+- sinatra: 4.2.1
+- slim: 4.15.2
+- slim-psr7: 1.8.0
+- symfony-http-foundation: 8.1.1
+- symfony-routing: 8.1.0
+- typescript: 7.0.2
+- vite: 8.1.3
+
+        Target guidance:
+        Use Next.js 16.2.10, React 19.2.7, and TypeScript 7.0.2. Implement endpoints as Next route handlers under app/.
+
+        Contract:
+        - Work only in the current directory.
+        - Keep or create ./run.sh.
+        - ./run.sh must start the HTTP server in the foreground.
+        - The server must listen on 127.0.0.1 using the PORT environment variable.
+        - Do not start the server before finishing your answer.
+        - Preserve prior-stage behavior. The evaluator suite for this stage is cumulative.
+        - Prefer deterministic, minimal code.
+
+        Stage spec:
+
+        # 066 World Events
+
+This cumulative suite inherits `065-quest-rewards`.
+
+Preserve all earlier behavior. Add deterministic campaign-level world events
+that the DM can schedule for a campaign turn and resolve exactly once when that
+turn is reached.
+
+`POST /v1/play/campaigns/{id}/world-events` accepts:
+
+`{"event_id":"world-storm","turn_number":4,"title":"Storm Front","text":"Black clouds gather over the cave road."}`
+
+Only the campaign DM may schedule world events. Players receive 403. The
+`event_id`, `title`, and `text` fields must be nonempty strings. `turn_number`
+must be an integer greater than or equal to the campaign's current
+`turn_number`. Invalid bodies return 400. Duplicate event IDs in the same
+campaign return 409.
+
+A valid schedule request returns 201 exactly:
+
+`{"event_id":"world-storm","turn_number":4,"title":"Storm Front","text":"Black clouds gather over the cave road.","status":"scheduled"}`
+
+`POST /v1/play/campaigns/{id}/world-events/{event_id}/resolve` accepts:
+
+`{"text":"Rain floods the trail and slows any retreat."}`
+
+Only the campaign DM may resolve world events. Players receive 403. Unknown
+events return 404. The resolution `text` must be nonempty. If the campaign's
+current turn number does not exactly match the event `turn_number`, resolution
+returns 409. If the event is already resolved, resolution returns 409 and does
+not change the stored resolution.
+
+A successful resolution records an immutable resolution and returns 201 exactly:
+
+`{"event_id":"world-storm","turn_number":4,"title":"Storm Front","text":"Black clouds gather over the cave road.","status":"resolved","resolution":{"turn_number":4,"text":"Rain floods the trail and slows any retreat."}}`
+
+`GET /v1/play/campaigns/{id}/world-events` is available to authenticated
+campaign members. It returns the campaign's world events ordered by
+`turn_number` ascending, then creation order for events scheduled on the same
+turn:
+
+`{"events":[{"event_id":"world-storm","turn_number":4,"title":"Storm Front","text":"Black clouds gather over the cave road.","status":"resolved","resolution":{"turn_number":4,"text":"Rain floods the trail and slows any retreat."}}]}`
+
+
+
+The previous evaluator attempt did not pass. Before editing, inspect
+`evaluations/067-02.json` and the raw logs it references. Fix the
+implementation so the same evaluator suite passes without removing
+previously implemented behavior.
+
+
+        Finish when ./run.sh is ready.
+```

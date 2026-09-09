@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec ./node_modules/.bin/next dev -H 127.0.0.1 -p "$PORT"
+./node_modules/.bin/next build
+exec ./node_modules/.bin/next start -H 127.0.0.1 -p "$PORT"

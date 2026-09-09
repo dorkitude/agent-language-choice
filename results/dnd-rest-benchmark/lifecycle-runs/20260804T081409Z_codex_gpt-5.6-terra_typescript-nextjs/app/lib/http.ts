@@ -19,3 +19,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function isInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value);
 }
+
+/**
+ * Keeps string-field validation consistent across route handlers. Whitespace
+ * remains significant because existing endpoints accept it as supplied.
+ */
+export function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}

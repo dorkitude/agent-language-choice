@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { createMonster, type Monster } from "../../../lib/compendium";
-import { badRequest, isInteger, isRecord, jsonBody } from "../../../lib/http";
+import { badRequest, isInteger, isNonEmptyString, isRecord, jsonBody } from "../../../lib/http";
 
 export const runtime = "nodejs";
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
-}
 
 export async function POST(request: Request) {
   const body = await jsonBody(request);
