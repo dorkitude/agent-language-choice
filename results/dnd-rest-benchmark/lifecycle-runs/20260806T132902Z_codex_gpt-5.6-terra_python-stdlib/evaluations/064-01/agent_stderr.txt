@@ -1,0 +1,52 @@
+2026-08-06T15:59:40.697174Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_db=$(mktemp /private/tmp/dnd-clues.XXXXXX.db)
+TEST_DB="$test_db" python3 - <<'"'PY'
+import os
+import server
+server.DATABASE_PATH = os.environ['TEST_DB']
+server.initialize_storage()
+assert server.create_play_campaign('dm', {'id': 'c1', 'name': 'Campaign', 'max_players': 2})['id'] == 'c1'
+assert server.add_play_campaign_member('c1', 'will', {
+    'character_id': 'play-char-w', 'name': 'Will', 'class': 'wizard'
+})['character_id'] == 'play-char-w'
+assert server.add_play_campaign_member('c1', 'jane', {
+    'character_id': 'play-char-j', 'name': 'Jane', 'class': 'fighter'
+})['character_id'] == 'play-char-j'
+character = server.create_play_campaign_clue('c1', 'dm', {
+    'clue_id': 'clue-letter', 'text': 'The Black Spider seeks Wave Echo Cave.',
+    'audience': 'character', 'character_id': 'play-char-w',
+})
+assert character == {'clue_id': 'clue-letter', 'text': 'The Black Spider seeks Wave Echo Cave.', 'audience': 'character', 'character_id': 'play-char-w'}
+party = server.create_play_campaign_clue('c1', 'dm', {
+    'clue_id': 'clue-party', 'text': 'The cave entrance lies east of Phandalin.', 'audience': 'party'
+})
+assert party == {'clue_id': 'clue-party', 'text': 'The cave entrance lies east of Phandalin.', 'audience': 'party'}
+server.create_play_campaign_clue('c1', 'dm', {
+    'clue_id': 'clue-hidden', 'text': 'Secret.', 'audience': 'hidden'
+})
+assert [c['clue_id'] for c in server.get_play_campaign_clues('c1', 'dm')['clues']] == ['clue-letter', 'clue-party', 'clue-hidden']
+assert [c['clue_id'] for c in server.get_play_campaign_clues('c1', 'will')['clues']] == ['clue-letter', 'clue-party']
+assert [c['clue_id'] for c in server.get_play_campaign_clues('c1', 'jane')['clues']] == ['clue-party']
+for payload in (
+    {'clue_id': 'bad-1', 'text': 'x', 'audience': 'party', 'character_id': 'play-char-w'},
+    {'clue_id': 'bad-2', 'text': 'x', 'audience': 'character'},
+    {'clue_id': 'bad-3', 'text': 'x', 'audience': 'character', 'character_id': 'missing'},
+    {'clue_id': 'bad-4', 'text': 'x', 'audience': 'nope'},
+):
+    try:
+        server.create_play_campaign_clue('c1', 'dm', payload)
+    except server.BadRequest:
+        pass
+    else:
+        raise AssertionError(payload)
+try:
+    server.create_play_campaign_clue('c1', 'dm', {
+        'clue_id': 'clue-party', 'text': 'x', 'audience': 'party'
+    })
+except server.DuplicateRecord:
+    pass
+else:
+    raise AssertionError('duplicate accepted')
+print('clue domain checks passed')
+PY
+rm -f \""'$test_db"
+python3 -m py_compile server.py'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_db=$(mktemp /private/tmp/dnd-clues.XXXXXX.db)\\nTEST_DB=\\\"$test_db\\\" python3 - <<'\\\"'PY'\\nimport os\\nimport server\\nserver.DATABASE_PATH = os.environ['TEST_DB']\\nserver.initialize_storage()\\nassert server.create_play_campaign('dm', {'id': 'c1', 'name': 'Campaign', 'max_players': 2})['id'] == 'c1'\\nassert server.add_play_campaign_member('c1', 'will', {\\n    'character_id': 'play-char-w', 'name': 'Will', 'class': 'wizard'\\n})['character_id'] == 'play-char-w'\\nassert server.add_play_campaign_member('c1', 'jane', {\\n    'character_id': 'play-char-j', 'name': 'Jane', 'class': 'fighter'\\n})['character_id'] == 'play-char-j'\\ncharacter = server.create_play_campaign_clue('c1', 'dm', {\\n    'clue_id': 'clue-letter', 'text': 'The Black Spider seeks Wave Echo Cave.',\\n    'audience': 'character', 'character_id': 'play-char-w',\\n})\\nassert character == {'clue_id': 'clue-letter', 'text': 'The Black Spider seeks Wave Echo Cave.', 'audience': 'character', 'character_id': 'play-char-w'}\\nparty = server.create_play_campaign_clue('c1', 'dm', {\\n    'clue_id': 'clue-party', 'text': 'The cave entrance lies east of Phandalin.', 'audience': 'party'\\n})\\nassert party == {'clue_id': 'clue-party', 'text': 'The cave entrance lies east of Phandalin.', 'audience': 'party'}\\nserver.create_play_campaign_clue('c1', 'dm', {\\n    'clue_id': 'clue-hidden', 'text': 'Secret.', 'audience': 'hidden'\\n})\\nassert [c['clue_id'] for c in server.get_play_campaign_clues('c1', 'dm')['clues']] == ['clue-letter', 'clue-party', 'clue-hidden']\\nassert [c['clue_id'] for c in server.get_play_campaign_clues('c1', 'will')['clues']] == ['clue-letter', 'clue-party']\\nassert [c['clue_id'] for c in server.get_play_campaign_clues('c1', 'jane')['clues']] == ['clue-party']\\nfor payload in (\\n    {'clue_id': 'bad-1', 'text': 'x', 'audience': 'party', 'character_id': 'play-char-w'},\\n    {'clue_id': 'bad-2', 'text': 'x', 'audience': 'character'},\\n    {'clue_id': 'bad-3', 'text': 'x', 'audience': 'character', 'character_id': 'missing'},\\n    {'clue_id': 'bad-4', 'text': 'x', 'audience': 'nope'},\\n):\\n    try:\\n        server.create_play_campaign_clue('c1', 'dm', payload)\\n    except server.BadRequest:\\n        pass\\n    else:\\n        raise AssertionError(payload)\\ntry:\\n    server.create_play_campaign_clue('c1', 'dm', {\\n        'clue_id': 'clue-party', 'text': 'x', 'audience': 'party'\\n    })\\nexcept server.DuplicateRecord:\\n    pass\\nelse:\\n    raise AssertionError('duplicate accepted')\\nprint('clue domain checks passed')\\nPY\\nrm -f \\\\\\\"\\\"'$test_db\\\"\\npython3 -m py_compile server.py'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

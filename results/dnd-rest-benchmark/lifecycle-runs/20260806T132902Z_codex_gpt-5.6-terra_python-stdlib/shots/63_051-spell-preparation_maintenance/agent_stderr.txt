@@ -1,0 +1,40 @@
+2026-08-06T15:28:51.653045Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_db=$(mktemp /private/tmp/prepared-spells.XXXXXX.db)
+TEST_DB="$test_db" python3 - <<'"'PY'
+import os
+import server
+server.DATABASE_PATH = os.environ[\"TEST_DB\"]
+server.initialize_storage()
+with server.database() as c:
+    c.execute(\"INSERT INTO play_campaigns VALUES ('c', 'Campaign', 'dm', 'open', 4)\")
+    c.execute(\"INSERT INTO play_campaign_members VALUES ('c', 'owner', 'play-char-w', 'Wizard', 'wizard')\")
+    c.execute(\"INSERT INTO play_campaign_members VALUES ('c', 'member', 'play-char-r', 'Rogue', 'rogue')\")
+    c.execute(\"INSERT INTO play_campaign_character_owners VALUES ('c', 'play-char-w', 'owner')\")
+    c.execute(\"INSERT INTO play_campaign_character_owners VALUES ('c', 'play-char-r', 'member')\")
+    c.execute(\"INSERT INTO play_campaign_character_progression VALUES ('c', 'play-char-w', 'wizard', 0, 1, 6)\")
+    c.execute(\"INSERT INTO play_campaign_character_progression VALUES ('c', 'play-char-r', 'rogue', 0, 1, 8)\")
+    c.execute(\"INSERT INTO play_campaign_character_spells VALUES ('c', 'play-char-w', 'fire-bolt', 'Fire Bolt', 0)\")
+expected = {'character_id': 'play-char-w', 'prepared_spells': ['fire-bolt'], 'max_prepared': 1}
+assert server.update_play_character_prepared_spells('c', 'play-char-w', 'owner', {'spell_ids': ['fire-bolt']}) == expected
+assert server.play_character_prepared_spells('c', 'play-char-w', 'member') == expected
+try:
+    server.update_play_character_prepared_spells('c', 'play-char-w', 'member', {'spell_ids': []})
+except PermissionError:
+    pass
+else:
+    raise AssertionError('non-owner update was allowed')
+for character_id, username, payload in [
+    ('play-char-r', 'member', {'spell_ids': []}),
+    ('play-char-w', 'owner', {'spell_ids': ['unknown']}),
+    ('play-char-w', 'owner', {'spell_ids': ['fire-bolt', 'unknown']}),
+]:
+    try:
+        server.update_play_character_prepared_spells('c', character_id, username, payload)
+    except server.BadRequest:
+        pass
+    else:
+        raise AssertionError('invalid preparation was allowed')
+print('prepared-spells domain checks passed')
+PY
+rm -f \""'$test_db"
+python3 -m py_compile server.py
+git diff --check --no-index /dev/null server.py >/dev/null || test $? -eq 1'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_db=$(mktemp /private/tmp/prepared-spells.XXXXXX.db)\\nTEST_DB=\\\"$test_db\\\" python3 - <<'\\\"'PY'\\nimport os\\nimport server\\nserver.DATABASE_PATH = os.environ[\\\\\\\"TEST_DB\\\\\\\"]\\nserver.initialize_storage()\\nwith server.database() as c:\\n    c.execute(\\\\\\\"INSERT INTO play_campaigns VALUES ('c', 'Campaign', 'dm', 'open', 4)\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_members VALUES ('c', 'owner', 'play-char-w', 'Wizard', 'wizard')\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_members VALUES ('c', 'member', 'play-char-r', 'Rogue', 'rogue')\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_character_owners VALUES ('c', 'play-char-w', 'owner')\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_character_owners VALUES ('c', 'play-char-r', 'member')\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_character_progression VALUES ('c', 'play-char-w', 'wizard', 0, 1, 6)\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_character_progression VALUES ('c', 'play-char-r', 'rogue', 0, 1, 8)\\\\\\\")\\n    c.execute(\\\\\\\"INSERT INTO play_campaign_character_spells VALUES ('c', 'play-char-w', 'fire-bolt', 'Fire Bolt', 0)\\\\\\\")\\nexpected = {'character_id': 'play-char-w', 'prepared_spells': ['fire-bolt'], 'max_prepared': 1}\\nassert server.update_play_character_prepared_spells('c', 'play-char-w', 'owner', {'spell_ids': ['fire-bolt']}) == expected\\nassert server.play_character_prepared_spells('c', 'play-char-w', 'member') == expected\\ntry:\\n    server.update_play_character_prepared_spells('c', 'play-char-w', 'member', {'spell_ids': []})\\nexcept PermissionError:\\n    pass\\nelse:\\n    raise AssertionError('non-owner update was allowed')\\nfor character_id, username, payload in [\\n    ('play-char-r', 'member', {'spell_ids': []}),\\n    ('play-char-w', 'owner', {'spell_ids': ['unknown']}),\\n    ('play-char-w', 'owner', {'spell_ids': ['fire-bolt', 'unknown']}),\\n]:\\n    try:\\n        server.update_play_character_prepared_spells('c', character_id, username, payload)\\n    except server.BadRequest:\\n        pass\\n    else:\\n        raise AssertionError('invalid preparation was allowed')\\nprint('prepared-spells domain checks passed')\\nPY\\nrm -f \\\\\\\"\\\"'$test_db\\\"\\npython3 -m py_compile server.py\\ngit diff --check --no-index /dev/null server.py >/dev/null || test $? -eq 1'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

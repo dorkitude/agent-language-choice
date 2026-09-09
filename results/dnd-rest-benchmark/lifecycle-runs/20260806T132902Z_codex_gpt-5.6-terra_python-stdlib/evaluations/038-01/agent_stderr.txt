@@ -1,0 +1,36 @@
+2026-08-06T14:47:52.643158Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'task_db=$(mktemp /private/tmp/combat-turn-XXXXXX.db)
+TASK_DB="$task_db" python3 - <<'"'PY'
+import json
+import os
+import server
+
+server.DATABASE_PATH = os.environ[\"TASK_DB\"]
+server.initialize_storage()
+with server.DATABASE_LOCK, server.database() as conn:
+    conn.execute(\"INSERT INTO play_campaigns VALUES ('c1','Campaign','dm','combat',2)\")
+    conn.execute(\"INSERT INTO play_campaign_members VALUES ('c1','aria','char1','Aria','Fighter')\")
+    roster = [
+        {'monster_id': 'g1', 'name': 'Goblin', 'hp_max': 7, 'hp_current': 7, 'initiative': 15},
+        {'member': 'aria', 'character_id': 'char1', 'name': 'Aria', 'initiative': 12},
+    ]
+    conn.execute(\"INSERT INTO play_campaign_encounters (id,campaign_id,name,status,combatants) VALUES ('e1','c1','Ambush','active',?)\", (json.dumps(roster),))
+assert server.get_play_campaign_encounter_turn('c1', 'e1', 'aria') == {
+    'round': 1, 'turn_index': 0,
+    'active': {'name': 'Goblin', 'kind': 'monster', 'initiative': 15},
+}
+try:
+    server.advance_play_campaign_encounter_turn('c1', 'e1', 'aria')
+    raise AssertionError('out-of-turn player advanced')
+except server.OutOfTurn:
+    pass
+assert server.advance_play_campaign_encounter_turn('c1', 'e1', 'dm') == {
+    'round': 1, 'turn_index': 1,
+    'active': {'name': 'Aria', 'kind': 'player', 'initiative': 12},
+}
+assert server.advance_play_campaign_encounter_turn('c1', 'e1', 'aria') == {
+    'round': 2, 'turn_index': 0,
+    'active': {'name': 'Goblin', 'kind': 'monster', 'initiative': 15},
+}
+print('isolated combat turn checks passed')
+PY
+rm -f \""'$task_db"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'task_db=$(mktemp /private/tmp/combat-turn-XXXXXX.db)\\nTASK_DB=\\\"$task_db\\\" python3 - <<'\\\"'PY'\\nimport json\\nimport os\\nimport server\\n\\nserver.DATABASE_PATH = os.environ[\\\\\\\"TASK_DB\\\\\\\"]\\nserver.initialize_storage()\\nwith server.DATABASE_LOCK, server.database() as conn:\\n    conn.execute(\\\\\\\"INSERT INTO play_campaigns VALUES ('c1','Campaign','dm','combat',2)\\\\\\\")\\n    conn.execute(\\\\\\\"INSERT INTO play_campaign_members VALUES ('c1','aria','char1','Aria','Fighter')\\\\\\\")\\n    roster = [\\n        {'monster_id': 'g1', 'name': 'Goblin', 'hp_max': 7, 'hp_current': 7, 'initiative': 15},\\n        {'member': 'aria', 'character_id': 'char1', 'name': 'Aria', 'initiative': 12},\\n    ]\\n    conn.execute(\\\\\\\"INSERT INTO play_campaign_encounters (id,campaign_id,name,status,combatants) VALUES ('e1','c1','Ambush','active',?)\\\\\\\", (json.dumps(roster),))\\nassert server.get_play_campaign_encounter_turn('c1', 'e1', 'aria') == {\\n    'round': 1, 'turn_index': 0,\\n    'active': {'name': 'Goblin', 'kind': 'monster', 'initiative': 15},\\n}\\ntry:\\n    server.advance_play_campaign_encounter_turn('c1', 'e1', 'aria')\\n    raise AssertionError('out-of-turn player advanced')\\nexcept server.OutOfTurn:\\n    pass\\nassert server.advance_play_campaign_encounter_turn('c1', 'e1', 'dm') == {\\n    'round': 1, 'turn_index': 1,\\n    'active': {'name': 'Aria', 'kind': 'player', 'initiative': 12},\\n}\\nassert server.advance_play_campaign_encounter_turn('c1', 'e1', 'aria') == {\\n    'round': 2, 'turn_index': 0,\\n    'active': {'name': 'Goblin', 'kind': 'monster', 'initiative': 15},\\n}\\nprint('isolated combat turn checks passed')\\nPY\\nrm -f \\\\\\\"\\\"'$task_db\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

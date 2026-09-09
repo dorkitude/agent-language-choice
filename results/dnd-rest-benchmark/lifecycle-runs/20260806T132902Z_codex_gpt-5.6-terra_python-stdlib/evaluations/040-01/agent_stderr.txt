@@ -1,0 +1,25 @@
+2026-08-06T14:52:41.978810Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_dir=$(mktemp -d)
+TEST_DB="$test_dir/game.db" python3 - <<'"'PY'
+import json
+import os
+import server
+
+server.DATABASE_PATH = os.environ[\"TEST_DB\"]
+server.initialize_storage()
+with server.DATABASE_LOCK, server.database() as conn:
+    conn.execute(\"INSERT INTO play_campaigns VALUES (?, ?, ?, ?, ?)\", (\"c1\", \"Campaign\", \"dm\", \"combat\", 4))
+    conn.execute(
+        \"INSERT INTO play_campaign_encounters (id, campaign_id, name, status, combatants) VALUES (?, ?, ?, ?, ?)\",
+        (\"e1\", \"c1\", \"Encounter\", \"active\", json.dumps([{
+            \"monster_id\": \"goblin-1\", \"name\": \"Goblin\", \"hp_current\": 7,
+            \"hp_max\": 7, \"initiative\": 12,
+        }])),
+    )
+assert server.adjust_play_campaign_combatant_hp(\"c1\", \"e1\", \"dm\", {\"target\": \"goblin-1\", \"amount\": 5}, False) == {\"target\": \"goblin-1\", \"hp_before\": 7, \"hp_after\": 2, \"damage\": 5}
+assert server.adjust_play_campaign_combatant_hp(\"c1\", \"e1\", \"dm\", {\"target\": \"goblin-1\", \"amount\": 9}, False)[\"hp_after\"] == 0
+assert server.adjust_play_campaign_combatant_hp(\"c1\", \"e1\", \"dm\", {\"target\": \"goblin-1\", \"amount\": 12}, True) == {\"target\": \"goblin-1\", \"hp_before\": 0, \"hp_after\": 7, \"healing\": 12}
+with server.DATABASE_LOCK, server.database() as conn:
+    roster = json.loads(conn.execute(\"SELECT combatants FROM play_campaign_encounters WHERE id = 'e1'\").fetchone()[0])
+assert roster[0][\"hp_current\"] == 7
+PY
+rm -rf \""'$test_dir"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_dir=$(mktemp -d)\\nTEST_DB=\\\"$test_dir/game.db\\\" python3 - <<'\\\"'PY'\\nimport json\\nimport os\\nimport server\\n\\nserver.DATABASE_PATH = os.environ[\\\\\\\"TEST_DB\\\\\\\"]\\nserver.initialize_storage()\\nwith server.DATABASE_LOCK, server.database() as conn:\\n    conn.execute(\\\\\\\"INSERT INTO play_campaigns VALUES (?, ?, ?, ?, ?)\\\\\\\", (\\\\\\\"c1\\\\\\\", \\\\\\\"Campaign\\\\\\\", \\\\\\\"dm\\\\\\\", \\\\\\\"combat\\\\\\\", 4))\\n    conn.execute(\\n        \\\\\\\"INSERT INTO play_campaign_encounters (id, campaign_id, name, status, combatants) VALUES (?, ?, ?, ?, ?)\\\\\\\",\\n        (\\\\\\\"e1\\\\\\\", \\\\\\\"c1\\\\\\\", \\\\\\\"Encounter\\\\\\\", \\\\\\\"active\\\\\\\", json.dumps([{\\n            \\\\\\\"monster_id\\\\\\\": \\\\\\\"goblin-1\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Goblin\\\\\\\", \\\\\\\"hp_current\\\\\\\": 7,\\n            \\\\\\\"hp_max\\\\\\\": 7, \\\\\\\"initiative\\\\\\\": 12,\\n        }])),\\n    )\\nassert server.adjust_play_campaign_combatant_hp(\\\\\\\"c1\\\\\\\", \\\\\\\"e1\\\\\\\", \\\\\\\"dm\\\\\\\", {\\\\\\\"target\\\\\\\": \\\\\\\"goblin-1\\\\\\\", \\\\\\\"amount\\\\\\\": 5}, False) == {\\\\\\\"target\\\\\\\": \\\\\\\"goblin-1\\\\\\\", \\\\\\\"hp_before\\\\\\\": 7, \\\\\\\"hp_after\\\\\\\": 2, \\\\\\\"damage\\\\\\\": 5}\\nassert server.adjust_play_campaign_combatant_hp(\\\\\\\"c1\\\\\\\", \\\\\\\"e1\\\\\\\", \\\\\\\"dm\\\\\\\", {\\\\\\\"target\\\\\\\": \\\\\\\"goblin-1\\\\\\\", \\\\\\\"amount\\\\\\\": 9}, False)[\\\\\\\"hp_after\\\\\\\"] == 0\\nassert server.adjust_play_campaign_combatant_hp(\\\\\\\"c1\\\\\\\", \\\\\\\"e1\\\\\\\", \\\\\\\"dm\\\\\\\", {\\\\\\\"target\\\\\\\": \\\\\\\"goblin-1\\\\\\\", \\\\\\\"amount\\\\\\\": 12}, True) == {\\\\\\\"target\\\\\\\": \\\\\\\"goblin-1\\\\\\\", \\\\\\\"hp_before\\\\\\\": 0, \\\\\\\"hp_after\\\\\\\": 7, \\\\\\\"healing\\\\\\\": 12}\\nwith server.DATABASE_LOCK, server.database() as conn:\\n    roster = json.loads(conn.execute(\\\\\\\"SELECT combatants FROM play_campaign_encounters WHERE id = 'e1'\\\\\\\").fetchone()[0])\\nassert roster[0][\\\\\\\"hp_current\\\\\\\"] == 7\\nPY\\nrm -rf \\\\\\\"\\\"'$test_dir\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

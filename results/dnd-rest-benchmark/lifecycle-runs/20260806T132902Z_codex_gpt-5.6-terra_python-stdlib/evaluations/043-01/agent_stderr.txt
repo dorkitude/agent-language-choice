@@ -1,0 +1,28 @@
+2026-08-06T15:03:50.005823Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_db=$(mktemp /private/tmp/dnd-delay-ready.XXXXXX.db)
+TEST_DB="$test_db" python3 - <<'"'PY'
+import os
+import server
+server.DATABASE_PATH = os.environ['TEST_DB']
+server.initialize_storage()
+server.create_play_campaign('dm', {'id': 'p', 'name': 'Campaign', 'max_players': 2})
+server.add_play_campaign_member('p', 'player-a', {'character_id': 'a', 'name': 'Aria', 'class': 'rogue'})
+server.add_play_campaign_member('p', 'player-b', {'character_id': 'b', 'name': 'Bram', 'class': 'fighter'})
+server.start_play_campaign('p', 'dm')
+server.create_play_campaign_encounter('p', 'dm', {'id': 'e', 'name': 'Road'})
+server.add_play_campaign_combatant('p', 'e', 'dm', {'member': 'player-a', 'initiative': 15})
+server.add_play_campaign_monster('p', 'e', 'dm', {'monster_id': 'goblin', 'name': 'Goblin', 'hp_max': 7, 'initiative': 14})
+server.add_play_campaign_combatant('p', 'e', 'dm', {'member': 'player-b', 'initiative': 13})
+delayed = server.delay_play_campaign_encounter_turn('p', 'e', 'player-a', {'new_index': 2})
+assert [item['name'] for item in delayed['order']] == ['Goblin', 'Bram', 'Aria'], delayed
+assert server.get_play_campaign_encounter_turn('p', 'e', 'player-a')['active']['name'] == 'Aria'
+assert server.ready_play_campaign_encounter_turn('p', 'e', 'player-a', {'trigger': 'when the goblin moves'}) == {'actor': 'player-a', 'trigger': 'when the goblin moves'}
+assert server.get_play_campaign_encounter_turn('p', 'e', 'player-a')['turn_index'] == 2
+try:
+    server.delay_play_campaign_encounter_turn('p', 'e', 'player-a', {'new_index': 2})
+except server.BadRequest:
+    pass
+else:
+    raise AssertionError('expected invalid delay index')
+print('delay/ready domain smoke test: OK')
+PY
+rm -f \""'$test_db"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_db=$(mktemp /private/tmp/dnd-delay-ready.XXXXXX.db)\\nTEST_DB=\\\"$test_db\\\" python3 - <<'\\\"'PY'\\nimport os\\nimport server\\nserver.DATABASE_PATH = os.environ['TEST_DB']\\nserver.initialize_storage()\\nserver.create_play_campaign('dm', {'id': 'p', 'name': 'Campaign', 'max_players': 2})\\nserver.add_play_campaign_member('p', 'player-a', {'character_id': 'a', 'name': 'Aria', 'class': 'rogue'})\\nserver.add_play_campaign_member('p', 'player-b', {'character_id': 'b', 'name': 'Bram', 'class': 'fighter'})\\nserver.start_play_campaign('p', 'dm')\\nserver.create_play_campaign_encounter('p', 'dm', {'id': 'e', 'name': 'Road'})\\nserver.add_play_campaign_combatant('p', 'e', 'dm', {'member': 'player-a', 'initiative': 15})\\nserver.add_play_campaign_monster('p', 'e', 'dm', {'monster_id': 'goblin', 'name': 'Goblin', 'hp_max': 7, 'initiative': 14})\\nserver.add_play_campaign_combatant('p', 'e', 'dm', {'member': 'player-b', 'initiative': 13})\\ndelayed = server.delay_play_campaign_encounter_turn('p', 'e', 'player-a', {'new_index': 2})\\nassert [item['name'] for item in delayed['order']] == ['Goblin', 'Bram', 'Aria'], delayed\\nassert server.get_play_campaign_encounter_turn('p', 'e', 'player-a')['active']['name'] == 'Aria'\\nassert server.ready_play_campaign_encounter_turn('p', 'e', 'player-a', {'trigger': 'when the goblin moves'}) == {'actor': 'player-a', 'trigger': 'when the goblin moves'}\\nassert server.get_play_campaign_encounter_turn('p', 'e', 'player-a')['turn_index'] == 2\\ntry:\\n    server.delay_play_campaign_encounter_turn('p', 'e', 'player-a', {'new_index': 2})\\nexcept server.BadRequest:\\n    pass\\nelse:\\n    raise AssertionError('expected invalid delay index')\\nprint('delay/ready domain smoke test: OK')\\nPY\\nrm -f \\\\\\\"\\\"'$test_db\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
