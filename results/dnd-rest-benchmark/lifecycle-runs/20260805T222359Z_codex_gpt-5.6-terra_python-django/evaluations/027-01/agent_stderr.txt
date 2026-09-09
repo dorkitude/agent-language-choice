@@ -1,0 +1,37 @@
+2026-08-05T23:48:47.695806Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'task_tmp=$(mktemp -d /private/tmp/gm-resolution.XXXXXX)
+TASK_TMP="$task_tmp" PYTHONPATH="$PWD/.deps${PYTHONPATH:+:$PYTHONPATH}" python3.14 - <<'"'PY'
+import json
+import os
+from pathlib import Path
+
+os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"dndsite.settings\")
+from dndsite import storage
+storage.DATABASE_PATH = Path(os.environ[\"TASK_TMP\"]) / \"game.db\"
+import django
+django.setup()
+from django.test import RequestFactory
+from dndsite import urls
+
+factory = RequestFactory()
+
+def post(view, path, body, token):
+    request = factory.post(path, data=json.dumps(body), content_type=\"application/json\", HTTP_AUTHORIZATION=token)
+    response = view(request, \"play-1\")
+    return response.status_code, json.loads(response.content)
+
+assert post(urls.create_play_campaign, \"/v1/play/campaigns\", {\"id\":\"play-1\", \"name\":\"Ashen Road\", \"max_players\":2}, \"Bearer session-dm\")[0] == 201
+assert post(urls.join_play_campaign, \"/v1/play/campaigns/play-1/members\", {\"character_id\":\"a\", \"name\":\"Aria\", \"class\":\"rogue\"}, \"Bearer session-player-a\")[0] == 201
+assert post(urls.join_play_campaign, \"/v1/play/campaigns/play-1/members\", {\"character_id\":\"b\", \"name\":\"Bram\", \"class\":\"cleric\"}, \"Bearer session-player-b\")[0] == 201
+assert post(urls.start_play_campaign, \"/v1/play/campaigns/play-1/start\", {}, \"Bearer session-dm\")[0] == 200
+assert post(urls.append_play_campaign_narration, \"/v1/play/campaigns/play-1/narrations\", {\"text\":\"Dawn.\"}, \"Bearer session-dm\")[1][\"sequence\"] == 1
+assert post(urls.submit_play_campaign_action, \"/v1/play/campaigns/play-1/actions\", {\"type\":\"search\", \"text\":\"I search.\"}, \"Bearer session-player-a\")[1][\"sequence\"] == 2
+status, payload = post(urls.append_play_campaign_resolution, \"/v1/play/campaigns/play-1/resolutions\", {\"text\":\"You find a broken arrow.\"}, \"Bearer session-player-a\")
+assert status == 409, (status, payload)
+status, payload = post(urls.append_play_campaign_resolution, \"/v1/play/campaigns/play-1/resolutions\", {\"text\":\"You find a broken arrow.\"}, \"Bearer session-dm\")
+assert status == 201, (status, payload)
+assert payload == {\"sequence\": 3, \"kind\": \"resolution\", \"actor\": \"dm\", \"text\": \"You find a broken arrow.\", \"next_actor\": \"player-b\", \"turn_number\": 2}, payload
+print(\"isolated GM-resolution flow: OK\")
+PY
+rm -rf \""'$task_tmp"
+git diff --stat -- dndsite/urls.py dndsite/storage.py run.sh
+git status --short -- dndsite/urls.py dndsite/storage.py run.sh'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'task_tmp=$(mktemp -d /private/tmp/gm-resolution.XXXXXX)\\nTASK_TMP=\\\"$task_tmp\\\" PYTHONPATH=\\\"$PWD/.deps${PYTHONPATH:+:$PYTHONPATH}\\\" python3.14 - <<'\\\"'PY'\\nimport json\\nimport os\\nfrom pathlib import Path\\n\\nos.environ.setdefault(\\\\\\\"DJANGO_SETTINGS_MODULE\\\\\\\", \\\\\\\"dndsite.settings\\\\\\\")\\nfrom dndsite import storage\\nstorage.DATABASE_PATH = Path(os.environ[\\\\\\\"TASK_TMP\\\\\\\"]) / \\\\\\\"game.db\\\\\\\"\\nimport django\\ndjango.setup()\\nfrom django.test import RequestFactory\\nfrom dndsite import urls\\n\\nfactory = RequestFactory()\\n\\ndef post(view, path, body, token):\\n    request = factory.post(path, data=json.dumps(body), content_type=\\\\\\\"application/json\\\\\\\", HTTP_AUTHORIZATION=token)\\n    response = view(request, \\\\\\\"play-1\\\\\\\")\\n    return response.status_code, json.loads(response.content)\\n\\nassert post(urls.create_play_campaign, \\\\\\\"/v1/play/campaigns\\\\\\\", {\\\\\\\"id\\\\\\\":\\\\\\\"play-1\\\\\\\", \\\\\\\"name\\\\\\\":\\\\\\\"Ashen Road\\\\\\\", \\\\\\\"max_players\\\\\\\":2}, \\\\\\\"Bearer session-dm\\\\\\\")[0] == 201\\nassert post(urls.join_play_campaign, \\\\\\\"/v1/play/campaigns/play-1/members\\\\\\\", {\\\\\\\"character_id\\\\\\\":\\\\\\\"a\\\\\\\", \\\\\\\"name\\\\\\\":\\\\\\\"Aria\\\\\\\", \\\\\\\"class\\\\\\\":\\\\\\\"rogue\\\\\\\"}, \\\\\\\"Bearer session-player-a\\\\\\\")[0] == 201\\nassert post(urls.join_play_campaign, \\\\\\\"/v1/play/campaigns/play-1/members\\\\\\\", {\\\\\\\"character_id\\\\\\\":\\\\\\\"b\\\\\\\", \\\\\\\"name\\\\\\\":\\\\\\\"Bram\\\\\\\", \\\\\\\"class\\\\\\\":\\\\\\\"cleric\\\\\\\"}, \\\\\\\"Bearer session-player-b\\\\\\\")[0] == 201\\nassert post(urls.start_play_campaign, \\\\\\\"/v1/play/campaigns/play-1/start\\\\\\\", {}, \\\\\\\"Bearer session-dm\\\\\\\")[0] == 200\\nassert post(urls.append_play_campaign_narration, \\\\\\\"/v1/play/campaigns/play-1/narrations\\\\\\\", {\\\\\\\"text\\\\\\\":\\\\\\\"Dawn.\\\\\\\"}, \\\\\\\"Bearer session-dm\\\\\\\")[1][\\\\\\\"sequence\\\\\\\"] == 1\\nassert post(urls.submit_play_campaign_action, \\\\\\\"/v1/play/campaigns/play-1/actions\\\\\\\", {\\\\\\\"type\\\\\\\":\\\\\\\"search\\\\\\\", \\\\\\\"text\\\\\\\":\\\\\\\"I search.\\\\\\\"}, \\\\\\\"Bearer session-player-a\\\\\\\")[1][\\\\\\\"sequence\\\\\\\"] == 2\\nstatus, payload = post(urls.append_play_campaign_resolution, \\\\\\\"/v1/play/campaigns/play-1/resolutions\\\\\\\", {\\\\\\\"text\\\\\\\":\\\\\\\"You find a broken arrow.\\\\\\\"}, \\\\\\\"Bearer session-player-a\\\\\\\")\\nassert status == 409, (status, payload)\\nstatus, payload = post(urls.append_play_campaign_resolution, \\\\\\\"/v1/play/campaigns/play-1/resolutions\\\\\\\", {\\\\\\\"text\\\\\\\":\\\\\\\"You find a broken arrow.\\\\\\\"}, \\\\\\\"Bearer session-dm\\\\\\\")\\nassert status == 201, (status, payload)\\nassert payload == {\\\\\\\"sequence\\\\\\\": 3, \\\\\\\"kind\\\\\\\": \\\\\\\"resolution\\\\\\\", \\\\\\\"actor\\\\\\\": \\\\\\\"dm\\\\\\\", \\\\\\\"text\\\\\\\": \\\\\\\"You find a broken arrow.\\\\\\\", \\\\\\\"next_actor\\\\\\\": \\\\\\\"player-b\\\\\\\", \\\\\\\"turn_number\\\\\\\": 2}, payload\\nprint(\\\\\\\"isolated GM-resolution flow: OK\\\\\\\")\\nPY\\nrm -rf \\\\\\\"\\\"'$task_tmp\\\"\\ngit diff --stat -- dndsite/urls.py dndsite/storage.py run.sh\\ngit status --short -- dndsite/urls.py dndsite/storage.py run.sh'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

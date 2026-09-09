@@ -1,0 +1,36 @@
+2026-08-06T11:19:41.334358Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc "sed -n '1420,1505p' dndsite/urls.py
+sed -n '2280,2355p' dndsite/storage.py
+TMP_DB="'$(mktemp /private/tmp/dnd-inventory-test.XXXXXX.sqlite3)
+PYTHONPATH="$PWD/.deps" TEST_DB="$TMP_DB" python3.14 - <<'"'PY'
+import json, os
+os.environ['DJANGO_SETTINGS_MODULE'] = 'dndsite.settings'
+from pathlib import Path
+import django
+django.setup()
+from dndsite import storage
+storage.DATABASE_PATH = Path(os.environ['TEST_DB'])
+storage.initialize()
+from django.test import Client
+c = Client()
+def request(method, path, body=None, user=None):
+    kwargs = {'content_type': 'application/json'}
+    if user:
+        kwargs['HTTP_AUTHORIZATION'] = f'Bearer session-{user}'
+    response = getattr(c, method)(path, data=json.dumps(body) if body is not None else '', **kwargs)
+    print(method.upper(), response.status_code, response.json())
+    return response
+request('post', '/v1/play/campaigns', {'id':'camp','name':'Campaign','max_players':2}, 'dm')
+request('post', '/v1/play/campaigns/camp/members', {'character_id':'play-char-w','name':'Willow','class':'wizard'}, 'willow')
+request('post', '/v1/play/campaigns/camp/characters/play-char-w/claim', {}, 'willow')
+items='/v1/play/campaigns/camp/characters/play-char-w/inventory/items'
+request('get', items, user='willow')
+request('post', items, {'item_id':'healing-potion','quantity':2}, 'willow')
+request('post', items, {'item_id':'torch','quantity':1}, 'willow')
+request('get', items, user='willow')
+request('delete', items+'/healing-potion', {'quantity':1}, 'willow')
+request('delete', items+'/healing-potion', {'quantity':2}, 'willow')
+request('post', items, {'item_id':'bad','quantity':1}, 'willow')
+request('post', items, {'item_id':'torch','quantity':0}, 'willow')
+request('post', items, {'item_id':'torch','quantity':1}, 'other')
+PY
+rm -f \""'$TMP_DB"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc \\\"sed -n '1420,1505p' dndsite/urls.py\\nsed -n '2280,2355p' dndsite/storage.py\\nTMP_DB=\\\"'$(mktemp /private/tmp/dnd-inventory-test.XXXXXX.sqlite3)\\nPYTHONPATH=\\\"$PWD/.deps\\\" TEST_DB=\\\"$TMP_DB\\\" python3.14 - <<'\\\"'PY'\\nimport json, os\\nos.environ['DJANGO_SETTINGS_MODULE'] = 'dndsite.settings'\\nfrom pathlib import Path\\nimport django\\ndjango.setup()\\nfrom dndsite import storage\\nstorage.DATABASE_PATH = Path(os.environ['TEST_DB'])\\nstorage.initialize()\\nfrom django.test import Client\\nc = Client()\\ndef request(method, path, body=None, user=None):\\n    kwargs = {'content_type': 'application/json'}\\n    if user:\\n        kwargs['HTTP_AUTHORIZATION'] = f'Bearer session-{user}'\\n    response = getattr(c, method)(path, data=json.dumps(body) if body is not None else '', **kwargs)\\n    print(method.upper(), response.status_code, response.json())\\n    return response\\nrequest('post', '/v1/play/campaigns', {'id':'camp','name':'Campaign','max_players':2}, 'dm')\\nrequest('post', '/v1/play/campaigns/camp/members', {'character_id':'play-char-w','name':'Willow','class':'wizard'}, 'willow')\\nrequest('post', '/v1/play/campaigns/camp/characters/play-char-w/claim', {}, 'willow')\\nitems='/v1/play/campaigns/camp/characters/play-char-w/inventory/items'\\nrequest('get', items, user='willow')\\nrequest('post', items, {'item_id':'healing-potion','quantity':2}, 'willow')\\nrequest('post', items, {'item_id':'torch','quantity':1}, 'willow')\\nrequest('get', items, user='willow')\\nrequest('delete', items+'/healing-potion', {'quantity':1}, 'willow')\\nrequest('delete', items+'/healing-potion', {'quantity':2}, 'willow')\\nrequest('post', items, {'item_id':'bad','quantity':1}, 'willow')\\nrequest('post', items, {'item_id':'torch','quantity':0}, 'willow')\\nrequest('post', items, {'item_id':'torch','quantity':1}, 'other')\\nPY\\nrm -f \\\\\\\"\\\"'$TMP_DB\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

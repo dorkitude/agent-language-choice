@@ -1,0 +1,39 @@
+2026-08-06T12:12:19.635185Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'tmp_db=$(mktemp /private/tmp/dnd-shops-test.XXXXXX.db)
+TEST_DB="$tmp_db" PYTHONPATH="$PWD/.deps${PYTHONPATH:+:$PYTHONPATH}" python3.14 - <<'"'PY'
+import os
+from pathlib import Path
+from dndsite import storage
+storage.DATABASE_PATH = Path(os.environ['TEST_DB'])
+import django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dndsite.settings')
+django.setup()
+from django.test import Client
+
+c = Client()
+def call(method, path, data=None, user=None):
+    kwargs = {'content_type': 'application/json'}
+    if data is not None:
+        import json
+        data = json.dumps(data)
+    if user:
+        kwargs['HTTP_AUTHORIZATION'] = f'Bearer session-{user}'
+    response = getattr(c, method)(path, data=data, **kwargs)
+    print(method.upper(), path, response.status_code, response.json())
+    return response
+
+call('post', '/v1/play/campaigns', {'id':'shops-c','name':'Shops','max_players':2}, 'dm')
+call('post', '/v1/play/campaigns/shops-c/members', {'username':'player-a','character_id':'play-char-w','name':'W','class':'wizard'}, 'dm')
+settlement = {'settlement_id':'phandalin','name':'Phandalin','services':['shops'],'availability':'open'}
+call('post', '/v1/play/campaigns/shops-c/settlements', settlement, 'dm')
+shop = {'shop_id':'shop-lionshield','name':'Lionshield Coster','stock':{'healing-potion':3},'buy_price':2,'sell_price':1}
+call('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops', shop, 'dm')
+call('get', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield', user='player-a')
+call('post', '/v1/play/campaigns/shops-c/settlements/phandalin/discover', {}, 'player-a')
+call('get', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield', user='player-a')
+trade = {'character_id':'play-char-w','item_id':'healing-potion','quantity':1}
+call('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield/buy', trade, 'player-a')
+call('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield/sell', trade, 'player-a')
+call('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield/buy', {'character_id':'play-char-w','item_id':'healing-potion','quantity':99}, 'player-a')
+call('get', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield', user='dm')
+PY
+rm -f \""'$tmp_db"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'tmp_db=$(mktemp /private/tmp/dnd-shops-test.XXXXXX.db)\\nTEST_DB=\\\"$tmp_db\\\" PYTHONPATH=\\\"$PWD/.deps${PYTHONPATH:+:$PYTHONPATH}\\\" python3.14 - <<'\\\"'PY'\\nimport os\\nfrom pathlib import Path\\nfrom dndsite import storage\\nstorage.DATABASE_PATH = Path(os.environ['TEST_DB'])\\nimport django\\nos.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dndsite.settings')\\ndjango.setup()\\nfrom django.test import Client\\n\\nc = Client()\\ndef call(method, path, data=None, user=None):\\n    kwargs = {'content_type': 'application/json'}\\n    if data is not None:\\n        import json\\n        data = json.dumps(data)\\n    if user:\\n        kwargs['HTTP_AUTHORIZATION'] = f'Bearer session-{user}'\\n    response = getattr(c, method)(path, data=data, **kwargs)\\n    print(method.upper(), path, response.status_code, response.json())\\n    return response\\n\\ncall('post', '/v1/play/campaigns', {'id':'shops-c','name':'Shops','max_players':2}, 'dm')\\ncall('post', '/v1/play/campaigns/shops-c/members', {'username':'player-a','character_id':'play-char-w','name':'W','class':'wizard'}, 'dm')\\nsettlement = {'settlement_id':'phandalin','name':'Phandalin','services':['shops'],'availability':'open'}\\ncall('post', '/v1/play/campaigns/shops-c/settlements', settlement, 'dm')\\nshop = {'shop_id':'shop-lionshield','name':'Lionshield Coster','stock':{'healing-potion':3},'buy_price':2,'sell_price':1}\\ncall('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops', shop, 'dm')\\ncall('get', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield', user='player-a')\\ncall('post', '/v1/play/campaigns/shops-c/settlements/phandalin/discover', {}, 'player-a')\\ncall('get', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield', user='player-a')\\ntrade = {'character_id':'play-char-w','item_id':'healing-potion','quantity':1}\\ncall('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield/buy', trade, 'player-a')\\ncall('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield/sell', trade, 'player-a')\\ncall('post', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield/buy', {'character_id':'play-char-w','item_id':'healing-potion','quantity':99}, 'player-a')\\ncall('get', '/v1/play/campaigns/shops-c/settlements/phandalin/shops/shop-lionshield', user='dm')\\nPY\\nrm -f \\\\\\\"\\\"'$tmp_db\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

@@ -1,0 +1,40 @@
+2026-08-06T01:07:25.519619Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_db=$(mktemp /private/tmp/dnd-build-test.XXXXXX.sqlite3)
+TEST_DB="$test_db" DJANGO_SETTINGS_MODULE=dndsite.settings python3.14 - <<'"'PY'
+import json
+import os
+from pathlib import Path
+import django
+
+django.setup()
+from django.test import RequestFactory
+from dndsite import storage
+from dndsite.urls import build_play_campaign_character
+
+storage.DATABASE_PATH = Path(os.environ[\"TEST_DB\"])
+storage.initialize()
+storage.create_play_campaign({\"id\": \"camp\", \"name\": \"Camp\", \"owner\": \"dm\", \"status\": \"lobby\", \"max_players\": 2})
+storage.add_play_campaign_member(\"camp\", {\"username\": \"alice\", \"character_id\": \"play-char-a\", \"name\": \"A\", \"class\": \"rogue\"})
+request = RequestFactory().post(
+    \"/v1/play/campaigns/camp/characters/play-char-a/build\",
+    data=json.dumps({\"race\":\"elf\",\"class\":\"rogue\",\"background\":\"criminal\",\"abilities\":{\"str\":8,\"dex\":16,\"con\":12,\"int\":13,\"wis\":10,\"cha\":14}}),
+    content_type=\"application/json\",
+    HTTP_AUTHORIZATION=\"Bearer session-alice\",
+)
+response = build_play_campaign_character(request, \"camp\", \"play-char-a\")
+assert response.status_code == 200, response.content
+assert json.loads(response.content) == {\"character_id\":\"play-char-a\",\"race\":\"elf\",\"class\":\"rogue\",\"background\":\"criminal\",\"level\":1,\"hp_max\":9,\"proficiency_bonus\":2}
+invalid = RequestFactory().post(
+    \"/\", data=json.dumps({\"race\":\"elf\",\"class\":\"rogue\",\"background\":\"criminal\",\"abilities\":{\"str\":8,\"dex\":16,\"con\":31,\"int\":13,\"wis\":10,\"cha\":14}}),
+    content_type=\"application/json\", HTTP_AUTHORIZATION=\"Bearer session-alice\",
+)
+assert build_play_campaign_character(invalid, \"camp\", \"play-char-a\").status_code == 400
+forbidden = RequestFactory().post(
+    \"/\", data=json.dumps({\"race\":\"elf\",\"class\":\"rogue\",\"background\":\"criminal\",\"abilities\":{\"str\":8,\"dex\":16,\"con\":12,\"int\":13,\"wis\":10,\"cha\":14}}),
+    content_type=\"application/json\", HTTP_AUTHORIZATION=\"Bearer session-bob\",
+)
+assert build_play_campaign_character(forbidden, \"camp\", \"play-char-a\").status_code == 403
+print(\"build endpoint checks passed\")
+PY
+rm -f \""'$test_db"
+python3.14 manage.py check
+git status --short -- dndsite run.sh'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_db=$(mktemp /private/tmp/dnd-build-test.XXXXXX.sqlite3)\\nTEST_DB=\\\"$test_db\\\" DJANGO_SETTINGS_MODULE=dndsite.settings python3.14 - <<'\\\"'PY'\\nimport json\\nimport os\\nfrom pathlib import Path\\nimport django\\n\\ndjango.setup()\\nfrom django.test import RequestFactory\\nfrom dndsite import storage\\nfrom dndsite.urls import build_play_campaign_character\\n\\nstorage.DATABASE_PATH = Path(os.environ[\\\\\\\"TEST_DB\\\\\\\"])\\nstorage.initialize()\\nstorage.create_play_campaign({\\\\\\\"id\\\\\\\": \\\\\\\"camp\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"Camp\\\\\\\", \\\\\\\"owner\\\\\\\": \\\\\\\"dm\\\\\\\", \\\\\\\"status\\\\\\\": \\\\\\\"lobby\\\\\\\", \\\\\\\"max_players\\\\\\\": 2})\\nstorage.add_play_campaign_member(\\\\\\\"camp\\\\\\\", {\\\\\\\"username\\\\\\\": \\\\\\\"alice\\\\\\\", \\\\\\\"character_id\\\\\\\": \\\\\\\"play-char-a\\\\\\\", \\\\\\\"name\\\\\\\": \\\\\\\"A\\\\\\\", \\\\\\\"class\\\\\\\": \\\\\\\"rogue\\\\\\\"})\\nrequest = RequestFactory().post(\\n    \\\\\\\"/v1/play/campaigns/camp/characters/play-char-a/build\\\\\\\",\\n    data=json.dumps({\\\\\\\"race\\\\\\\":\\\\\\\"elf\\\\\\\",\\\\\\\"class\\\\\\\":\\\\\\\"rogue\\\\\\\",\\\\\\\"background\\\\\\\":\\\\\\\"criminal\\\\\\\",\\\\\\\"abilities\\\\\\\":{\\\\\\\"str\\\\\\\":8,\\\\\\\"dex\\\\\\\":16,\\\\\\\"con\\\\\\\":12,\\\\\\\"int\\\\\\\":13,\\\\\\\"wis\\\\\\\":10,\\\\\\\"cha\\\\\\\":14}}),\\n    content_type=\\\\\\\"application/json\\\\\\\",\\n    HTTP_AUTHORIZATION=\\\\\\\"Bearer session-alice\\\\\\\",\\n)\\nresponse = build_play_campaign_character(request, \\\\\\\"camp\\\\\\\", \\\\\\\"play-char-a\\\\\\\")\\nassert response.status_code == 200, response.content\\nassert json.loads(response.content) == {\\\\\\\"character_id\\\\\\\":\\\\\\\"play-char-a\\\\\\\",\\\\\\\"race\\\\\\\":\\\\\\\"elf\\\\\\\",\\\\\\\"class\\\\\\\":\\\\\\\"rogue\\\\\\\",\\\\\\\"background\\\\\\\":\\\\\\\"criminal\\\\\\\",\\\\\\\"level\\\\\\\":1,\\\\\\\"hp_max\\\\\\\":9,\\\\\\\"proficiency_bonus\\\\\\\":2}\\ninvalid = RequestFactory().post(\\n    \\\\\\\"/\\\\\\\", data=json.dumps({\\\\\\\"race\\\\\\\":\\\\\\\"elf\\\\\\\",\\\\\\\"class\\\\\\\":\\\\\\\"rogue\\\\\\\",\\\\\\\"background\\\\\\\":\\\\\\\"criminal\\\\\\\",\\\\\\\"abilities\\\\\\\":{\\\\\\\"str\\\\\\\":8,\\\\\\\"dex\\\\\\\":16,\\\\\\\"con\\\\\\\":31,\\\\\\\"int\\\\\\\":13,\\\\\\\"wis\\\\\\\":10,\\\\\\\"cha\\\\\\\":14}}),\\n    content_type=\\\\\\\"application/json\\\\\\\", HTTP_AUTHORIZATION=\\\\\\\"Bearer session-alice\\\\\\\",\\n)\\nassert build_play_campaign_character(invalid, \\\\\\\"camp\\\\\\\", \\\\\\\"play-char-a\\\\\\\").status_code == 400\\nforbidden = RequestFactory().post(\\n    \\\\\\\"/\\\\\\\", data=json.dumps({\\\\\\\"race\\\\\\\":\\\\\\\"elf\\\\\\\",\\\\\\\"class\\\\\\\":\\\\\\\"rogue\\\\\\\",\\\\\\\"background\\\\\\\":\\\\\\\"criminal\\\\\\\",\\\\\\\"abilities\\\\\\\":{\\\\\\\"str\\\\\\\":8,\\\\\\\"dex\\\\\\\":16,\\\\\\\"con\\\\\\\":12,\\\\\\\"int\\\\\\\":13,\\\\\\\"wis\\\\\\\":10,\\\\\\\"cha\\\\\\\":14}}),\\n    content_type=\\\\\\\"application/json\\\\\\\", HTTP_AUTHORIZATION=\\\\\\\"Bearer session-bob\\\\\\\",\\n)\\nassert build_play_campaign_character(forbidden, \\\\\\\"camp\\\\\\\", \\\\\\\"play-char-a\\\\\\\").status_code == 403\\nprint(\\\\\\\"build endpoint checks passed\\\\\\\")\\nPY\\nrm -f \\\\\\\"\\\"'$test_db\\\"\\npython3.14 manage.py check\\ngit status --short -- dndsite run.sh'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

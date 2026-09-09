@@ -1,0 +1,30 @@
+2026-08-05T23:21:30.197874Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'PYTHONPATH="$PWD/.deps" DJANGO_SETTINGS_MODULE=dndsite.settings python3.14 - <<'"'PY'
+import json
+from pathlib import Path
+from django.test import Client
+from dndsite import storage
+
+storage.DATABASE_PATH = Path('/private/tmp/dnd-party-membership-test.sqlite3')
+if storage.DATABASE_PATH.exists():
+    storage.DATABASE_PATH.unlink()
+storage.initialize()
+client = Client()
+
+def post(path, data, token=None):
+    headers = {} if token is None else {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+    response = client.post(path, data=json.dumps(data), content_type='application/json', **headers)
+    return response.status_code, response.json()
+
+assert post('/v1/play/campaigns', {'id':'play-1','name':'Ashen Road','max_players':2}, 'session-dm') == (201, {'id':'play-1','name':'Ashen Road','owner':'dm','status':'lobby','max_players':2})
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Aria','class':'rogue'})[0] == 401
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Aria','class':'rogue'}, 'session-dm')[0] == 403
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Aria','class':'rogue'}, 'session-player-a') == (201, {'username':'player-a','character_id':'play-char-a','name':'Aria','class':'rogue'})
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-b','name':'Bryn','class':'cleric'}, 'session-player-a')[0] == 409
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Bryn','class':'cleric'}, 'session-player-b')[0] == 409
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-b','name':'Bryn','class':'cleric'}, 'session-player-b')[0] == 201
+assert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-c','name':'Cato','class':'bard'}, 'session-stranger')[0] == 409
+print('membership smoke test passed')
+PY
+rm -f /private/tmp/dnd-party-membership-test.sqlite3
+
+git diff -- dndsite/storage.py dndsite/urls.py run.sh"`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'PYTHONPATH=\\\"$PWD/.deps\\\" DJANGO_SETTINGS_MODULE=dndsite.settings python3.14 - <<'\\\"'PY'\\nimport json\\nfrom pathlib import Path\\nfrom django.test import Client\\nfrom dndsite import storage\\n\\nstorage.DATABASE_PATH = Path('/private/tmp/dnd-party-membership-test.sqlite3')\\nif storage.DATABASE_PATH.exists():\\n    storage.DATABASE_PATH.unlink()\\nstorage.initialize()\\nclient = Client()\\n\\ndef post(path, data, token=None):\\n    headers = {} if token is None else {'HTTP_AUTHORIZATION': f'Bearer {token}'}\\n    response = client.post(path, data=json.dumps(data), content_type='application/json', **headers)\\n    return response.status_code, response.json()\\n\\nassert post('/v1/play/campaigns', {'id':'play-1','name':'Ashen Road','max_players':2}, 'session-dm') == (201, {'id':'play-1','name':'Ashen Road','owner':'dm','status':'lobby','max_players':2})\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Aria','class':'rogue'})[0] == 401\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Aria','class':'rogue'}, 'session-dm')[0] == 403\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Aria','class':'rogue'}, 'session-player-a') == (201, {'username':'player-a','character_id':'play-char-a','name':'Aria','class':'rogue'})\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-b','name':'Bryn','class':'cleric'}, 'session-player-a')[0] == 409\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-a','name':'Bryn','class':'cleric'}, 'session-player-b')[0] == 409\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-b','name':'Bryn','class':'cleric'}, 'session-player-b')[0] == 201\\nassert post('/v1/play/campaigns/play-1/members', {'character_id':'play-char-c','name':'Cato','class':'bard'}, 'session-stranger')[0] == 409\\nprint('membership smoke test passed')\\nPY\\nrm -f /private/tmp/dnd-party-membership-test.sqlite3\\n\\ngit diff -- dndsite/storage.py dndsite/urls.py run.sh\\\"` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

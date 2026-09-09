@@ -1,0 +1,28 @@
+2026-08-06T00:51:17.660464Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'test_dir=$(mktemp -d /private/tmp/dnd-delay-ready.XXXXXX)
+TEST_DATABASE="$test_dir/game.db" PYTHONPATH="$PWD/.deps:$PWD" python3.14 - <<'"'PY'
+import os
+from pathlib import Path
+from dndsite import storage
+
+storage.DATABASE_PATH = Path(os.environ[\"TEST_DATABASE\"])
+storage.initialize()
+with storage.connection() as db:
+    db.execute(\"INSERT INTO play_campaigns (id,name,owner,status,max_players,phase) VALUES ('c','Campaign','dm','active',2,'combat')\")
+    db.execute(\"INSERT INTO play_campaign_members (campaign_id,username,character_id,name,class) VALUES ('c','player-a','char-a','Aria','wizard')\")
+    db.execute(\"INSERT INTO play_campaign_members (campaign_id,username,character_id,name,class) VALUES ('c','player-b','char-b','Bram','fighter')\")
+    db.execute(\"INSERT INTO play_campaign_encounters (id,campaign_id,name,status,combat_round,turn_index) VALUES ('e','c','Road','active',1,1)\")
+    db.execute(\"INSERT INTO play_campaign_encounter_monsters VALUES ('e','goblin-1','Goblin',7,7,16)\")
+    db.execute(\"INSERT INTO play_campaign_encounter_combatants VALUES ('e','player-a','char-a','Aria',14)\")
+    db.execute(\"INSERT INTO play_campaign_encounter_combatants VALUES ('e','player-b','char-b','Bram',13)\")
+result, delayed = storage.delay_play_campaign_encounter_turn('c', 'player-a', 'e', 2)
+assert result == 'delayed'
+assert [item['name'] for item in delayed['order']] == ['Goblin', 'Bram', 'Aria']
+result, ready = storage.ready_play_campaign_encounter_action('c', 'player-a', 'e', 'when the goblin moves')
+assert (result, ready) == ('created', {'actor': 'player-a', 'trigger': 'when the goblin moves'})
+result, turn = storage.get_play_campaign_encounter_turn('c', 'player-a', 'e')
+assert result == 'found' and turn['turn_index'] == 2 and turn['active']['name'] == 'Aria'
+result, _ = storage.delay_play_campaign_encounter_turn('c', 'player-a', 'e', 2)
+assert result == 'invalid_index'
+print('delay/ready storage behavior verified')
+PY
+rm -rf \""'$test_dir"'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'test_dir=$(mktemp -d /private/tmp/dnd-delay-ready.XXXXXX)\\nTEST_DATABASE=\\\"$test_dir/game.db\\\" PYTHONPATH=\\\"$PWD/.deps:$PWD\\\" python3.14 - <<'\\\"'PY'\\nimport os\\nfrom pathlib import Path\\nfrom dndsite import storage\\n\\nstorage.DATABASE_PATH = Path(os.environ[\\\\\\\"TEST_DATABASE\\\\\\\"])\\nstorage.initialize()\\nwith storage.connection() as db:\\n    db.execute(\\\\\\\"INSERT INTO play_campaigns (id,name,owner,status,max_players,phase) VALUES ('c','Campaign','dm','active',2,'combat')\\\\\\\")\\n    db.execute(\\\\\\\"INSERT INTO play_campaign_members (campaign_id,username,character_id,name,class) VALUES ('c','player-a','char-a','Aria','wizard')\\\\\\\")\\n    db.execute(\\\\\\\"INSERT INTO play_campaign_members (campaign_id,username,character_id,name,class) VALUES ('c','player-b','char-b','Bram','fighter')\\\\\\\")\\n    db.execute(\\\\\\\"INSERT INTO play_campaign_encounters (id,campaign_id,name,status,combat_round,turn_index) VALUES ('e','c','Road','active',1,1)\\\\\\\")\\n    db.execute(\\\\\\\"INSERT INTO play_campaign_encounter_monsters VALUES ('e','goblin-1','Goblin',7,7,16)\\\\\\\")\\n    db.execute(\\\\\\\"INSERT INTO play_campaign_encounter_combatants VALUES ('e','player-a','char-a','Aria',14)\\\\\\\")\\n    db.execute(\\\\\\\"INSERT INTO play_campaign_encounter_combatants VALUES ('e','player-b','char-b','Bram',13)\\\\\\\")\\nresult, delayed = storage.delay_play_campaign_encounter_turn('c', 'player-a', 'e', 2)\\nassert result == 'delayed'\\nassert [item['name'] for item in delayed['order']] == ['Goblin', 'Bram', 'Aria']\\nresult, ready = storage.ready_play_campaign_encounter_action('c', 'player-a', 'e', 'when the goblin moves')\\nassert (result, ready) == ('created', {'actor': 'player-a', 'trigger': 'when the goblin moves'})\\nresult, turn = storage.get_play_campaign_encounter_turn('c', 'player-a', 'e')\\nassert result == 'found' and turn['turn_index'] == 2 and turn['active']['name'] == 'Aria'\\nresult, _ = storage.delay_play_campaign_encounter_turn('c', 'player-a', 'e', 2)\\nassert result == 'invalid_index'\\nprint('delay/ready storage behavior verified')\\nPY\\nrm -rf \\\\\\\"\\\"'$test_dir\\\"'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

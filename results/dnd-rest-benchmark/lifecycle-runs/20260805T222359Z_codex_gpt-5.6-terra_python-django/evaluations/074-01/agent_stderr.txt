@@ -1,0 +1,45 @@
+2026-08-06T12:27:40.207696Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'task_tmp=$(mktemp -d)
+TASK_TMP="$task_tmp" PYTHONPATH="$PWD/.deps" python3.14 - <<'"'PY'
+import json
+import os
+from pathlib import Path
+
+from dndsite import storage
+storage.DATABASE_PATH = Path(os.environ[\"TASK_TMP\"]) / \"game.db\"
+os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"dndsite.settings\")
+import django
+django.setup()
+from django.test import Client
+
+client = Client()
+def call(method, url, body=None, token=None):
+    kwargs = {}
+    if body is not None:
+        kwargs[\"data\"] = json.dumps(body)
+        kwargs[\"content_type\"] = \"application/json\"
+    if token:
+        kwargs[\"HTTP_AUTHORIZATION\"] = f\"Bearer session-{token}\"
+    response = getattr(client, method)(url, **kwargs)
+    return response.status_code, response.json()
+
+assert call(\"post\", \"/v1/play/campaigns\", {\"id\":\"camp\",\"name\":\"Camp\",\"max_players\":2}, \"dm\")[0] == 201
+assert call(\"post\", \"/v1/play/campaigns/camp/members\", {\"username\":\"player\",\"character_id\":\"pc\",\"name\":\"Player\",\"class\":\"rogue\"}, \"dm\")[0] == 201
+record = {\"content_id\":\"content-spider\",\"kind\":\"scene\",\"text\":\"A giant spider descends.\",\"tags\":[\"arachnophobia\",\"combat\"]}
+assert call(\"post\", \"/v1/play/campaigns/camp/content\", record, \"dm\") == (201, record)
+assert call(\"post\", \"/v1/play/campaigns/camp/content\", record, \"dm\")[0] == 409
+assert call(\"post\", \"/v1/play/campaigns/camp/content\", record, \"player\")[0] == 403
+assert call(\"get\", \"/v1/play/campaigns/camp/content?exclude_tag=arachnophobia\", token=\"dm\") == (200, {\"content\":[record]})
+assert call(\"get\", \"/v1/play/campaigns/camp/content?exclude_tag=arachnophobia\", token=\"player\") == (200, {\"content\":[]})
+updated = {**record, \"tags\": []}
+assert call(\"put\", \"/v1/play/campaigns/camp/content/content-spider/tags\", {\"tags\":[]}, \"dm\") == (200, updated)
+assert call(\"put\", \"/v1/play/campaigns/camp/content/content-spider/tags\", {\"tags\":[\"x\",\"x\"]}, \"dm\")[0] == 400
+assert call(\"get\", \"/v1/play/campaigns/camp/content?exclude_tag=\", token=\"player\")[0] == 400
+assert call(\"get\", \"/v1/play/campaigns/nope/content\", token=\"dm\")[0] == 404
+print(\"content endpoint smoke tests passed\")
+PY
+status="'$?
+rm -rf "$task_tmp"
+exit $status
+python3.14 -m compileall -q dndsite
+./run.sh >/dev/null 2>&1 &
+'`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'task_tmp=$(mktemp -d)\\nTASK_TMP=\\\"$task_tmp\\\" PYTHONPATH=\\\"$PWD/.deps\\\" python3.14 - <<'\\\"'PY'\\nimport json\\nimport os\\nfrom pathlib import Path\\n\\nfrom dndsite import storage\\nstorage.DATABASE_PATH = Path(os.environ[\\\\\\\"TASK_TMP\\\\\\\"]) / \\\\\\\"game.db\\\\\\\"\\nos.environ.setdefault(\\\\\\\"DJANGO_SETTINGS_MODULE\\\\\\\", \\\\\\\"dndsite.settings\\\\\\\")\\nimport django\\ndjango.setup()\\nfrom django.test import Client\\n\\nclient = Client()\\ndef call(method, url, body=None, token=None):\\n    kwargs = {}\\n    if body is not None:\\n        kwargs[\\\\\\\"data\\\\\\\"] = json.dumps(body)\\n        kwargs[\\\\\\\"content_type\\\\\\\"] = \\\\\\\"application/json\\\\\\\"\\n    if token:\\n        kwargs[\\\\\\\"HTTP_AUTHORIZATION\\\\\\\"] = f\\\\\\\"Bearer session-{token}\\\\\\\"\\n    response = getattr(client, method)(url, **kwargs)\\n    return response.status_code, response.json()\\n\\nassert call(\\\\\\\"post\\\\\\\", \\\\\\\"/v1/play/campaigns\\\\\\\", {\\\\\\\"id\\\\\\\":\\\\\\\"camp\\\\\\\",\\\\\\\"name\\\\\\\":\\\\\\\"Camp\\\\\\\",\\\\\\\"max_players\\\\\\\":2}, \\\\\\\"dm\\\\\\\")[0] == 201\\nassert call(\\\\\\\"post\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/members\\\\\\\", {\\\\\\\"username\\\\\\\":\\\\\\\"player\\\\\\\",\\\\\\\"character_id\\\\\\\":\\\\\\\"pc\\\\\\\",\\\\\\\"name\\\\\\\":\\\\\\\"Player\\\\\\\",\\\\\\\"class\\\\\\\":\\\\\\\"rogue\\\\\\\"}, \\\\\\\"dm\\\\\\\")[0] == 201\\nrecord = {\\\\\\\"content_id\\\\\\\":\\\\\\\"content-spider\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"scene\\\\\\\",\\\\\\\"text\\\\\\\":\\\\\\\"A giant spider descends.\\\\\\\",\\\\\\\"tags\\\\\\\":[\\\\\\\"arachnophobia\\\\\\\",\\\\\\\"combat\\\\\\\"]}\\nassert call(\\\\\\\"post\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content\\\\\\\", record, \\\\\\\"dm\\\\\\\") == (201, record)\\nassert call(\\\\\\\"post\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content\\\\\\\", record, \\\\\\\"dm\\\\\\\")[0] == 409\\nassert call(\\\\\\\"post\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content\\\\\\\", record, \\\\\\\"player\\\\\\\")[0] == 403\\nassert call(\\\\\\\"get\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content?exclude_tag=arachnophobia\\\\\\\", token=\\\\\\\"dm\\\\\\\") == (200, {\\\\\\\"content\\\\\\\":[record]})\\nassert call(\\\\\\\"get\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content?exclude_tag=arachnophobia\\\\\\\", token=\\\\\\\"player\\\\\\\") == (200, {\\\\\\\"content\\\\\\\":[]})\\nupdated = {**record, \\\\\\\"tags\\\\\\\": []}\\nassert call(\\\\\\\"put\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content/content-spider/tags\\\\\\\", {\\\\\\\"tags\\\\\\\":[]}, \\\\\\\"dm\\\\\\\") == (200, updated)\\nassert call(\\\\\\\"put\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content/content-spider/tags\\\\\\\", {\\\\\\\"tags\\\\\\\":[\\\\\\\"x\\\\\\\",\\\\\\\"x\\\\\\\"]}, \\\\\\\"dm\\\\\\\")[0] == 400\\nassert call(\\\\\\\"get\\\\\\\", \\\\\\\"/v1/play/campaigns/camp/content?exclude_tag=\\\\\\\", token=\\\\\\\"player\\\\\\\")[0] == 400\\nassert call(\\\\\\\"get\\\\\\\", \\\\\\\"/v1/play/campaigns/nope/content\\\\\\\", token=\\\\\\\"dm\\\\\\\")[0] == 404\\nprint(\\\\\\\"content endpoint smoke tests passed\\\\\\\")\\nPY\\nstatus=\\\"'$?\\nrm -rf \\\"$task_tmp\\\"\\nexit $status\\npython3.14 -m compileall -q dndsite\\n./run.sh >/dev/null 2>&1 &\\n'` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
