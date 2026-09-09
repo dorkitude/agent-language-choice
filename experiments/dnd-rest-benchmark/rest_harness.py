@@ -2042,6 +2042,10 @@ def structured_agent_error_text(stdout: str) -> str:
 
     for record in parse_json_output(stdout):
         event_type = record.get("type")
+        # Pi marks failed local tool commands with isError. Their output can
+        # contain benchmark HTTP 429 responses; it is not a provider error.
+        if event_type in {"tool_execution_start", "tool_execution_update", "tool_execution_end", "tool_result", "tool-result"}:
+            continue
         if event_type in {"error", "agent_error", "agent-error"}:
             errors.append(json.dumps(record, ensure_ascii=False))
             continue

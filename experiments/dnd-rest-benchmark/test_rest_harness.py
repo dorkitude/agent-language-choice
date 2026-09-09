@@ -75,6 +75,12 @@ class ProviderCapacityTests(unittest.TestCase):
         content=json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'Selected model is at capacity.'}})
         self.assertEqual(h.classify_agent_exit(content,'',False,0),'ok')
 
+    def test_failed_pi_tool_with_http_429_is_not_provider_rate_limit(self):
+        tool=json.dumps({'type':'tool_execution_end','isError':True,'result':{'content':[{'type':'text','text':'HTTP 429\nCommand exited with code 143'}]}})
+        self.assertEqual(h.classify_agent_exit(tool,'',False,0),'ok')
+        provider=json.dumps({'type':'error','message':'429 too many requests'})
+        self.assertEqual(h.classify_agent_exit(tool+'\n'+provider,'',False,1),'rate_limit')
+
     def test_expired_claude_oauth_is_auth_infrastructure(self):
         error=json.dumps({'type':'result','is_error':True,'result':'Failed to authenticate: OAuth session expired and could not be refreshed'})
         self.assertEqual(h.classify_agent_exit(error,'',False,1),'auth_error')
