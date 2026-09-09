@@ -7,3 +7,5 @@
 - [003-infra-block-classification.md](003-infra-block-classification.md):
   correction note separating Claude CLI quota/session/auth/rate-limit blocks
   from ordinary benchmark failures.
+
+- [004-resumed-100-stage-matrix.md](004-resumed-100-stage-matrix.md): September 9 restart decision and pre-resume 100-stage statuses.

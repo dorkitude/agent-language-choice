@@ -50,6 +50,18 @@ The completed 5-model by 15-target D&D REST lifecycle matrix is summarized in
 That completed matrix used nine cumulative stages and latest terminal results
 after the 2026-07-12/13 Claude reruns.
 
+## Active continuation — September 9, 2026
+
+The 100-stage lifecycle experiment is active again, tracked in
+[issue #6](https://github.com/dorkitude/agent-language-choice/issues/6). Kyle directed that resumed work stay in
+the existing run directories, SQLite database, and dashboard. The first resumed
+cell is GPT-5.6 Terra / Rust stdlib after 94 completed stages. The Go evaluator
+tests passed before restarting. The historical nine-stage findings below are
+a separate completed baseline, not the current 100-stage standings.
+
+See [the restart record](docs/findings/004-resumed-100-stage-matrix.md) for the
+pre-resume counts and interpretation limits.
+
 ## Current Findings
 
 | Finding | Current result | Underlying files |
