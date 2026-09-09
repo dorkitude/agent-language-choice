@@ -37,6 +37,10 @@ export function forbidden(message: string = ErrorMessages.forbidden) {
   return NextResponse.json({ error: message }, { status: 403 });
 }
 
+export function internalServerError(message: string) {
+  return NextResponse.json({ error: message }, { status: 500 });
+}
+
 /**
  * Parse and validate the JSON body of a POST request.
  *

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { badRequest, parseJsonBody } from "../../../lib/http.js";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   const parsed = await parseJsonBody(req);
   if (!parsed.ok) return parsed.response;

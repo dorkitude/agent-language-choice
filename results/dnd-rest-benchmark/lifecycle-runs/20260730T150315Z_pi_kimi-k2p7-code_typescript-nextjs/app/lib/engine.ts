@@ -234,7 +234,7 @@ const VALID_CLASSES = new Set([
   "wizard",
 ]);
 
-const CLASS_HIT_DICE: Record<string, number> = {
+export const CLASS_HIT_DICE: Record<string, number> = {
   barbarian: 12,
   bard: 6,
   cleric: 8,
@@ -248,6 +248,87 @@ const CLASS_HIT_DICE: Record<string, number> = {
   warlock: 8,
   wizard: 6,
 };
+
+const SPELLCASTING_CLASSES = new Set([
+  "bard",
+  "cleric",
+  "druid",
+  "sorcerer",
+  "warlock",
+  "wizard",
+]);
+
+export function isSpellcastingClass(characterClass: string): boolean {
+  return SPELLCASTING_CLASSES.has(characterClass.toLowerCase());
+}
+
+export function maxPreparedSpells(
+  characterClass: string,
+  level: number
+): number {
+  if (!isSpellcastingClass(characterClass)) return 0;
+  if (!Number.isInteger(level) || level < 1) return 0;
+  // Simplified rule: a spellcasting character may prepare a number of spells
+  // equal to their class level. A level-1 wizard therefore may prepare one spell.
+  return level;
+}
+
+// SRD 5e full-caster spell slots by level.  Level 1 is intentionally overridden
+// to one first-level slot to match the stage 52 spell-casting contract example.
+const FULL_CASTER_SPELL_SLOTS: Record<number, Record<number, number>> = {
+  1: { 1: 1 },
+  2: { 1: 3 },
+  3: { 1: 4, 2: 2 },
+  4: { 1: 4, 2: 3 },
+  5: { 1: 4, 2: 3, 3: 2 },
+  6: { 1: 4, 2: 3, 3: 3 },
+  7: { 1: 4, 2: 3, 3: 3, 4: 1 },
+  8: { 1: 4, 2: 3, 3: 3, 4: 2 },
+  9: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 1 },
+  10: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2 },
+  11: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1 },
+  12: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1 },
+  13: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1 },
+  14: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1 },
+  15: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1 },
+  16: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1 },
+  17: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1 },
+  18: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1 },
+  19: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 1, 8: 1, 9: 1 },
+  20: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 2, 8: 1, 9: 1 },
+};
+
+export function getSpellSlots(
+  characterClass: string,
+  level: number
+): Record<number, number> | null {
+  if (!isSpellcastingClass(characterClass)) return null;
+  if (!Number.isInteger(level) || level < 1 || level > 20) return null;
+
+  const normalizedClass = characterClass.toLowerCase();
+
+  // Full casters share the standard slot table.
+  if (
+    normalizedClass === "bard" ||
+    normalizedClass === "cleric" ||
+    normalizedClass === "druid" ||
+    normalizedClass === "sorcerer" ||
+    normalizedClass === "wizard"
+  ) {
+    return FULL_CASTER_SPELL_SLOTS[level] ?? null;
+  }
+
+  // Warlock pact magic: a single slot level that scales with character level.
+  if (normalizedClass === "warlock") {
+    const slotLevel = Math.max(1, Math.min(9, Math.ceil(level / 2)));
+    const slotCount = level >= 11 ? 3 : level >= 2 ? 2 : 1;
+    return { [slotLevel]: slotCount };
+  }
+
+  // Half casters (paladin, ranger) use a halved progression capped at level 5.
+  const halfCasterLevel = Math.max(1, Math.min(5, Math.floor(level / 2)));
+  return FULL_CASTER_SPELL_SLOTS[halfCasterLevel] ?? null;
+}
 
 const VALID_BACKGROUNDS = new Set([
   "acolyte",

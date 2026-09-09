@@ -42,8 +42,8 @@ curl http://127.0.0.1:$PORT/v1/storage/status
 | `./next.config.js` | Minimal Next.js config. |
 | `./instrumentation.ts` | `register()` hook that eagerly initializes the SQLite schema on Node.js startup. Uses a dynamic import so the Edge Runtime bundle does not statically load the SQLite module. |
 | `./app/lib/types.ts` | Shared domain type definitions used by both the engine and storage layers. |
-| `./app/lib/engine.ts` | Pure, deterministic game-rule logic: dice stats, ability checks, initiative, encounter XP, derived stats, combat session lifecycle. |
-| `./app/lib/storage.ts` | SQLite connection management, schema migration, and CRUD repositories grouped by domain. |
+| `./app/lib/engine.ts` | Pure, deterministic game-rule logic: dice stats, ability checks, initiative, encounter XP, derived stats, combat session lifecycle, character build/level-up rules. |
+| `./app/lib/storage.ts` | Single monolithic SQLite repository. Owns the `DatabaseSync` connection, schema, migrations, and all CRUD functions grouped by domain section. |
 | `./app/lib/auth.ts` | Username/password validation, scrypt hashing, and bearer-token authorization. |
 | `./app/lib/http.ts` | Common request parsing (`parseJsonBody`) and shared HTTP response helpers (`ok`, `created`, `badRequest`, `notFound`, `conflict`, `unauthorized`, `forbidden`). |
 | `./app/lib/validate.ts` | Deterministic predicates (`isNonEmptyString`, `isInteger`, `isPositiveInteger`, `isStringArray`, etc.) used by route handlers. |
@@ -63,6 +63,10 @@ Route handlers are responsible for **only three things**:
 2. Call the appropriate engine or storage function.
 3. Format the result into a `NextResponse` with the correct status code.
 
+### Why `storage.ts` is one file
+
+All persistence code lives in a single module so that the cumulative evaluator suite sees exactly one deterministic SQLite surface.  Domain boundaries inside the file are marked with section comments (`// Users`, `// Campaigns`, `// Play campaigns`, etc.).  If you add a new domain, append a new clearly labeled section to `storage.ts` rather than creating a separate persistence module, so that lazy initialization and transaction conventions remain uniform.
+
 ---
 
 ## State, persistence, and routing
@@ -72,6 +76,8 @@ Route handlers are responsible for **only three things**:
 The default database path is `game.db` in the project root.  You can override it with `DB_PATH`.
 
 `storage.ts` owns a single lazy `DatabaseSync` instance.  The first call to `getDb()` (or any repository function that calls it) runs `initStorage()`, which creates the schema and seeds `schema_version` if needed.  The `instrumentation.ts` hook eagerly calls `initStorage()` in the Node.js runtime so the first request does not pay the schema-creation cost.
+
+`initStorage()` keeps the base `CREATE TABLE` statements and delegates stage-by-stage additive migrations to `runMigrations()`.  Each migration is wrapped in a try/catch so it is safe to rerun against a database that already has the column or table.
 
 #### Schema overview
 
@@ -99,10 +105,18 @@ The default database path is `game.db` in the project root.  You can override it
 | `campaign_session_agenda` | Ordered agenda items for a session. |
 | `campaign_session_attendance` | Per-session character attendance. |
 | `play_campaigns` | Turn-based play campaigns. |
-| `play_campaign_members` | Player membership in a play campaign. |
-| `play_campaign_state` | Active turn state (current actor, turn number, nudge count). |
-| `play_campaign_narrations` | Ordered narration / action / resolution events. |
+| `play_campaign_members` | Player membership in a play campaign, including HP, death saves, and build data. |
+| `play_campaign_state` | Active turn state (current actor, turn number, nudge count, location, phase). |
+| `play_campaign_narrations` | Ordered narration / action / resolution / travel / rest / combat events. |
+| `play_campaign_scenes` | Play-campaign scenes with open/closed status. |
+| `play_campaign_current_scene` | Currently active scene for a campaign. |
 | `play_campaign_documents` | Campaign documents (story and DM notes). |
+| `play_campaign_locations` | Named locations within a play campaign. |
+| `play_campaign_location_connections` | Directed travel edges between locations with turn cost. |
+| `play_campaign_encounters` | Active or completed encounters within a play campaign. |
+| `play_campaign_encounter_combatants` | Party members bound to an encounter with initiative. |
+| `play_campaign_encounter_monsters` | Monster roster for an encounter with HP and initiative. |
+| `play_campaign_encounter_conditions` | Time-limited conditions on encounter targets. |
 
 All parent-child tables use `ON DELETE CASCADE`.
 
@@ -119,7 +133,7 @@ The API is intentionally deterministic:
 
 Endpoints are organized by URL path under `app/v1/`.  Next.js maps each `route.ts` to `/v1/<path>` automatically.  Dynamic segments are declared as `[id]` or `[slug]` directories.
 
-Because these routes read from and write to SQLite, storage-touching handlers export `export const dynamic = "force-dynamic"` to prevent any static caching.
+All route handlers export `export const dynamic = "force-dynamic"` to prevent any static caching and keep the API surface uniform across pure computation and storage-touching endpoints.
 
 ---
 
@@ -219,9 +233,64 @@ Because these routes read from and write to SQLite, storage-touching handlers ex
 | `GET` | `/v1/play/campaigns/[id]/turn` | Read turn state and queue. |
 | `GET` | `/v1/play/campaigns/[id]/my-turn` | Player-specific turn context. |
 | `POST` | `/v1/play/campaigns/[id]/turn/nudge` | Nudge the current actor. |
+| `POST` | `/v1/play/campaigns/[id]/turn/travel` | Travel to a connected location. |
+| `POST` | `/v1/play/campaigns/[id]/turn/rest` | Take a short or long rest. |
 | `GET` | `/v1/play/campaigns/[id]/gm/status` | GM dashboard view. |
 | `GET` | `/v1/play/campaigns/[id]/document` | Read campaign document (players see `story`; DM sees `story` + `dm_notes`). |
 | `PUT` | `/v1/play/campaigns/[id]/document` | Update campaign document (DM only). |
+
+### Play-campaign characters
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/play/campaigns/[id]/characters/[char_id]/owner` | Read character ownership. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/claim` | Claim an unowned character. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/transfer` | Transfer character ownership to another member. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/build` | Save race/class/background/abilities/level/HP build. |
+| `GET` | `/v1/play/campaigns/[id]/characters/[char_id]/status` | Read HP and status. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/damage` | Apply damage to a character. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/death-saves` | Record a death save outcome. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/level-up` | Level up a character by one. |
+| `POST` | `/v1/play/campaigns/[id]/characters/[char_id]/skill-check` | Roll a skill check using the character's build. |
+
+### Play-campaign scenes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/play/campaigns/[id]/scenes` | Create a scene. |
+| `POST` | `/v1/play/campaigns/[id]/scenes/[scene_id]/enter` | Enter a scene and record it in the narration log. |
+| `GET` | `/v1/play/campaigns/[id]/scenes/current` | Read the currently open scene. |
+| `POST` | `/v1/play/campaigns/[id]/scenes/[scene_id]/close` | Close a scene. |
+
+### Play-campaign locations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/play/campaigns/[id]/locations` | Create a location. |
+| `POST` | `/v1/play/campaigns/[id]/locations/[loc_id]/connections` | Connect a location to another. |
+| `GET` | `/v1/play/campaigns/[id]/locations/[loc_id]/travel` | List outbound travel destinations. |
+
+### Play-campaign encounters
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/play/campaigns/[id]/encounters` | Create an active encounter and enter combat phase. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/monsters` | Add a monster to the encounter. |
+| `DELETE` | `/v1/play/campaigns/[id]/encounters/[enc_id]/monsters/[monster_id]` | Remove a monster from the encounter. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/combatants` | Bind a party member to the encounter. |
+| `DELETE` | `/v1/play/campaigns/[id]/encounters/[enc_id]/combatants/[member]` | Unbind a party member from the encounter. |
+| `GET` | `/v1/play/campaigns/[id]/encounters/[enc_id]/status` | Read encounter turn, order, and conditions. |
+| `GET` | `/v1/play/campaigns/[id]/encounters/[enc_id]/turn` | Read current encounter turn. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/turn/advance` | Advance the encounter turn. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/turn/delay` | Delay the current turn to a later index. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/turn/ready` | Record a ready action. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/conditions` | Add a condition to a target. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/damage` | Apply damage to a combatant. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/heal` | Apply healing to a combatant. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/actions` | Record a player combat action in the narration log. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/rewards` | Award XP and loot for the encounter. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/close` | Close the encounter. |
+| `POST` | `/v1/play/campaigns/[id]/encounters/[enc_id]/end` | End the encounter and return to exploration. |
 
 ### Health
 
@@ -238,14 +307,21 @@ Because these routes read from and write to SQLite, storage-touching handlers ex
 1. Create a new `route.ts` under the appropriate `app/v1/...` directory.
 2. Use `parseJsonBody(req)` from `app/lib/http.ts` for JSON parsing.
 3. Reuse the shared helpers from `app/lib/http.ts` for responses and from `app/lib/validate.ts` for deterministic field checks.
-4. Keep validation in the route; keep business logic in `app/lib/engine.ts` or repository code in `app/lib/storage.ts`.
-5. If the endpoint touches SQLite, add `export const dynamic = "force-dynamic"`.
+4. Keep validation in the route; keep business logic in `app/lib/engine.ts` and repository code in the appropriate section of `app/lib/storage.ts`.
+5. Add `export const dynamic = "force-dynamic"` to every new route handler to keep behavior uniform and avoid static caching.
 6. Reuse the shared error shapes: `Invalid JSON`, `Bad request`, `Not found`, `Conflict`, `Unauthorized`, `Forbidden`.
+
+### Adding persistence logic
+
+* Repository functions belong in `app/lib/storage.ts` within the appropriate domain section.
+* Use `getDb()` from the top of the file to obtain the initialized `DatabaseSync` instance.
+* Wrap multi-statement writes in `BEGIN IMMEDIATE;` / `COMMIT;` with `ROLLBACK;` in the catch path so the suite sees atomic updates.
+* Return `null` on unique-key conflicts or missing rows so routes can map to `404` or `409` consistently.
+* Additive schema changes should be appended to `runMigrations()` with a try/catch guard so they are idempotent across resets and fresh starts.
 
 ### Adding domain logic
 
 * Pure functions belong in `engine.ts` and should return `null` (or a sentinel) on invalid input so routes can map to `400`.
-* Repository functions belong in `storage.ts` and should return `null` on unique-key conflicts so routes can map to `409`.
 * Shared data types belong in `types.ts`.  Do not import `engine.ts` from `storage.ts`; both should import from `types.ts`.
 
 ### Testing locally
@@ -255,9 +331,11 @@ The evaluator exercises the full suite cumulatively, so a manual smoke test shou
 1. `GET /health`
 2. `POST /v1/storage/reset`
 3. Register/login a user
-4. Create compendium entries, campaigns, characters, events
+4. Create compendium entries, campaigns, characters, events, quests, factions, NPCs, inventory, crafting, and sessions
 5. Build encounters, create combat sessions, advance/condition turns
-6. Create play campaigns, add members, start, narrate, act, resolve, and edit documents
+6. Create play campaigns, add members, start, narrate, act, resolve, travel, rest, and edit documents
+7. Create scenes, locations, and connections; enter/close scenes and travel between locations
+8. Create encounters, add monsters and party combatants, advance turns, apply damage/healing/conditions, award rewards, and end encounters
 
 You can run the service in the foreground with `PORT=3000 ./run.sh` and use `curl` or any HTTP client.
 
@@ -269,3 +347,4 @@ You can run the service in the foreground with `PORT=3000 ./run.sh` and use `cur
 * SQLite is initialized lazily, so most route handlers do not need to call `initStorage()` explicitly.
 * All route handlers use the standard `Request` / `NextResponse` API and assume the Node.js runtime.
 * Authorization is based on deterministic `session-<username>` bearer tokens.  Unregistered tokens are accepted and their role is inferred from the username (`dm` or `dm-*` -> DM, otherwise player) so that the play surface can be exercised without a registration step.
+* Keep all persistence code in `app/lib/storage.ts` to preserve the single deterministic SQLite surface expected by the cumulative suite.

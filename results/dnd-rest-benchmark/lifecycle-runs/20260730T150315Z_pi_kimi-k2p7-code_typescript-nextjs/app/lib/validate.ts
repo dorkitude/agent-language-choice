@@ -31,3 +31,14 @@ export function isNonEmptyStringArray(value: unknown): value is string[] {
     (item) => typeof item === "string" && item.length > 0
   );
 }
+
+export function isValidSeason(
+  value: unknown
+): value is "spring" | "summer" | "autumn" | "winter" {
+  return (
+    value === "spring" ||
+    value === "summer" ||
+    value === "autumn" ||
+    value === "winter"
+  );
+}

@@ -36,7 +36,18 @@ export async function GET(
     return notFound();
   }
 
-  const phase = state.current_actor === campaign.owner ? "dm" : "player";
+  // The "phase" field preserves early-stage semantics (`player` when a player
+  // is the active actor in exploration) while reporting the campaign phase
+  // (`exploration` / `combat`) when the DM or the campaign is in combat.
+  let phase: string;
+  if (state.phase === "combat") {
+    phase = "combat";
+  } else if (state.current_actor === campaign.owner) {
+    phase = "exploration";
+  } else {
+    phase = "player";
+  }
+
   const queue: string[] = [];
   for (const m of members) {
     queue.push(m.username, "dm");
