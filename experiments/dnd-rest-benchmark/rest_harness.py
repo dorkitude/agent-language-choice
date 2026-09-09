@@ -2819,41 +2819,41 @@ def write_state_db(db: Path, operation: Any) -> Any:
     raise AssertionError("unreachable")
 
 
-def find_resumable_lifecycle_run(
-    provider: str,
-    model: str,
-    target: str,
-    stages: list[LifecycleStage],
+def latest_lifecycle_run(
+    provider: str, model: str, target: str, stages: list[LifecycleStage],
 ) -> tuple[Path, dict[str, Any]] | None:
+    """Use the latest created matching attempt, consistent with the report ledger."""
     wanted_stages = [stage.id for stage in stages]
-    candidates: list[tuple[float, Path, dict[str, Any]]] = []
+    candidates = []
     for path in LIFECYCLE_RUNS_DIR.glob("*/lifecycle-result.json"):
         try:
             data = json.loads(path.read_text())
         except (json.JSONDecodeError, OSError):
             continue
         meta = data.get("metadata") or {}
-        if (
-            meta.get("provider") == provider
-            and meta.get("model") == model
-            and meta.get("target") == target
-            and meta.get("stages") == wanted_stages
-            # Infrastructure-blocked cells are recorded as terminal snapshots
-            # for reporting, but their implementation and failed-stage shots
-            # are valid checkpoints once the transient provider limit clears.
-            # Also recover snapshots that an older broad transcript matcher
-            # incorrectly labelled as infrastructure failures.
-            and (
-                not data.get("completed_at_utc")
-                or run_status(data, path.parent) in ("blocked", "timeout")
-                or needs_reclassified_agent_retry(data, path.parent)
-            )
-        ):
-            candidates.append((path.stat().st_mtime, path.parent, data))
+        if (meta.get("provider"), meta.get("model"), meta.get("target")) != (provider, model, target):
+            continue
+        if meta.get("stages") != wanted_stages:
+            continue
+        candidates.append((str(meta.get("created_at_utc") or ""), path.stat().st_mtime, path.parent, data))
     if not candidates:
         return None
-    _, run_dir, data = max(candidates, key=lambda item: item[0])
+    _, _, run_dir, data = max(candidates, key=lambda item: (item[0], item[1], str(item[2])))
     return run_dir, data
+
+
+def find_resumable_lifecycle_run(
+    provider: str, model: str, target: str, stages: list[LifecycleStage],
+) -> tuple[Path, dict[str, Any]] | None:
+    latest = latest_lifecycle_run(provider, model, target, stages)
+    if latest is None:
+        return None
+    run_dir, data = latest
+    if (not data.get("completed_at_utc")
+        or run_status(data, run_dir) in ("blocked", "timeout")
+        or needs_reclassified_agent_retry(data, run_dir)):
+        return latest
+    return None
 
 
 def lifecycle_matrix(args: argparse.Namespace) -> int:
@@ -3006,27 +3006,15 @@ def make_progress(args: argparse.Namespace) -> int:
 
 
 def completed_lifecycle_exists(provider: str, model: str, target: str, stages_value: str | None) -> bool:
-    wanted_stages = [stage.id for stage in selected_stages(stages_value)]
-    for path in LIFECYCLE_RUNS_DIR.glob("*/lifecycle-result.json"):
-        try:
-            data = json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError):
-            continue
-        meta = data.get("metadata", {})
-        if (
-            data.get("completed_at_utc")
-            and meta.get("provider") == provider
-            and meta.get("model") == model
-            and meta.get("target") == target
-            and meta.get("stages") == wanted_stages
-            and run_status(data, path.parent) not in ("blocked", "timeout")
-            # A snapshot whose terminal shot was falsely classified as an
-            # infrastructure failure never received a real evaluation; it is
-            # resumable work, not a completed cell, and must not be skipped.
-            and not needs_reclassified_agent_retry(data, path.parent)
-        ):
-            return True
-    return False
+    latest = latest_lifecycle_run(provider, model, target, selected_stages(stages_value))
+    if latest is None:
+        return False
+    run_dir, data = latest
+    return bool(
+        data.get("completed_at_utc")
+        and run_status(data, run_dir) in ("pass", "fail")
+        and not needs_reclassified_agent_retry(data, run_dir)
+    )
 
 
 def completed_run_exists(provider: str, model: str, target: str) -> bool:

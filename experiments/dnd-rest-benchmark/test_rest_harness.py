@@ -6,6 +6,7 @@ import socket
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("rest_harness", pathlib.Path(__file__).with_name("rest_harness.py"))
 h = importlib.util.module_from_spec(SPEC)
@@ -42,6 +43,29 @@ open(args[args.index('--json-out')+1],'w').write(json.dumps({'passed':True,'resu
             self.assertTrue(result['passed'], result)
             self.assertGreater((root/'server_stdout.txt').stat().st_size,65536)
             self.assertGreater((root/'server_stderr.txt').stat().st_size,524288)
+
+class LatestAttemptTests(unittest.TestCase):
+    def test_old_success_does_not_hide_new_partial_and_new_success_does_not_resume_old_partial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp)
+            stages=h.selected_stages(None)
+            def write(name, date, complete):
+                folder=root/name;folder.mkdir(exist_ok=True)
+                (folder/'lifecycle-result.json').write_text(json.dumps({
+                    'metadata': {'provider':'codex','model':'gpt-5.6-terra','target':'go-stdlib',
+                        'created_at_utc':date,'stages':[s.id for s in stages]},
+                    'completed_at_utc':date if complete else None,
+                    'passed':complete,'shots':[], 'stage_results':[]}))
+                return folder
+            old=write('old','2026-01-01',True)
+            new=write('new','2026-01-02',False)
+            with mock.patch.object(h,'LIFECYCLE_RUNS_DIR',root):
+                self.assertFalse(h.completed_lifecycle_exists('codex','gpt-5.6-terra','go-stdlib',None))
+                self.assertEqual(h.find_resumable_lifecycle_run('codex','gpt-5.6-terra','go-stdlib',stages)[0],new)
+                write('old','2026-01-01',False)
+                write('new','2026-01-02',True)
+                self.assertTrue(h.completed_lifecycle_exists('codex','gpt-5.6-terra','go-stdlib',None))
+                self.assertIsNone(h.find_resumable_lifecycle_run('codex','gpt-5.6-terra','go-stdlib',stages))
 
 if __name__ == '__main__':
     unittest.main()
