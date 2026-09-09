@@ -1794,11 +1794,17 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
         key = resolve_fireworks_api_key()
         if key:
             env["FIREWORKS_API_KEY"] = key
-        # pi 0.65 SIGKILLs itself at startup when a positional prompt message
-        # exceeds ~1KB (every lifecycle prompt does). Feeding the prompt
-        # through pi's @file syntax avoids the crash entirely.
-        pi_prompt_path = log_dir / "prompt.txt"
-        pi_prompt_path.write_text(prompt)
+        # pi 0.65 SIGKILLs itself at startup when its initial message is over
+        # roughly 1KB.  Its @file argument is expanded into that same initial
+        # message, so it is not a workaround.  `run_lifecycle_one` has already
+        # persisted the complete task as run_dir/PROMPT.md; give pi a small
+        # bootstrap instruction and let its normal read tool load that file.
+        # This keeps the process alive while preserving the full task context.
+        pi_bootstrap_prompt = (
+            "Read ./PROMPT.md with the read tool, then carry out every instruction "
+            "in it. Work only in this directory and finish when the requested "
+            "server or codebase is ready."
+        )
         command = [
             "pi",
             "--no-session",
@@ -1811,7 +1817,7 @@ def run_agent(args: argparse.Namespace, run_dir: Path, prompt: str, progress_nam
             "--mode",
             "json",
             "-p",
-            f"@{pi_prompt_path}",
+            pi_bootstrap_prompt,
         ]
     elif args.provider == "claude":
         command = [
@@ -2270,15 +2276,25 @@ def evaluate_exclusive(run_dir: Path, evaluator: Path, port: int, server_timeout
 
     env = benchmark_env()
     env["PORT"] = str(port)
-    server = subprocess.Popen(
-        ["./run.sh"],
-        cwd=run_dir,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
+    # Write server output directly to files. Undrained PIPEs fill around 64 KiB
+    # on macOS and block chatty HTTP servers during long cumulative suites.
+    # Keep these filenames unchanged so archived shot logs remain compatible.
+    server_stdout = (run_dir / "server_stdout.txt").open("w")
+    server_stderr = (run_dir / "server_stderr.txt").open("w")
+    try:
+        server = subprocess.Popen(
+            ["./run.sh"],
+            cwd=run_dir,
+            env=env,
+            stdout=server_stdout,
+            stderr=server_stderr,
+            text=True,
+            start_new_session=True,
+        )
+    except BaseException:
+        server_stdout.close()
+        server_stderr.close()
+        raise
     base_url = f"http://127.0.0.1:{port}"
     try:
         healthy, health_detail = wait_health(base_url, server_timeout)
@@ -2319,12 +2335,13 @@ def evaluate_exclusive(run_dir: Path, evaluator: Path, port: int, server_timeout
     finally:
         terminate_process_group(server)
         try:
-            stdout, stderr = server.communicate(timeout=5)
+            server.wait(timeout=5)
         except subprocess.TimeoutExpired:
             kill_process_group(server)
-            stdout, stderr = server.communicate(timeout=5)
-        (run_dir / "server_stdout.txt").write_text(stdout or "")
-        (run_dir / "server_stderr.txt").write_text(stderr or "")
+            server.wait(timeout=5)
+        finally:
+            server_stdout.close()
+            server_stderr.close()
 
 
 def validate_refactor_checkpoint(run_dir: Path, evaluation: dict[str, Any]) -> dict[str, Any]:
@@ -2552,12 +2569,17 @@ def run_lifecycle_one(args: argparse.Namespace) -> int:
     start_stage_index = len([result for result in final["stage_results"] if result.get("passed")])
     for stage_index, stage in enumerate(stages[start_stage_index:], start=start_stage_index):
         stage_passed = False
-        # Timeout shots are environment events, not model attempts: they do not
-        # consume the stage's fix-shot budget, so a resumed cell gets its full
-        # complement of bug-fix turns.
+        # Environment failures are not model attempts: an evaluator deadline or
+        # a provider/CLI block must not consume this stage's fix-shot budget.
+        # Otherwise a run that exhausted its retry count solely on a transient
+        # Pi SIGKILL or provider quota error can never actually be resumed.
         stage_shots = [
             shot for shot in final["shots"]
-            if shot.get("stage") == stage.id and not shot_eval_timed_out(shot)
+            if (
+                shot.get("stage") == stage.id
+                and not shot_eval_timed_out(shot)
+                and shot_exit_class(shot, run_dir) not in INFRA_EXIT_CLASSES
+            )
         ]
         max_attempts = 1 + args.max_fix_shots
         if stage_shots:
