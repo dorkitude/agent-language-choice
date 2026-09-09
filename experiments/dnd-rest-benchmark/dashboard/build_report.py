@@ -40,6 +40,8 @@ def snapshot(db):
         latest[key] = row
         histories.setdefault(key, []).append(row)
     stage_ids = [s.id for s in harness.STAGES] if hasattr(harness, 'STAGES') else [s.id for s in harness.selected_stages(None)]
+    event_path = db.parent / "operator-events.jsonl"
+    events = [json.loads(line) for line in event_path.read_text().splitlines() if line.strip()] if event_path.exists() else []
     cells = []
     for model in harness.MODELS:
         for target_id, target in harness.targets().items():
@@ -59,6 +61,7 @@ def snapshot(db):
                 cell['shots'] = [{k: s.get(k) for k in fields} for s in shots.get(row['run_id'], [])]
                 cell['history'] = [{k: r[k] for k in ('run_id', 'status', 'completed_stages', 'total_shots', 'created_at_utc')}
                                    for r in histories[key]]
+            cell['operator_events'] = [event for event in events if event['run_id'] == cell.get('run_id')]
             cells.append(cell)
     return {'schema_version': 1, 'generated_at': dt.datetime.now(dt.timezone.utc).isoformat(),
         'source': 'results/dnd-rest-benchmark/experiment-state.sqlite3',
@@ -74,6 +77,7 @@ def snapshot(db):
             'Before September 9, undrained server log pipes could cause evaluator timeouts. Those outcomes are not evidence of model inability.',
             'Model and harness versions span multiple dates. This is an observational benchmark, not a causal language ranking.',
             'Costs show only metered values; missing costs are not zero. No inferred token prices are used.',
+            'Operator interventions are flagged on affected cells and detailed in Run evidence. Annotated continuations must not be described as wholly unattended trials.',
         ], 'infra_classes': sorted(harness.INFRA_EXIT_CLASSES)}
 
 

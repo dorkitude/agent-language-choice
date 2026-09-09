@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import sqlite3
+import json
 import tempfile
 import unittest
 
@@ -21,11 +22,13 @@ class SnapshotTests(unittest.TestCase):
                     (run_id,'lifecycle',status,int(status=='pass'),'codex','gpt-5.6-terra','go-stdlib','go','stdlib',100,completed,1,tmp,str(pathlib.Path(tmp)/'missing.json'),'hash',created,created))
                 c.execute('''INSERT INTO shots (run_id,shot,status,passed,setup_ok,agent_exit_class,agent_timed_out,eval_passed,eval_timed_out)
                     VALUES ('new',1,'timeout',0,1,'ok',0,0,1)''')
+            (db.parent/"operator-events.jsonl").write_text(json.dumps({"run_id":"new","event":"test-intervention"})+"\n")
             d=b.snapshot(db)
             self.assertEqual(len(d['cells']),85)
             cell=next(c for c in d['cells'] if c['model']=='gpt-5.6-terra' and c['target']=='go-stdlib')
             self.assertEqual(cell['run_id'],'new')
             self.assertEqual(cell['status'],'partial')
+            self.assertEqual(cell['operator_events'][0]['event'],'test-intervention')
             self.assertEqual(len(cell['history']),2)
             self.assertFalse(cell['artifact_present'])
             self.assertEqual(cell['shots'][0]['eval_timed_out'],1)
