@@ -29,3 +29,17 @@ Seven additional unchanged snapshots passed their formerly timed-out stage suite
 Each effective terminal-shot evaluation was corrected in its existing run and SQLite row. Original archived evaluations remain unchanged; each run retains a compressed before-state, the original evaluation embedded in the shot, and the full recheck receipt. No model shots were added, and generated implementations were not edited. Operator events expose all corrections in the dashboard. These runs remain partial and require further model work.
 
 The Sonnet/Next.js recheck initially passed 568/611, with failures loading generated chunks from the copied build cache. Moving the snapshot’s .next cache aside and reevaluating the same application source passed 611/611. Application files were compared byte-for-byte before accepting the correction. Both recheck reports and the failed-cache stderr are preserved in the original run. The live GPT and Kimi queues continue.
+
+## Other queued timeout rechecks
+
+Five additional queued runs passed reevaluation of unchanged snapshots before model retries began. Their existing records now reflect these completed stages:
+
+| Model | Target | Stage completed | Checks passed |
+| --- | --- | ---: | ---: |
+| gpt-5.6-terra | ruby-rails | 77 | 557/557 |
+| gpt-5.6-terra | php-stdlib | 83 | 642/642 |
+| kimi-k2p7-code | php-slim | 83 | 642/642 |
+| gpt-5.6-terra | python-flask | 79 | 584/584 |
+| gpt-5.6-terra | python-django | 76 | 540/540 |
+
+The same preservation procedure was used: original evaluation, compressed before-state, full recheck receipt, and dashboard operator event. Cell locks and unchanged-result hashes guarded acceptance against concurrent queue work. No model shots were added. All five remain partial and available for continuation in place.
