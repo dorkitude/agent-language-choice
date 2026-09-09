@@ -1,0 +1,28 @@
+2026-08-05T22:19:19.987799Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc "python3 -m py_compile app.py && rm -f game.db && python3 - <<'PY'
+from app import app
+
+client = app.test_client()
+def call(method, path, payload=None, user=None):
+    headers = {} if user is None else {'Authorization': f'Bearer session-{user}'}
+    response = getattr(client, method)(path, json=payload, headers=headers)
+    return response.status_code, response.get_json()
+
+assert call('post', '/v1/auth/register', {'username': 'dm1', 'password': 'password1', 'role': 'dm'})[0] == 201
+assert call('post', '/v1/auth/register', {'username': 'wiz', 'password': 'password1', 'role': 'player'})[0] == 201
+assert call('post', '/v1/auth/register', {'username': 'ally', 'password': 'password1', 'role': 'player'})[0] == 201
+assert call('post', '/v1/play/campaigns', {'id': 'c', 'name': 'Campaign', 'max_players': 2}, 'dm1')[0] == 201
+assert call('post', '/v1/play/campaigns/c/members', {'character_id': 'play-char-w', 'name': 'Wizard', 'class': 'wizard'}, 'wiz')[0] == 201
+assert call('post', '/v1/play/campaigns/c/members', {'character_id': 'ally-char', 'name': 'Ally', 'class': 'fighter'}, 'ally')[0] == 201
+assert call('post', '/v1/play/campaigns/c/characters/play-char-w/spells', {'spell_id': 'magic-missile', 'name': 'Magic Missile', 'level': 1}, 'wiz')[0] == 201
+assert call('put', '/v1/play/campaigns/c/characters/play-char-w/prepared-spells', {'spell_ids': ['magic-missile']}, 'wiz')[0] == 200
+status, body = call('post', '/v1/play/campaigns/c/characters/play-char-w/casts', {'spell_id': 'magic-missile', 'target': 'training-dummy'}, 'wiz')
+assert status == 201 and body == {'character_id': 'play-char-w', 'spell_id': 'magic-missile', 'target': 'training-dummy', 'slot_level': 1, 'slots_remaining': 0, 'sequence': 1}, body
+assert call('post', '/v1/play/campaigns/c/characters/play-char-w/casts', {'spell_id': 'magic-missile', 'target': 'training-dummy'}, 'wiz')[0] == 409
+status, body = call('get', '/v1/play/campaigns/c/characters/play-char-w/casts', user='ally')
+assert status == 200 and body == {'casts': [{'character_id': 'play-char-w', 'spell_id': 'magic-missile', 'target': 'training-dummy', 'slot_level': 1, 'sequence': 1}]}, body
+assert call('get', '/v1/play/campaigns/c/characters/ally-char/casts', user='wiz') == (200, {'casts': []})
+assert call('post', '/v1/play/campaigns/c/characters/play-char-w/casts', {'spell_id': 'magic-missile', 'target': 'x'}, 'ally')[0] == 403
+print('cast route smoke test passed')
+PY
+rm -f game.db
+git diff --check && git diff -- app.py run.sh"`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc \\\"python3 -m py_compile app.py && rm -f game.db && python3 - <<'PY'\\nfrom app import app\\n\\nclient = app.test_client()\\ndef call(method, path, payload=None, user=None):\\n    headers = {} if user is None else {'Authorization': f'Bearer session-{user}'}\\n    response = getattr(client, method)(path, json=payload, headers=headers)\\n    return response.status_code, response.get_json()\\n\\nassert call('post', '/v1/auth/register', {'username': 'dm1', 'password': 'password1', 'role': 'dm'})[0] == 201\\nassert call('post', '/v1/auth/register', {'username': 'wiz', 'password': 'password1', 'role': 'player'})[0] == 201\\nassert call('post', '/v1/auth/register', {'username': 'ally', 'password': 'password1', 'role': 'player'})[0] == 201\\nassert call('post', '/v1/play/campaigns', {'id': 'c', 'name': 'Campaign', 'max_players': 2}, 'dm1')[0] == 201\\nassert call('post', '/v1/play/campaigns/c/members', {'character_id': 'play-char-w', 'name': 'Wizard', 'class': 'wizard'}, 'wiz')[0] == 201\\nassert call('post', '/v1/play/campaigns/c/members', {'character_id': 'ally-char', 'name': 'Ally', 'class': 'fighter'}, 'ally')[0] == 201\\nassert call('post', '/v1/play/campaigns/c/characters/play-char-w/spells', {'spell_id': 'magic-missile', 'name': 'Magic Missile', 'level': 1}, 'wiz')[0] == 201\\nassert call('put', '/v1/play/campaigns/c/characters/play-char-w/prepared-spells', {'spell_ids': ['magic-missile']}, 'wiz')[0] == 200\\nstatus, body = call('post', '/v1/play/campaigns/c/characters/play-char-w/casts', {'spell_id': 'magic-missile', 'target': 'training-dummy'}, 'wiz')\\nassert status == 201 and body == {'character_id': 'play-char-w', 'spell_id': 'magic-missile', 'target': 'training-dummy', 'slot_level': 1, 'slots_remaining': 0, 'sequence': 1}, body\\nassert call('post', '/v1/play/campaigns/c/characters/play-char-w/casts', {'spell_id': 'magic-missile', 'target': 'training-dummy'}, 'wiz')[0] == 409\\nstatus, body = call('get', '/v1/play/campaigns/c/characters/play-char-w/casts', user='ally')\\nassert status == 200 and body == {'casts': [{'character_id': 'play-char-w', 'spell_id': 'magic-missile', 'target': 'training-dummy', 'slot_level': 1, 'sequence': 1}]}, body\\nassert call('get', '/v1/play/campaigns/c/characters/ally-char/casts', user='wiz') == (200, {'casts': []})\\nassert call('post', '/v1/play/campaigns/c/characters/play-char-w/casts', {'spell_id': 'magic-missile', 'target': 'x'}, 'ally')[0] == 403\\nprint('cast route smoke test passed')\\nPY\\nrm -f game.db\\ngit diff --check && git diff -- app.py run.sh\\\"` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

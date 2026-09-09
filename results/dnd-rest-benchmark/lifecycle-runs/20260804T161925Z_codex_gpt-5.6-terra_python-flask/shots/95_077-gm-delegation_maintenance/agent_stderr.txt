@@ -1,0 +1,30 @@
+2026-08-06T00:01:18.952995Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc "python3 -m py_compile app.py && python3 - <<'PY'
+import app
+
+client = app.app.test_client()
+def call(method, path, user=None, body=None):
+    headers = {} if user is None else {'Authorization': f'Bearer session-{user}'}
+    return getattr(client, method)(path, headers=headers, json=body)
+
+assert call('post', '/v1/storage/reset').status_code == 200
+assert call('post', '/v1/auth/register', body={'username':'gm-owner','password':'password1','role':'dm'}).status_code == 201
+assert call('post', '/v1/auth/register', body={'username':'player-b','password':'password1','role':'player'}).status_code == 201
+assert call('post', '/v1/play/campaigns', 'gm-owner', {'id':'camp-1','name':'Camp','max_players':4}).status_code == 201
+assert call('post', '/v1/play/campaigns/camp-1/invitations', 'gm-owner', {'invitation_id':'inv-1','username':'player-b','character_id':'char-b'}).status_code == 201
+assert call('post', '/v1/play/campaigns/camp-1/invitations/inv-1/accept', 'player-b').status_code == 200
+r = call('post', '/v1/play/campaigns/camp-1/delegations', 'gm-owner', {'username':'player-b','powers':['narrate']})
+assert r.status_code == 201 and r.get_json() == {'username':'player-b','powers':['narrate'],'active':True}, r.get_json()
+assert call('post', '/v1/play/campaigns/camp-1/narrations', 'player-b', {'text':'Delegated narration'}).status_code == 201
+assert call('post', '/v1/play/campaigns/camp-1/delegations', 'gm-owner', {'username':'player-b','powers':['narrate']}).status_code == 409
+r = call('delete', '/v1/play/campaigns/camp-1/delegations/player-b', 'gm-owner')
+assert r.status_code == 200 and r.get_json() == {'username':'player-b','powers':['narrate'],'active':False}, r.get_json()
+assert call('post', '/v1/play/campaigns/camp-1/narrations', 'player-b', {'text':'No longer allowed'}).status_code == 403
+r = call('get', '/v1/play/campaigns/camp-1/delegations/audit', 'gm-owner')
+assert r.status_code == 200 and r.get_json() == {'entries':[{'username':'player-b','action':'granted','powers':['narrate']},{'username':'player-b','action':'revoked','powers':['narrate']}]}, r.get_json()
+assert call('get', '/v1/play/campaigns/camp-1/delegations/audit', 'player-b').status_code == 403
+assert call('post', '/v1/play/campaigns/camp-1/delegations', 'gm-owner', {'username':'player-b','powers':['narrate','narrate']}).status_code == 400
+print('delegation flow verified')
+PY
+rm -f game.db
+git diff --check -- app.py run.sh
+git diff --stat -- app.py run.sh"`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc \\\"python3 -m py_compile app.py && python3 - <<'PY'\\nimport app\\n\\nclient = app.app.test_client()\\ndef call(method, path, user=None, body=None):\\n    headers = {} if user is None else {'Authorization': f'Bearer session-{user}'}\\n    return getattr(client, method)(path, headers=headers, json=body)\\n\\nassert call('post', '/v1/storage/reset').status_code == 200\\nassert call('post', '/v1/auth/register', body={'username':'gm-owner','password':'password1','role':'dm'}).status_code == 201\\nassert call('post', '/v1/auth/register', body={'username':'player-b','password':'password1','role':'player'}).status_code == 201\\nassert call('post', '/v1/play/campaigns', 'gm-owner', {'id':'camp-1','name':'Camp','max_players':4}).status_code == 201\\nassert call('post', '/v1/play/campaigns/camp-1/invitations', 'gm-owner', {'invitation_id':'inv-1','username':'player-b','character_id':'char-b'}).status_code == 201\\nassert call('post', '/v1/play/campaigns/camp-1/invitations/inv-1/accept', 'player-b').status_code == 200\\nr = call('post', '/v1/play/campaigns/camp-1/delegations', 'gm-owner', {'username':'player-b','powers':['narrate']})\\nassert r.status_code == 201 and r.get_json() == {'username':'player-b','powers':['narrate'],'active':True}, r.get_json()\\nassert call('post', '/v1/play/campaigns/camp-1/narrations', 'player-b', {'text':'Delegated narration'}).status_code == 201\\nassert call('post', '/v1/play/campaigns/camp-1/delegations', 'gm-owner', {'username':'player-b','powers':['narrate']}).status_code == 409\\nr = call('delete', '/v1/play/campaigns/camp-1/delegations/player-b', 'gm-owner')\\nassert r.status_code == 200 and r.get_json() == {'username':'player-b','powers':['narrate'],'active':False}, r.get_json()\\nassert call('post', '/v1/play/campaigns/camp-1/narrations', 'player-b', {'text':'No longer allowed'}).status_code == 403\\nr = call('get', '/v1/play/campaigns/camp-1/delegations/audit', 'gm-owner')\\nassert r.status_code == 200 and r.get_json() == {'entries':[{'username':'player-b','action':'granted','powers':['narrate']},{'username':'player-b','action':'revoked','powers':['narrate']}]}, r.get_json()\\nassert call('get', '/v1/play/campaigns/camp-1/delegations/audit', 'player-b').status_code == 403\\nassert call('post', '/v1/play/campaigns/camp-1/delegations', 'gm-owner', {'username':'player-b','powers':['narrate','narrate']}).status_code == 400\\nprint('delegation flow verified')\\nPY\\nrm -f game.db\\ngit diff --check -- app.py run.sh\\ngit diff --stat -- app.py run.sh\\\"` rejected: rm -f style commands are not permitted. Use a safer approach\")" }

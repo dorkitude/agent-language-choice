@@ -1,0 +1,35 @@
+2026-08-05T23:51:33.620148Z ERROR codex_core::tools::router: error=exec_command failed for `/bin/zsh -lc 'ls -ld .deps 2>/dev/null || true
+PYTHONPATH="$PWD/.deps${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'"'PY'
+from app import app
+
+client = app.test_client()
+
+def request(method, path, user=None, payload=None):
+    headers = {} if user is None else {\"Authorization\": f\"Bearer session-{user}\"}
+    return getattr(client, method)(path, headers=headers, json=payload)
+
+assert client.post('/v1/storage/reset').status_code == 200
+for username, role in [('dm-a', 'dm'), ('player-a', 'player'), ('player-b', 'player'), ('outsider', 'player')]:
+    response = client.post('/v1/auth/register', json={'username': username, 'password': 'password8', 'role': role})
+    assert response.status_code == 201, response.json
+assert request('post', '/v1/play/campaigns', 'dm-a', {'id':'camp-a','name':'Campaign','max_players':2}).status_code == 201
+assert request('post', '/v1/play/campaigns/camp-a/members', 'player-a', {'character_id':'play-char-a','name':'Aria','class':'rogue'}).status_code == 201
+assert request('post', '/v1/play/campaigns/camp-a/members', 'player-b', {'character_id':'play-char-b','name':'Borin','class':'fighter'}).status_code == 201
+response = request('post', '/v1/play/campaigns/camp-a/notes', 'player-a', {'note_id':'note-a','text':'secret','visibility':'private'})
+assert response.status_code == 201 and response.json == {'note_id':'note-a','text':'secret','visibility':'private','owner':'player-a'}, response.json
+assert request('get', '/v1/play/campaigns/camp-a/notes', 'player-b').json == {'notes': []}
+assert request('get', '/v1/play/campaigns/camp-a/notes/note-a', 'player-b').status_code == 403
+assert request('get', '/v1/play/campaigns/camp-a/notes', 'dm-a').json['notes'][0]['owner'] == 'player-a'
+response = request('post', '/v1/play/campaigns/camp-a/whispers', 'player-a', {'whisper_id':'whisper-a','to_character_id':'play-char-b','text':'meet at dawn'})
+assert response.status_code == 201 and response.json['from_character_id'] == 'play-char-a', response.json
+assert len(request('get', '/v1/play/campaigns/camp-a/whispers', 'player-b').json['whispers']) == 1
+response = request('get', '/v1/play/campaigns/camp-a/characters/play-char-a/sheet', 'player-a')
+assert response.status_code == 200 and response.json['armor_class'] == 10, response.json
+assert request('get', '/v1/play/campaigns/camp-a/characters/play-char-a/sheet', 'player-b').status_code == 403
+assert request('get', '/v1/play/campaigns/camp-a/notes', 'outsider').status_code == 403
+print('privacy smoke tests passed')
+PY
+rm -f game.db
+python3 -m py_compile app.py
+stat -f '%Sp %N' run.sh
+rg -n \"play_campaign_(notes|whispers)|privacy_access|/sheet\" app.py"`: CreateProcess { message: "Rejected(\"`/bin/zsh -lc 'ls -ld .deps 2>/dev/null || true\\nPYTHONPATH=\\\"$PWD/.deps${PYTHONPATH:+:$PYTHONPATH}\\\" python3 - <<'\\\"'PY'\\nfrom app import app\\n\\nclient = app.test_client()\\n\\ndef request(method, path, user=None, payload=None):\\n    headers = {} if user is None else {\\\\\\\"Authorization\\\\\\\": f\\\\\\\"Bearer session-{user}\\\\\\\"}\\n    return getattr(client, method)(path, headers=headers, json=payload)\\n\\nassert client.post('/v1/storage/reset').status_code == 200\\nfor username, role in [('dm-a', 'dm'), ('player-a', 'player'), ('player-b', 'player'), ('outsider', 'player')]:\\n    response = client.post('/v1/auth/register', json={'username': username, 'password': 'password8', 'role': role})\\n    assert response.status_code == 201, response.json\\nassert request('post', '/v1/play/campaigns', 'dm-a', {'id':'camp-a','name':'Campaign','max_players':2}).status_code == 201\\nassert request('post', '/v1/play/campaigns/camp-a/members', 'player-a', {'character_id':'play-char-a','name':'Aria','class':'rogue'}).status_code == 201\\nassert request('post', '/v1/play/campaigns/camp-a/members', 'player-b', {'character_id':'play-char-b','name':'Borin','class':'fighter'}).status_code == 201\\nresponse = request('post', '/v1/play/campaigns/camp-a/notes', 'player-a', {'note_id':'note-a','text':'secret','visibility':'private'})\\nassert response.status_code == 201 and response.json == {'note_id':'note-a','text':'secret','visibility':'private','owner':'player-a'}, response.json\\nassert request('get', '/v1/play/campaigns/camp-a/notes', 'player-b').json == {'notes': []}\\nassert request('get', '/v1/play/campaigns/camp-a/notes/note-a', 'player-b').status_code == 403\\nassert request('get', '/v1/play/campaigns/camp-a/notes', 'dm-a').json['notes'][0]['owner'] == 'player-a'\\nresponse = request('post', '/v1/play/campaigns/camp-a/whispers', 'player-a', {'whisper_id':'whisper-a','to_character_id':'play-char-b','text':'meet at dawn'})\\nassert response.status_code == 201 and response.json['from_character_id'] == 'play-char-a', response.json\\nassert len(request('get', '/v1/play/campaigns/camp-a/whispers', 'player-b').json['whispers']) == 1\\nresponse = request('get', '/v1/play/campaigns/camp-a/characters/play-char-a/sheet', 'player-a')\\nassert response.status_code == 200 and response.json['armor_class'] == 10, response.json\\nassert request('get', '/v1/play/campaigns/camp-a/characters/play-char-a/sheet', 'player-b').status_code == 403\\nassert request('get', '/v1/play/campaigns/camp-a/notes', 'outsider').status_code == 403\\nprint('privacy smoke tests passed')\\nPY\\nrm -f game.db\\npython3 -m py_compile app.py\\nstat -f '%Sp %N' run.sh\\nrg -n \\\\\\\"play_campaign_(notes|whispers)|privacy_access|/sheet\\\\\\\" app.py\\\"` rejected: rm -f style commands are not permitted. Use a safer approach\")" }
