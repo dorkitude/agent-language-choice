@@ -11,3 +11,20 @@ The unchanged Sonnet/Sinatra implementation was copied for an isolated reevaluat
 The original run `20260804T072004Z_claude_claude-sonnet-5_ruby-sinatra` now has 77 completed stages and remains partial, ready to resume at stage 78 when Claude authentication is restored. Its 103 recorded model shots are retained. The effective evaluation of shot 103 was corrected; its original evaluation remains embedded as `evaluation_before_harness_recheck`, its archived evaluation file remains unchanged, and the complete before-state plus recheck receipt are stored in the run's `evaluation-rechecks/` directory. An operator event makes this correction visible in the dashboard.
 
 This is not a full 100-stage pass. Already-running queues may have skipped this formerly terminal cell during startup; a fresh sweep is required after those queues finish. The two remaining terminal failures were not reopened.
+
+## Further Sonnet timeout rechecks
+
+Six additional unchanged snapshots passed their formerly timed-out stage suites with the corrected harness:
+
+| Target | Stage now completed | Checks passed |
+| --- | ---: | ---: |
+| PHP Slim | 83 | 642/642 |
+| PHP stdlib | 83 | 642/642 |
+| PHP Symfony | 83 | 642/642 |
+| Python Django | 76 | 540/540 |
+| Python Flask | 79 | 584/584 |
+| Ruby Rails | 77 | 557/557 |
+
+Each effective terminal-shot evaluation was corrected in its existing run and SQLite row. Original archived evaluations remain unchanged; each run retains a compressed before-state, the original evaluation embedded in the shot, and the full recheck receipt. No model shots were added, and generated implementations were not edited. Operator events expose all corrections in the dashboard. These runs remain partial and require further model work.
+
+The Sonnet/Next.js stage-81 recheck is still running as of this update; no correction has been accepted for it. The live GPT and Kimi queues are also continuing.
