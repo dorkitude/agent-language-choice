@@ -38,13 +38,17 @@ curl -X POST http://127.0.0.1:8080/v1/storage/reset
 - `run.sh` — builds and runs the server with `cargo run`.
 - `src/main.rs` — entry point, module declarations, global state, and the
   central request dispatcher. Routing is split into `dispatch_get`,
-  `dispatch_post`, and `dispatch_put` helpers.
+  `dispatch_post`, `dispatch_put`, and `dispatch_delete` helpers.
 - `src/domain.rs` — core domain types (`Combatant`, `CombatSession`, `User`,
   `Condition`) and the global in-memory caches (`SESSIONS`, `USERS`).
 - `src/http.rs` — minimal HTTP/1.1 request parsing and response writing.
 - `src/json.rs` — hand-rolled JSON parsing helpers used by every handler.
+  Recent refactoring introduced `find_value_pos` and `scan_bracket_content` to
+  share the key-location and bracket-matching logic across all extractors.
 - `src/store.rs` — SQLite persistence via the `sqlite3` CLI tool, plus all
-  existence and lookup helpers used by the domain modules.
+  existence and lookup helpers used by the domain modules. Startup migrations
+  are consolidated through `add_column_if_missing` so older schemas can be
+  forward-migrated without changing behavior for new databases.
 - `src/auth.rs` — registration, login, and bearer-token verification.
 - `src/combat.rs` — combat sessions, initiative, conditions, and turn
   advancement.
@@ -63,8 +67,12 @@ curl -X POST http://127.0.0.1:8080/v1/storage/reset
 - `src/downtime.rs` — downtime crafting projects.
 - `src/analytics.rs` — campaign readiness score and risk reports.
 - `src/play.rs` — authenticated play-by-post campaigns: membership, turn
-  queue, narrations, actions, resolutions, nudges, and the role-filtered
-  campaign document.
+  queue, narrations, actions, resolutions, nudges, the role-filtered campaign
+  document, scenes, locations, travel, rests, encounter management, character
+  ownership, character creation, level progression, and skill checks. Path
+  parsing is centralized on small helpers (`parse_play_suffix`,
+  `parse_play_nested`, `parse_play_encounter_base`, `parse_play_encounter_resource`)
+  to keep the dozens of similar route patterns consistent.
 
 ## State, persistence, and routing
 
@@ -94,17 +102,27 @@ Other tables (`campaigns`, `characters`, `events`, `monsters`, `items`,
 `monster_tags`, `quests`, `quest_milestones`, `factions`, `npcs`,
 `campaign_inventory`, `character_equipment`, `crafting_projects`,
 `campaign_sessions`, `session_agenda`, `session_attendance`, `play_campaigns`,
-`play_campaign_members`, `play_narrations`, `play_campaign_documents`) are
+`play_campaign_members`, `play_narrations`, `play_campaign_documents`,
+`play_scenes`, `play_locations`, `play_location_connections`, `play_encounters`,
+`play_encounter_monsters`, `play_encounter_combatants`,
+`play_encounter_conditions`, `play_encounter_order`, `play_encounter_loot`) are
 written directly by their respective handlers and do not go through the
 in-memory caches. The storage reset endpoint preserves the `users` cache so
 that authenticated play sessions remain identifiable across resets.
+
+### Startup migrations
+
+`init_db()` runs a set of small, additive migrations after creating the schema.
+Each migration checks the existing `PRAGMA table_info` output and adds missing
+columns with safe defaults. They are implemented through the shared helper
+`add_column_if_missing`, so adding a future migration is a single function call.
 
 ### Request routing
 
 `src/main.rs` reads the request line, extracts the body, acquires both global
 locks, and dispatches to the appropriate handler. The dispatcher uses a
-method-based split (`dispatch_get`, `dispatch_post`, `dispatch_put`) plus
-helper parsers for dynamic path segments:
+method-based split (`dispatch_get`, `dispatch_post`, `dispatch_put`,
+`dispatch_delete`) plus helper parsers for dynamic path segments:
 
 - `combat::parse_combat_path` for `/v1/combat/sessions/{id}/...`
 - `campaigns::parse_campaign_path` for `/v1/campaigns/{id}/...`
@@ -114,6 +132,9 @@ helper parsers for dynamic path segments:
   and `parse_character_equipment_path`.
 - `downtime::parse_crafting_path` and `parse_crafting_advance_path`.
 - `play::parse_play_campaign_path` for `/v1/play/campaigns/{id}/...`.
+- `play::parse_play_campaign_scene_path`, `parse_play_campaign_location_path`,
+  and `parse_play_campaign_character_path` for nested play resources.
+- `play::parse_play_encounter_*` helpers for encounter-related routes.
 - `strip_prefix` for `/v1/compendium/monsters/{slug}` and items.
 
 Authorization is enforced by `require_auth` in `src/main.rs`, which checks the
@@ -123,10 +144,18 @@ role (`dm`, `player`, or any role). After a handler that mutates `SESSIONS` or
 
 ### JSON parsing
 
-`src/json.rs` provides a small, serde-free parser. It scans for `"key"`, finds
-the following `:`, and extracts the next primitive value or bracketed/array
-block. It supports nested objects and arrays by tracking `{ }` / `[ ]` depth,
-but does not handle escaped quotes inside string values. All inputs are
+`src/json.rs` provides a small, serde-free parser. All keyed extractors build on
+`find_value_pos`, which locates the first `"key"` and the following colon, and
+`scan_bracket_content`, which extracts balanced bracket bodies. The public
+helpers are:
+
+- `extract_string` / `extract_int` / `extract_bool` — scalar fields.
+- `extract_array_content` / `extract_object_content` — nested bodies.
+- `extract_top_array_content` — top-level SQLite JSON-mode arrays.
+- `extract_objects` — split an object sequence into individual `{...}` strings.
+- `extract_string_array` — strict quoted-string array parsing.
+
+The parser does not handle escaped quotes inside string values; all inputs are
 expected to be simple JSON objects produced by the test harness.
 
 ## API / domain groupings
@@ -149,6 +178,11 @@ expected to be simple JSON objects produced by the test harness.
 | Analytics | `GET /v1/campaigns/{id}/analytics/summary`, `POST /v1/campaigns/{id}/analytics/risk-report` | `src/analytics.rs` |
 | DM tools | `POST /v1/dm/{encounter-builder,loot-parcel,session-recap}` | `src/dm_tools.rs` |
 | Play campaigns | `POST /v1/play/campaigns`, `POST /v1/play/campaigns/{id}/members`, `POST /v1/play/campaigns/{id}/start`, `POST /v1/play/campaigns/{id}/narrations`, `POST /v1/play/campaigns/{id}/actions`, `POST /v1/play/campaigns/{id}/resolutions`, `POST /v1/play/campaigns/{id}/turn/nudge`, `GET /v1/play/campaigns/{id}/turn`, `GET /v1/play/campaigns/{id}/gm/status`, `GET /v1/play/campaigns/{id}/my-turn`, `GET /v1/play/campaigns/{id}/document`, `PUT /v1/play/campaigns/{id}/document` | `src/play.rs` |
+| Play scenes | `POST /v1/play/campaigns/{id}/scenes`, `POST /v1/play/campaigns/{id}/scenes/{scene_id}/enter`, `POST /v1/play/campaigns/{id}/scenes/{scene_id}/close`, `GET /v1/play/campaigns/{id}/scenes/current` | `src/play.rs` |
+| Play locations | `POST /v1/play/campaigns/{id}/locations`, `POST /v1/play/campaigns/{id}/locations/{from_id}/connections`, `GET /v1/play/campaigns/{id}/locations/{loc_id}/travel`, `POST /v1/play/campaigns/{id}/turn/travel` | `src/play.rs` |
+| Play rests | `POST /v1/play/campaigns/{id}/turn/rest` | `src/play.rs` |
+| Play encounters | `POST /v1/play/campaigns/{id}/encounters`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/monsters`, `DELETE /v1/play/campaigns/{id}/encounters/{enc_id}/monsters/{monster_id}`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/combatants`, `DELETE /v1/play/campaigns/{id}/encounters/{enc_id}/combatants/{member}`, `GET /v1/play/campaigns/{id}/encounters/{enc_id}/turn`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/turn/advance`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/turn/delay`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/turn/ready`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/actions`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/damage`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/heal`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/conditions`, `GET /v1/play/campaigns/{id}/encounters/{enc_id}/status`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/rewards`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/close`, `POST /v1/play/campaigns/{id}/encounters/{enc_id}/end` | `src/play.rs` |
+| Play characters | `POST /v1/play/campaigns/{id}/characters/{char_id}/damage`, `POST /v1/play/campaigns/{id}/characters/{char_id}/death-saves`, `GET /v1/play/campaigns/{id}/characters/{char_id}/status`, `GET /v1/play/campaigns/{id}/characters/{char_id}/owner`, `POST /v1/play/campaigns/{id}/characters/{char_id}/claim`, `POST /v1/play/campaigns/{id}/characters/{char_id}/transfer`, `POST /v1/play/campaigns/{id}/characters/{char_id}/build`, `POST /v1/play/campaigns/{id}/characters/{char_id}/level-up`, `POST /v1/play/campaigns/{id}/characters/{char_id}/skill-check`, `POST /v1/play/campaigns/{id}/characters/{char_id}/spells`, `PUT /v1/play/campaigns/{id}/characters/{char_id}/prepared-spells`, `GET /v1/play/campaigns/{id}/characters/{char_id}/spells`, `GET /v1/play/campaigns/{id}/characters/{char_id}/prepared-spells`, `POST /v1/play/campaigns/{id}/characters/{char_id}/casts`, `GET /v1/play/campaigns/{id}/characters/{char_id}/casts` | `src/play.rs` |
 
 ## Extending and testing the codebase
 
@@ -165,6 +199,20 @@ expected to be simple JSON objects produced by the test harness.
    `AuthRequirement`.
 4. Keep JSON field order and response shape exactly as expected by the test
    suite; the string-building helpers in `src/json.rs` are used for this.
+
+### Reusing existing path-parsing helpers
+
+For new play-campaign sub-resources, prefer the existing helpers:
+
+- `parse_play_campaign_path(path, suffix)` for simple `/v1/play/campaigns/{id}/<suffix>` routes.
+- `parse_play_nested(path, prefix, marker, suffix)` for nested resources such as
+  `/v1/play/campaigns/{id}/characters/{char_id}/<suffix>`.
+- `parse_play_encounter_base(path, suffix)` for encounter sub-resources.
+- `parse_play_encounter_resource(path, resource)` for resource ids under an
+  encounter (e.g. `/monsters/{monster_id}`).
+
+These helpers enforce the same non-empty and segment-validity rules used by the
+existing tests.
 
 ### String safety
 
@@ -195,3 +243,13 @@ the running server.
 Keep behavior deterministic: use explicit sorting (e.g., combatant ordering and
 condition target ordering), fixed lookup tables, and no randomness. The test
 suite compares exact response bodies and relies on consistent ordering.
+
+### Refactoring conventions
+
+When making structural changes, preserve the exact HTTP status codes, response
+bodies, and validation rules of the existing endpoints. Safe refactorings
+include: extracting shared helpers for JSON parsing, path parsing, and schema
+migrations; adding clarifying comments; and deduplicating repeated error-mapping
+patterns. Avoid changing SQL string-building rules, JSON field ordering, or
+in-memory cache persistence semantics unless the test suite explicitly requires
+it.
