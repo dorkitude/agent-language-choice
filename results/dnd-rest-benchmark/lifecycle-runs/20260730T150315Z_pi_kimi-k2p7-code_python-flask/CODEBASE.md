@@ -230,6 +230,12 @@ enforce owner/member roles:
 - `POST /v1/play/campaigns/<id>/encounters/<enc_id>/close` — close an encounter (DM only).
 - `POST /v1/play/campaigns/<id>/encounters/<enc_id>/end` — end an encounter and return to exploration (DM only).
 
+### Deterministic RNG ledger
+
+- `PUT /v1/play/campaigns/<id>/rng-seed` — configure the campaign RNG seed (DM only).
+- `POST /v1/play/campaigns/<id>/rng-rolls` — append a deterministic roll to the ledger (DM or members).
+- `GET /v1/play/campaigns/<id>/rng-ledger` — read the configured seed and ordered roll records.
+
 ### DM tools
 
 - `POST /v1/dm/encounter-builder` — builds an encounter from stored monsters.

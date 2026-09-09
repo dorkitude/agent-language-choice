@@ -458,3 +458,38 @@ def compute_skill_modifier(ability_score, level, proficient):
     if proficient:
         modifier += proficiency_bonus(level)
     return modifier
+
+
+# --- Calendar weather ---
+
+SEASON_OFFSETS = {"spring": 0, "summer": 1, "autumn": 2, "winter": 3}
+WEATHER_BY_INDEX = {0: "clear", 1: "rain", 2: "wind", 3: "snow"}
+
+
+def compute_weather(day, season):
+    """Return deterministic weather for a day and season.
+
+    Weather is derived from (day + season_offset) % 4 where the season
+    offsets are spring=0, summer=1, autumn=2, winter=3, mapped to
+    0=clear, 1=rain, 2=wind, 3=snow.
+    """
+    offset = SEASON_OFFSETS.get(season, 0)
+    return WEATHER_BY_INDEX[(day + offset) % 4]
+
+
+# --- Deterministic RNG ledger ---
+
+
+def compute_rng_roll(seed, sequence, roll_id, sides):
+    """Return a deterministic die result from seed, sequence, roll_id, and sides.
+
+    Builds the byte string ``seed + "|" + sequence + "|" + roll_id + "|" + sides``,
+    hashes it with a simple 32-bit rolling accumulator, and returns
+    ``(accumulator % sides) + 1``.  No randomness or global state is used.
+    """
+    byte_string = (seed + "|" + str(sequence) + "|" + roll_id + "|" + str(sides)).encode("utf-8")
+    acc = 0
+    modulus = 2 ** 32
+    for b in byte_string:
+        acc = (acc * 31 + b) % modulus
+    return (acc % sides) + 1

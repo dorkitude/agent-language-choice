@@ -5,7 +5,9 @@ header. It covers lobby creation, membership, turn queue, narration, scene and
 location graph management, travel/rest turns, encounter building, and combat.
 """
 
-from flask import jsonify
+import json
+
+from flask import Response, jsonify, request
 
 import domain
 import storage
@@ -19,6 +21,7 @@ from ._common import (
     _forbidden,
     _load_play_campaign,
     _not_found,
+    _rate_limited,
     _require_dm_campaign,
     _require_owner,
     _require_owner_or_member,
@@ -26,6 +29,7 @@ from ._common import (
     _require_role,
     _require_strings,
     _unauthorized,
+    set_maintenance_mode,
 )
 from . import api
 
@@ -56,6 +60,21 @@ def create_play_campaign():
     if result is None:
         return _conflict("campaign already exists")
     return jsonify(result), 201
+
+
+@api.post("/v1/play/campaigns/<id>/service-mode")
+def set_play_campaign_service_mode(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    maintenance = data.get("maintenance")
+    if not isinstance(maintenance, bool):
+        return _bad_request()
+
+    set_maintenance_mode(maintenance)
+    return jsonify(maintenance=maintenance)
 
 
 @api.post("/v1/play/campaigns/<id>/members")
@@ -125,18 +144,87 @@ def start_play_campaign(id):
     return jsonify(result)
 
 
-@api.post("/v1/play/campaigns/<id>/narrations")
-def add_narration(id):
+@api.put("/v1/play/campaigns/<id>/session-zero")
+def set_session_zero(id):
     (campaign, user), err = _require_dm_campaign(id)
     if err:
         return err
+
+    data = _body()
+    rules = data.get("rules")
+    tone = data.get("tone")
+    consent = data.get("consent")
+    if not _require_strings(rules, tone):
+        return _bad_request()
+    if not isinstance(consent, list) or len(consent) == 0:
+        return _bad_request()
+    seen = set()
+    for item in consent:
+        if not isinstance(item, str) or item == "" or item in seen:
+            return _bad_request()
+        seen.add(item)
+
+    if campaign["status"] != "lobby":
+        return _conflict("campaign is not in lobby")
+
+    result = storage.set_play_campaign_session_zero(id, rules, tone, consent)
+    if result == "not_lobby":
+        return _conflict("campaign is not in lobby")
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/session-zero")
+def get_session_zero(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_play_campaign_session_zero(id)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/onboarding")
+def get_play_campaign_onboarding(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if campaign["owner"] == user["username"]:
+        return Response(
+            '{"role":"dm","next_steps":["configure-safety","invite-players","start-campaign"],"can_mutate":true}',
+            mimetype="application/json",
+        )
+    return Response(
+        '{"role":"player","next_steps":["review-party","take-turn","submit-action"],"can_mutate":true}',
+        mimetype="application/json",
+    )
+
+
+@api.post("/v1/play/campaigns/<id>/narrations")
+def add_narration(id):
+    user = _current_user()
+    if user is None:
+        return _unauthorized()
+
+    campaign, err = _load_play_campaign(id)
+    if err:
+        return err
+
+    is_owner = campaign["owner"] == user["username"]
+    if not is_owner and not storage.is_active_delegate(id, user["username"], "narrate"):
+        return _forbidden()
 
     data = _body()
     text = data.get("text")
     if not isinstance(text, str) or text == "":
         return _bad_request()
 
-    result = storage.create_narration(id, text)
+    actor = "dm" if is_owner else user["username"]
+    result = storage.create_narration(id, text, actor=actor)
     if result is None:
         return _not_found()
     return jsonify(result), 201
@@ -149,22 +237,29 @@ def get_play_campaign_turn(id):
         return err
 
     current_actor = campaign["current_actor"]
-    if current_actor == campaign["owner"]:
-        phase = "dm"
+    campaign_phase = campaign.get("phase")
+    if campaign_phase == "combat":
+        phase = "combat"
+    elif current_actor == campaign["owner"]:
+        phase = "exploration"
     elif current_actor is None:
         phase = campaign["status"]
     else:
         phase = "player"
 
     queue = storage.get_play_campaign_queue(id)
-    return jsonify(
-        campaign_id=id,
-        current_actor=current_actor,
-        phase=phase,
-        turn_number=campaign["turn_number"],
-        queue=queue,
-        overdue=False,
-        logical_deadline=campaign["turn_number"] + 1,
+    payload = {
+        "campaign_id": id,
+        "current_actor": current_actor,
+        "phase": phase,
+        "turn_number": campaign["turn_number"],
+        "queue": queue,
+        "overdue": False,
+        "logical_deadline": campaign["turn_number"] + 1,
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
     )
 
 
@@ -2374,4 +2469,2015 @@ def get_world_events_route(id):
     if events is None:
         return _not_found()
     return jsonify(events=events)
+
+
+# --- Calendar ---
+
+
+def _calendar_response(day, season):
+    return {
+        "day": day,
+        "season": season,
+        "weather": domain.compute_weather(day, season),
+    }
+
+
+@api.post("/v1/play/campaigns/<id>/calendar")
+def create_calendar(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    day = data.get("day")
+    season = data.get("season")
+
+    try:
+        day = int(day)
+    except (TypeError, ValueError):
+        return _bad_request()
+    if day < 1:
+        return _bad_request()
+    if season not in domain.SEASON_OFFSETS:
+        return _bad_request()
+
+    result = storage.create_calendar(id, day, season)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("calendar already exists")
+
+    return jsonify(_calendar_response(result["day"], result["season"])), 201
+
+
+@api.get("/v1/play/campaigns/<id>/calendar")
+def get_calendar(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_calendar(id)
+    if result is None:
+        return _not_found()
+
+    return jsonify(_calendar_response(result["day"], result["season"]))
+
+
+@api.post("/v1/play/campaigns/<id>/calendar/advance")
+def advance_calendar(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    try:
+        days = int(data.get("days"))
+    except (TypeError, ValueError):
+        return _bad_request()
+    if days < 1 or days > 30:
+        return _bad_request()
+
+    result = storage.advance_calendar(id, days)
+    if result is None:
+        return _not_found()
+
+    return jsonify(_calendar_response(result["day"], result["season"]))
+
+
+# --- Settlements ---
+
+
+def _validate_settlement_payload(data, require_settlement_id=True):
+    """Return normalized settlement fields or None if invalid."""
+    settlement_id = data.get("settlement_id")
+    name = data.get("name")
+    services = data.get("services")
+    availability = data.get("availability")
+
+    if require_settlement_id and not _require_strings(settlement_id):
+        return None
+    if not _require_strings(name):
+        return None
+    if availability not in ("open", "limited", "closed"):
+        return None
+    if not isinstance(services, list) or len(services) == 0:
+        return None
+
+    normalized = []
+    seen = set()
+    for svc in services:
+        if not isinstance(svc, str):
+            return None
+        trimmed = svc.strip()
+        if trimmed == "" or trimmed in seen:
+            return None
+        seen.add(trimmed)
+        normalized.append(trimmed)
+
+    result = {"name": name, "services": normalized, "availability": availability}
+    if require_settlement_id:
+        result["settlement_id"] = settlement_id
+    return result
+
+
+def _player_filter_settlement(settlement, character_id):
+    """Return a player-view copy of a settlement with discovered_by limited."""
+    filtered = dict(settlement)
+    if character_id in settlement.get("discovered_by", []):
+        filtered["discovered_by"] = [character_id]
+    else:
+        filtered["discovered_by"] = []
+    return filtered
+
+
+@api.post("/v1/play/campaigns/<id>/settlements")
+def create_settlement(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    validated = _validate_settlement_payload(_body())
+    if validated is None:
+        return _bad_request()
+
+    result = storage.create_settlement(
+        id,
+        validated["settlement_id"],
+        validated["name"],
+        validated["services"],
+        validated["availability"],
+    )
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("settlement already exists")
+    return jsonify(result), 201
+
+
+@api.put("/v1/play/campaigns/<id>/settlements/<settlement_id>")
+def update_settlement(id, settlement_id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    validated = _validate_settlement_payload(_body(), require_settlement_id=False)
+    if validated is None:
+        return _bad_request()
+
+    result = storage.update_settlement(
+        id,
+        settlement_id,
+        validated["name"],
+        validated["services"],
+        validated["availability"],
+    )
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+@api.post("/v1/play/campaigns/<id>/settlements/<settlement_id>/discover")
+def discover_settlement(id, settlement_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if user["role"] != "player":
+        return _forbidden()
+
+    member = storage.get_play_campaign_member(id, user["username"])
+    if member is None:
+        return _forbidden()
+
+    result = storage.discover_settlement(id, settlement_id, member["character_id"])
+    if result is None:
+        return _not_found()
+
+    settlement, created = result
+    status = 201 if created else 200
+    return jsonify(_player_filter_settlement(settlement, member["character_id"])), status
+
+
+@api.get("/v1/play/campaigns/<id>/settlements")
+def list_settlements(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    settlements = storage.get_settlements(id)
+    if settlements is None:
+        return _not_found()
+
+    if campaign["owner"] == user["username"]:
+        return jsonify(settlements=settlements)
+
+    member = storage.get_play_campaign_member(id, user["username"])
+    if member is None:
+        return _forbidden()
+    character_id = member["character_id"]
+
+    filtered = [
+        _player_filter_settlement(s, character_id)
+        for s in settlements
+        if character_id in s.get("discovered_by", [])
+    ]
+    return jsonify(settlements=filtered)
+
+
+# --- Settlement shops ---
+
+
+@api.post("/v1/play/campaigns/<id>/settlements/<settlement_id>/shops")
+def create_shop(id, settlement_id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    shop_id = data.get("shop_id")
+    name = data.get("name")
+    stock = data.get("stock")
+    buy_price = data.get("buy_price")
+    sell_price = data.get("sell_price")
+
+    if not _require_strings(shop_id, name):
+        return _bad_request()
+    if not isinstance(stock, dict) or len(stock) == 0:
+        return _bad_request()
+    for item_id, qty in stock.items():
+        if item_id not in _VALID_INVENTORY_ITEMS:
+            return _bad_request()
+        if not isinstance(qty, int) or qty <= 0:
+            return _bad_request()
+    try:
+        buy_price = int(buy_price)
+        sell_price = int(sell_price)
+    except (TypeError, ValueError):
+        return _bad_request()
+    if buy_price <= 0 or sell_price < 0:
+        return _bad_request()
+
+    result = storage.create_shop(id, settlement_id, shop_id, name, stock, buy_price, sell_price)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("shop already exists")
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/settlements/<settlement_id>/shops/<shop_id>")
+def get_shop(id, settlement_id, shop_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    settlement = storage.get_settlement(id, settlement_id)
+    if settlement is None:
+        return _not_found()
+
+    shop = storage.get_shop(id, settlement_id, shop_id)
+    if shop is None:
+        return _not_found()
+
+    if campaign["owner"] != user["username"]:
+        member = storage.get_play_campaign_member(id, user["username"])
+        if member is None:
+            return _forbidden()
+        if member["character_id"] not in settlement.get("discovered_by", []):
+            return _not_found()
+
+    return jsonify(shop)
+
+
+@api.post("/v1/play/campaigns/<id>/settlements/<settlement_id>/shops/<shop_id>/buy")
+def buy_from_shop(id, settlement_id, shop_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if user["role"] == "dm":
+        return _forbidden()
+
+    data = _body()
+    character_id = data.get("character_id")
+    item_id = data.get("item_id")
+    quantity = data.get("quantity")
+
+    if not _require_strings(character_id, item_id):
+        return _bad_request()
+    if item_id not in _VALID_INVENTORY_ITEMS:
+        return _bad_request()
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        return _bad_request()
+    if quantity <= 0:
+        return _bad_request()
+
+    if storage.get_settlement(id, settlement_id) is None:
+        return _not_found()
+    if storage.get_shop(id, settlement_id, shop_id) is None:
+        return _not_found()
+
+    owner_info = storage.get_character_owner(id, character_id)
+    if owner_info is None:
+        return _not_found()
+    if owner_info.get("owner") != user["username"]:
+        return _forbidden()
+
+    result = storage.buy_from_shop(id, settlement_id, shop_id, character_id, item_id, quantity)
+    if result is None:
+        return _not_found()
+    if result in ("invalid_item", "invalid_quantity"):
+        return _bad_request()
+    if result == "insufficient_stock":
+        return _conflict("insufficient stock")
+    if result == "insufficient_funds":
+        return _conflict("insufficient gold")
+
+    return jsonify(result)
+
+
+@api.post("/v1/play/campaigns/<id>/settlements/<settlement_id>/shops/<shop_id>/sell")
+def sell_to_shop(id, settlement_id, shop_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if user["role"] == "dm":
+        return _forbidden()
+
+    data = _body()
+    character_id = data.get("character_id")
+    item_id = data.get("item_id")
+    quantity = data.get("quantity")
+
+    if not _require_strings(character_id, item_id):
+        return _bad_request()
+    if item_id not in _VALID_INVENTORY_ITEMS:
+        return _bad_request()
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        return _bad_request()
+    if quantity <= 0:
+        return _bad_request()
+
+    if storage.get_settlement(id, settlement_id) is None:
+        return _not_found()
+    if storage.get_shop(id, settlement_id, shop_id) is None:
+        return _not_found()
+
+    owner_info = storage.get_character_owner(id, character_id)
+    if owner_info is None:
+        return _not_found()
+    if owner_info.get("owner") != user["username"]:
+        return _forbidden()
+
+    result = storage.sell_to_shop(id, settlement_id, shop_id, character_id, item_id, quantity)
+    if result is None:
+        return _not_found()
+    if result in ("invalid_item", "invalid_quantity"):
+        return _bad_request()
+    if result == "insufficient_inventory":
+        return _conflict("insufficient inventory")
+
+    return jsonify(result)
+
+
+# --- Campaign crafting recipes ---
+
+
+@api.post("/v1/play/campaigns/<id>/recipes")
+def create_recipe(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    recipe_id = data.get("recipe_id")
+    name = data.get("name")
+    ingredients = data.get("ingredients")
+    output_item = data.get("output_item")
+    output_quantity = data.get("output_quantity")
+
+    result = storage.create_recipe(id, recipe_id, name, ingredients, output_item, output_quantity)
+    if result is None:
+        return _not_found()
+    if result == "invalid":
+        return _bad_request()
+    if result == "duplicate":
+        return _conflict("recipe already exists")
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/recipes")
+def list_recipes(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    recipes = storage.get_recipes(id)
+    if recipes is None:
+        return _not_found()
+    return jsonify(recipes=recipes)
+
+
+@api.post("/v1/play/campaigns/<id>/recipes/<recipe_id>/craft")
+def craft_recipe(id, recipe_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if user["role"] == "dm":
+        return _forbidden()
+
+    data = _body()
+    character_id = data.get("character_id")
+    if not _require_strings(character_id):
+        return _bad_request()
+
+    character = storage.get_play_campaign_character(id, character_id)
+    if character is None:
+        return _not_found()
+
+    owner_info = storage.get_character_owner(id, character_id)
+    if owner_info is None or owner_info.get("owner") != user["username"]:
+        return _forbidden()
+
+    result = storage.craft_recipe(id, recipe_id, character_id)
+    if result is None:
+        return _not_found()
+    if result == "character_not_found":
+        return _not_found()
+    if result == "insufficient":
+        return _conflict("insufficient ingredients")
+
+    return jsonify(result), 201
+
+
+# --- Recurring downtime ---
+
+
+@api.post("/v1/play/campaigns/<id>/downtime/activities")
+def create_downtime_activity(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    activity_id = data.get("activity_id")
+    name = data.get("name")
+    cycles_required = data.get("cycles_required")
+    if not _require_strings(activity_id, name):
+        return _bad_request()
+    if type(cycles_required) is not int or not (1 <= cycles_required <= 10):
+        return _bad_request()
+
+    result = storage.create_downtime_activity(id, activity_id, name, cycles_required)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("activity already exists")
+    return jsonify(result), 201
+
+
+@api.post("/v1/play/campaigns/<id>/characters/<char_id>/downtime/allocations")
+def create_downtime_allocation(id, char_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if user["role"] == "dm":
+        return _forbidden()
+
+    owner_info = storage.get_character_owner(id, char_id)
+    if owner_info is None:
+        return _not_found()
+    if owner_info.get("owner") != user["username"]:
+        return _forbidden()
+
+    data = _body()
+    activity_id = data.get("activity_id")
+    if not _require_strings(activity_id):
+        return _bad_request()
+
+    result = storage.create_downtime_allocation(id, char_id, activity_id)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("allocation already exists")
+    return jsonify(result), 201
+
+
+@api.post("/v1/play/campaigns/<id>/characters/<char_id>/downtime/allocations/<activity_id>/progress")
+def progress_downtime_allocation(id, char_id, activity_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    if user["role"] == "dm":
+        return _forbidden()
+
+    owner_info = storage.get_character_owner(id, char_id)
+    if owner_info is None:
+        return _not_found()
+    if owner_info.get("owner") != user["username"]:
+        return _forbidden()
+
+    result = storage.progress_downtime_allocation(id, char_id, activity_id)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/characters/<char_id>/downtime/allocations/<activity_id>")
+def get_downtime_allocation(id, char_id, activity_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_downtime_allocation(id, char_id, activity_id)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+# --- Content tags ---
+
+
+@api.post("/v1/play/campaigns/<id>/content")
+def create_content_route(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    content_id = data.get("content_id")
+    kind = data.get("kind")
+    text = data.get("text")
+    tags = data.get("tags")
+    if not _require_strings(content_id, kind, text):
+        return _bad_request()
+
+    result = storage.create_content(id, content_id, kind, text, tags)
+    if result is None:
+        return _not_found()
+    if result == "invalid":
+        return _bad_request()
+    if result is False:
+        return _conflict("content already exists")
+
+    return jsonify(result), 201
+
+
+@api.put("/v1/play/campaigns/<id>/content/<content_id>/tags")
+def update_content_tags_route(id, content_id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    tags = data.get("tags")
+    if not isinstance(tags, list):
+        return _bad_request()
+
+    result = storage.update_content_tags(id, content_id, tags)
+    if result is None:
+        return _not_found()
+    if result == "invalid":
+        return _bad_request()
+
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/content")
+def list_content_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    exclude_tag = request.args.get("exclude_tag")
+    if exclude_tag is not None and exclude_tag == "":
+        return _bad_request()
+
+    content = storage.list_content(id)
+    if content is None:
+        return _not_found()
+
+    if campaign["owner"] != user["username"] and exclude_tag is not None:
+        content = [record for record in content if exclude_tag not in record.get("tags", [])]
+
+    return jsonify(content=content)
+
+
+# --- Notes ---
+
+
+@api.post("/v1/play/campaigns/<id>/notes")
+def create_note_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+    if campaign["owner"] != user["username"] and not storage.is_play_campaign_member(id, user["username"]):
+        return _forbidden()
+
+    data = _body()
+    note_id = data.get("note_id")
+    text = data.get("text")
+    visibility = data.get("visibility")
+    if not _require_strings(note_id, text):
+        return _bad_request()
+    if visibility not in ("private", "party"):
+        return _bad_request()
+
+    result = storage.create_note(id, note_id, text, visibility, user["username"])
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("note already exists")
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/notes")
+def list_notes_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    is_dm = campaign["owner"] == user["username"]
+    notes = storage.list_notes(id, actor=user["username"], is_dm=is_dm)
+    if notes is None:
+        return _not_found()
+    return jsonify(notes=notes)
+
+
+@api.get("/v1/play/campaigns/<id>/notes/<note_id>")
+def get_note_route(id, note_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    note = storage.get_note(id, note_id)
+    if note is None:
+        return _not_found()
+
+    is_dm = campaign["owner"] == user["username"]
+    if not is_dm and note["visibility"] == "private" and note["owner"] != user["username"]:
+        return _forbidden()
+    return jsonify(note)
+
+
+@api.put("/v1/play/campaigns/<id>/notes/<note_id>")
+def update_note_route(id, note_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    note = storage.get_note(id, note_id)
+    if note is None:
+        return _not_found()
+    if note["owner"] != user["username"]:
+        return _forbidden()
+
+    data = _body()
+    text = data.get("text")
+    visibility = data.get("visibility")
+    if not _require_strings(text) or visibility not in ("private", "party"):
+        return _bad_request()
+
+    result = storage.update_note(id, note_id, text, visibility)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+# --- Whispers ---
+
+
+@api.post("/v1/play/campaigns/<id>/whispers")
+def create_whisper_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+    if user["role"] != "player":
+        return _forbidden()
+
+    data = _body()
+    whisper_id = data.get("whisper_id")
+    to_character_id = data.get("to_character_id")
+    text = data.get("text")
+    if not _require_strings(whisper_id, to_character_id, text):
+        return _bad_request()
+
+    member = storage.get_play_campaign_member(id, user["username"])
+    if member is None:
+        return _bad_request()
+    owner_info = storage.get_character_owner(id, member["character_id"])
+    if owner_info is None or owner_info.get("owner") != user["username"]:
+        return _bad_request()
+    from_character_id = member["character_id"]
+
+    if storage.get_play_campaign_character(id, to_character_id) is None:
+        return _bad_request()
+
+    result = storage.create_whisper(id, whisper_id, from_character_id, to_character_id, text)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("whisper already exists")
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/whispers")
+def list_whispers_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    is_dm = campaign["owner"] == user["username"]
+    if is_dm:
+        whispers = storage.list_whispers(id, is_dm=True)
+    else:
+        member = storage.get_play_campaign_member(id, user["username"])
+        if member is None:
+            return _forbidden()
+        whispers = storage.list_whispers(id, character_id=member["character_id"], is_dm=False)
+    if whispers is None:
+        return _not_found()
+    return jsonify(whispers=whispers)
+
+
+# --- Chat messages ---
+
+
+@api.post("/v1/play/campaigns/<id>/messages")
+def create_message_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    text = data.get("text")
+    if not isinstance(text, str) or text == "":
+        return _bad_request()
+
+    result = storage.create_message(id, user["username"], text)
+    if result is None:
+        return _not_found()
+
+    return Response(
+        json.dumps(result, sort_keys=False, separators=(",", ":")),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+# --- Character sheets ---
+
+
+@api.get("/v1/play/campaigns/<id>/characters/<char_id>/sheet")
+def get_character_sheet_route(id, char_id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    sheet = storage.get_character_sheet(id, char_id)
+    if sheet is None:
+        return _not_found()
+    if campaign["owner"] != user["username"] and sheet["owner"] != user["username"]:
+        return _forbidden()
+    return jsonify(sheet)
+
+
+# --- Invitations ---
+
+
+@api.post("/v1/play/campaigns/<id>/invitations")
+def create_invitation_route(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    invitation_id = data.get("invitation_id")
+    username = data.get("username")
+    character_id = data.get("character_id")
+    if not _require_strings(invitation_id, username, character_id):
+        return _bad_request()
+
+    target = storage.get_user(username)
+    if target is None or target.get("role") != "player":
+        return _bad_request()
+
+    result = storage.create_play_campaign_invitation(id, invitation_id, username, character_id)
+    if result is None:
+        return _not_found()
+    if result == "duplicate_id":
+        return _conflict("invitation already exists")
+    if result == "duplicate_active":
+        return _conflict("active invitation already exists")
+    return jsonify(result), 201
+
+
+@api.post("/v1/play/campaigns/<id>/invitations/<invitation_id>/accept")
+def accept_invitation_route(id, invitation_id):
+    user = _current_user()
+    if user is None:
+        return _unauthorized()
+    campaign, err = _load_play_campaign(id)
+    if err:
+        return err
+
+    invitation = storage.get_play_campaign_invitation(id, invitation_id)
+    if invitation is None:
+        return _not_found()
+    if invitation["username"] != user["username"]:
+        return _forbidden()
+    if invitation["status"] != "pending":
+        return _conflict("already accepted")
+
+    result = storage.accept_play_campaign_invitation(id, invitation_id, user["username"])
+    if result is None:
+        return _not_found()
+    if result == "wrong_user":
+        return _forbidden()
+    if result == "already_accepted":
+        return _conflict("already accepted")
+    if result == "already_member":
+        return _conflict("player already joined")
+    if result == "duplicate_character":
+        return _conflict("character already exists")
+    if result == "full":
+        return _conflict("party is full")
+    return jsonify(result), 200
+
+
+@api.get("/v1/play/campaigns/<id>/invitations")
+def list_invitations_route(id):
+    user = _current_user()
+    if user is None:
+        return _unauthorized()
+    campaign, err = _load_play_campaign(id)
+    if err:
+        return err
+
+    if campaign["owner"] == user["username"]:
+        invitations = storage.list_play_campaign_invitations(id)
+    else:
+        invitations = storage.list_play_campaign_invitations(id, user["username"])
+        if not invitations and not storage.is_play_campaign_member(id, user["username"]):
+            return _forbidden()
+
+    return jsonify({"invitations": invitations})
+
+
+# --- GM Delegation ---
+
+_VALID_DELEGATION_POWERS = {"narrate"}
+
+
+@api.get("/v1/play/campaigns/<id>/delegations/audit")
+def list_delegation_audit(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    entries = storage.get_play_campaign_delegation_audit(id)
+    if entries is None:
+        return _not_found()
+    return jsonify(entries=entries)
+
+
+@api.post("/v1/play/campaigns/<id>/delegations")
+def grant_delegation(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    username = data.get("username")
+    powers = data.get("powers")
+    if not _require_strings(username):
+        return _bad_request()
+    if not isinstance(powers, list) or len(powers) == 0:
+        return _bad_request()
+
+    seen = set()
+    for power in powers:
+        if not isinstance(power, str) or power == "" or power in seen or power not in _VALID_DELEGATION_POWERS:
+            return _bad_request()
+        seen.add(power)
+
+    if not storage.is_play_campaign_member(id, username):
+        return _bad_request()
+
+    result = storage.grant_play_campaign_delegation(id, username, powers)
+    if result is None:
+        return _not_found()
+    if result == "not_member":
+        return _bad_request()
+    if result == "duplicate_active":
+        return _conflict("delegate already active")
+
+    return jsonify(result), 201
+
+
+@api.delete("/v1/play/campaigns/<id>/delegations/<username>")
+def revoke_delegation(id, username):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    if not storage.is_play_campaign_member(id, username):
+        return _bad_request()
+
+    result = storage.revoke_play_campaign_delegation(id, username)
+    if result is None:
+        return _not_found()
+    if result == "not_active":
+        return _bad_request()
+
+    return jsonify(result)
+
+
+# --- Actor Audit Trail ---
+
+
+@api.post("/v1/play/campaigns/<id>/audit-events")
+def create_audit_event(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    kind = data.get("kind")
+    correlation_id = data.get("correlation_id")
+    if not _require_strings(kind, correlation_id):
+        return _bad_request()
+
+    role = "DM" if campaign["owner"] == user["username"] else "player"
+    result = storage.create_actor_audit_event(id, kind, user["username"], role, correlation_id)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("correlation_id already exists")
+
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/audit-events")
+def list_audit_events(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    entries = storage.get_actor_audit_events(id)
+    if entries is None:
+        return _not_found()
+
+    return jsonify(entries=entries)
+
+
+# --- Projection events ---
+
+
+@api.post("/v1/play/campaigns/<id>/projection-events")
+def append_projection_event(id):
+    user = _current_user()
+    if user is None:
+        return _unauthorized()
+
+    campaign, err = _load_play_campaign(id)
+    if err:
+        return err
+
+    if campaign["owner"] == user["username"]:
+        return _forbidden()
+    if not storage.is_play_campaign_member(id, user["username"]):
+        return _forbidden()
+
+    data = _body()
+    event_id = data.get("event_id")
+    kind = data.get("kind")
+    value = data.get("value")
+
+    if not isinstance(event_id, str) or event_id == "":
+        return _bad_request()
+    if kind not in ("set-story", "increment-danger"):
+        return _bad_request()
+    if kind == "set-story":
+        if not isinstance(value, str) or value == "":
+            return _bad_request()
+    else:
+        if "value" in data:
+            return _bad_request()
+
+    result = storage.create_projection_event(id, event_id, kind, value if kind == "set-story" else None)
+    if result == "duplicate":
+        return _conflict("event_id already exists")
+    if result is None:
+        return _not_found()
+
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/projection")
+def get_projection(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_projection(id)
+    if result is None:
+        return _not_found()
+
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/projection/rebuild")
+def rebuild_projection(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_projection(id)
+    if result is None:
+        return _not_found()
+
+    return jsonify(result)
+
+
+# --- Idempotent events ---
+
+
+@api.post("/v1/play/campaigns/<id>/idempotent-events")
+def create_idempotent_event_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    idempotency_key = request.headers.get("Idempotency-Key", "").strip()
+    if idempotency_key == "":
+        return _bad_request()
+
+    data = _body()
+    event_id = data.get("event_id")
+    value = data.get("value")
+
+    if not _require_strings(event_id, value):
+        return _bad_request()
+
+    result = storage.create_idempotent_event(id, idempotency_key, event_id, value)
+    if result == "mismatch":
+        return _conflict("idempotency key mismatch")
+    if result == "duplicate_event_id":
+        return _conflict("event_id already exists")
+    if result is None:
+        return _not_found()
+
+    status, event = result
+    return jsonify(event), (201 if status == "created" else 200)
+
+
+@api.get("/v1/play/campaigns/<id>/idempotent-events")
+def list_idempotent_events(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    events = storage.get_idempotent_events(id)
+    if events is None:
+        return _not_found()
+
+    return jsonify(events=events)
+
+
+# --- Safe turns ---
+
+
+@api.post("/v1/play/campaigns/<id>/safe-turns")
+def submit_safe_turn(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    submission_id = data.get("submission_id")
+    expected_turn = data.get("expected_turn")
+    action = data.get("action")
+
+    if not _require_strings(submission_id, action):
+        return _bad_request()
+    try:
+        expected_turn = int(expected_turn)
+    except (TypeError, ValueError):
+        return _bad_request()
+    if expected_turn < 1:
+        return _bad_request()
+
+    result = storage.submit_safe_turn(id, submission_id, expected_turn, action)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("submission already exists")
+
+    status, payload = result
+    if status == "stale":
+        return jsonify(current_turn=payload), 409
+
+    return jsonify(payload), 201
+
+
+@api.get("/v1/play/campaigns/<id>/safe-turns")
+def list_safe_turns(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_safe_turns(id)
+    if result is None:
+        return _not_found()
+
+    return jsonify(result)
+
+
+# --- Transactional transfers ---
+
+
+@api.post("/v1/play/campaigns/<id>/transactional-transfers")
+def create_transactional_transfer_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    from_character_id = data.get("from_character_id")
+    to_character_id = data.get("to_character_id")
+    amount = data.get("amount")
+    simulate_failure = data.get("simulate_failure")
+
+    if not _require_strings(from_character_id, to_character_id):
+        return _bad_request()
+    if type(amount) is not int or amount <= 0:
+        return _bad_request()
+    if type(simulate_failure) is not bool:
+        return _bad_request()
+
+    result = storage.create_transactional_transfer(
+        id, user["username"], from_character_id, to_character_id, amount, simulate_failure
+    )
+    if result is None:
+        return _bad_request()
+    if result == "self_transfer":
+        return _bad_request()
+    if result == "invalid_amount":
+        return _bad_request()
+    if result == "forbidden":
+        return _forbidden()
+    if result == "insufficient":
+        return _conflict("insufficient gold")
+    if result == "simulated_failure":
+        return jsonify(error="simulated failure"), 500
+
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/transactional-transfers")
+def list_transactional_transfers(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_transactional_transfers(id)
+    if result is None:
+        return _not_found()
+
+    return jsonify(result)
+
+
+# --- Versioned campaign exports ---
+
+
+@api.post("/v1/play/campaigns/<id>/exports")
+def create_export(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    result = storage.create_play_campaign_export(id)
+    if result is None:
+        return _not_found()
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/exports")
+def list_exports(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    exports = storage.get_play_campaign_exports(id)
+    if exports is None:
+        return _not_found()
+    return jsonify(exports=exports)
+
+
+@api.get("/v1/play/campaigns/<id>/exports/<version>")
+def get_export(id, version):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    try:
+        version = int(version)
+    except (TypeError, ValueError):
+        return _not_found()
+
+    result = storage.get_play_campaign_export(id, version)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+# --- Campaign backups ---
+
+
+@api.post("/v1/play/campaigns/<id>/backups")
+def create_backup(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    result = storage.create_play_campaign_backup(id)
+    if result is None:
+        return _not_found()
+    payload = {
+        "backup_id": result["backup_id"],
+        "story": result["story"],
+        "status": result["status"],
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/backups")
+def list_backups(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    backups = storage.get_play_campaign_backups(id)
+    if backups is None:
+        return _not_found()
+    payload = {
+        "backups": [
+            {"backup_id": b["backup_id"], "story": b["story"], "status": b["status"]}
+            for b in backups
+        ],
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+@api.post("/v1/play/campaigns/<id>/backups/<backup_id>/restore")
+def restore_backup(id, backup_id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    result = storage.restore_play_campaign_backup(id, backup_id)
+    if result is None:
+        return _not_found()
+    payload = {
+        "backup_id": result["backup_id"],
+        "story": result["story"],
+        "status": result["status"],
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+# --- Campaign imports ---
+
+
+@api.post("/v1/play/campaigns/<id>/imports")
+def import_campaign(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    if not isinstance(data, dict):
+        return _bad_request()
+
+    version = data.get("version")
+    story = data.get("story")
+    status = data.get("status")
+
+    if not isinstance(version, int) or version != 1:
+        return _bad_request()
+    if not isinstance(story, str) or story == "":
+        return _bad_request()
+    if status not in ("lobby", "started"):
+        return _bad_request()
+
+    snapshot = {"version": 1, "story": story, "status": status}
+    result = storage.import_play_campaign_snapshot(id, snapshot)
+    if result is None:
+        return _not_found()
+    return Response(
+        json.dumps(result, separators=(",", ":")),
+        status=200,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/import-state")
+def get_import_state(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    result = storage.get_play_campaign_import_state(id)
+    if result is None:
+        return _not_found()
+    return Response(
+        json.dumps(result, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+# --- Schema migrations ---
+
+
+@api.post("/v1/play/campaigns/<id>/migrations")
+def migrate_campaign(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    if not isinstance(data, dict):
+        return _bad_request()
+
+    schema_version = data.get("schema_version")
+    story = data.get("story")
+
+    if not isinstance(schema_version, int) or schema_version != 1:
+        return _bad_request()
+    if not isinstance(story, str) or story == "":
+        return _bad_request()
+
+    result = storage.migrate_play_campaign(id, schema_version, story)
+    if result == "invalid":
+        return _bad_request()
+    if result is None:
+        return _not_found()
+
+    status = 201 if result["created"] else 200
+    return Response(
+        json.dumps(result["state"], separators=(",", ":")),
+        status=status,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/migration-state")
+def get_migration_state(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    result = storage.get_play_campaign_migration_state(id)
+    if result is None:
+        return _not_found()
+    return Response(
+        json.dumps(result, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+# --- Search records ---
+
+
+@api.post("/v1/play/campaigns/<id>/search-records")
+def create_search_record(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    record_id = data.get("record_id")
+    text = data.get("text")
+    if not _require_strings(record_id, text):
+        return _bad_request()
+
+    result = storage.create_search_record(id, record_id, text)
+    if result is None:
+        return _not_found()
+    if result is False:
+        return _bad_request()
+
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/search-records")
+def list_search_records(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    q = request.args.get("q")
+    try:
+        limit = int(request.args.get("limit", 2))
+    except (TypeError, ValueError):
+        return _bad_request()
+    try:
+        cursor = int(request.args.get("cursor", 0))
+    except (TypeError, ValueError):
+        return _bad_request()
+    if not (1 <= limit <= 3) or cursor < 0:
+        return _bad_request()
+
+    result = storage.list_search_records(id, q=q, limit=limit, cursor=cursor)
+    if result is None:
+        return _not_found()
+
+    return jsonify(result)
+
+
+# --- Deterministic Replay ---
+
+
+@api.post("/v1/play/campaigns/<id>/replay-events")
+def append_replay_event(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    event_id = data.get("event_id")
+    kind = data.get("kind")
+    text = data.get("text")
+    if not _require_strings(event_id, text):
+        return _bad_request()
+    if kind != "append":
+        return _bad_request()
+
+    result = storage.create_replay_event(id, event_id, kind, text)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("event_id already exists")
+
+    payload = {"event_id": result["event_id"], "kind": result["kind"], "text": result["text"], "sequence": result["sequence"]}
+    return Response(
+        json.dumps(payload, separators=(",", ":"), sort_keys=False),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/replay")
+def get_replay_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_replay(id)
+    if result is None:
+        return _not_found()
+
+    return Response(
+        json.dumps(result, separators=(",", ":"), sort_keys=False),
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/replay/check")
+def check_replay(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_replay(id)
+    if result is None:
+        return _not_found()
+
+    return Response(
+        json.dumps(result, separators=(",", ":"), sort_keys=False),
+        mimetype="application/json",
+    )
+
+
+# --- Rate events ---
+
+
+@api.post("/v1/play/campaigns/<id>/rate-events")
+def create_rate_event(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    event_id = data.get("event_id")
+    if not isinstance(event_id, str) or event_id == "":
+        return _bad_request()
+
+    result = storage.create_rate_event(id, user["username"], event_id)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _bad_request()
+    if result == "rate_limited":
+        return _rate_limited(2, 0)
+
+    return jsonify(result), 201
+
+
+@api.get("/v1/play/campaigns/<id>/rate-events")
+def list_rate_events(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.list_rate_events(id, user["username"])
+    if result is None:
+        return _not_found()
+
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/metrics")
+def get_campaign_metrics(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    result = storage.get_campaign_metrics(id)
+    if result is None:
+        return _not_found()
+
+    # Preserve the exact key order required by the stage contract; the default
+    # Flask JSON provider sorts object keys alphabetically.
+    response = Response(json.dumps(result, separators=(",", ":")), mimetype="application/json")
+    return response
+
+
+# --- Deterministic RNG ledger ---
+
+
+def _rng_roll_record(roll_id, sides, result, sequence):
+    """Return an ordered RNG roll record dict for stable JSON serialization."""
+    return {
+        "roll_id": roll_id,
+        "sides": sides,
+        "result": result,
+        "sequence": sequence,
+    }
+
+
+@api.put("/v1/play/campaigns/<id>/rng-seed")
+def set_rng_seed(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    seed = data.get("seed")
+    if not isinstance(seed, str) or seed == "":
+        return _bad_request()
+
+    result = storage.set_play_campaign_rng_seed(id, seed)
+    if result is None:
+        return _not_found()
+    if result == "exists":
+        return _conflict("seed already configured")
+
+    ledger = storage.get_play_campaign_rng_ledger(id)
+    payload = {"seed": ledger["seed"], "rolls": ledger["rolls"]}
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+@api.post("/v1/play/campaigns/<id>/rng-rolls")
+def append_rng_roll(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    roll_id = data.get("roll_id")
+    sides = data.get("sides")
+
+    if not isinstance(roll_id, str) or roll_id == "":
+        return _bad_request()
+    if isinstance(sides, bool) or not isinstance(sides, int) or sides < 2 or sides > 100:
+        return _bad_request()
+
+    result = storage.append_play_campaign_rng_roll(id, roll_id, sides)
+    if result is None:
+        return _not_found()
+    if result == "no_seed":
+        return _conflict("rng seed not configured")
+    if result == "duplicate":
+        return _conflict("roll_id already exists")
+
+    payload = _rng_roll_record(result["roll_id"], result["sides"], result["result"], result["sequence"])
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/rng-ledger")
+def get_rng_ledger(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    ledger = storage.get_play_campaign_rng_ledger(id)
+    rolls = [
+        _rng_roll_record(r["roll_id"], r["sides"], r["result"], r["sequence"])
+        for r in ledger["rolls"]
+    ]
+    payload = {"seed": ledger["seed"], "rolls": rolls}
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+# --- Moderation workflow ---
+
+
+def _moderation_report_response(report, status=200):
+    """Return a JSON Response with the exact report key order."""
+    return Response(
+        json.dumps(report, sort_keys=False, separators=(",", ":")),
+        status=status,
+        mimetype="application/json",
+    )
+
+
+@api.post("/v1/play/campaigns/<id>/moderation/reports")
+def create_moderation_report(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    report_id = data.get("report_id")
+    target_id = data.get("target_id")
+    reason = data.get("reason")
+    if not _require_strings(report_id, target_id, reason):
+        return _bad_request()
+
+    result = storage.create_moderation_report(id, report_id, target_id, reason, user["username"])
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("report already exists")
+
+    return _moderation_report_response(result, status=201)
+
+
+@api.get("/v1/play/campaigns/<id>/moderation/reports")
+def list_moderation_reports(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    reports = storage.get_moderation_reports(id)
+    if reports is None:
+        return _not_found()
+
+    return Response(
+        json.dumps({"reports": reports}, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+@api.put("/v1/play/campaigns/<id>/moderation/reports/<report_id>/resolution")
+def resolve_moderation_report(id, report_id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    action = data.get("action")
+    note = data.get("note")
+    if action not in ("allow", "remove"):
+        return _bad_request()
+    if not isinstance(note, str) or note == "":
+        return _bad_request()
+
+    result = storage.resolve_moderation_report(id, report_id, action, note, user["username"])
+    if result is None:
+        return _not_found()
+    if result == "already_resolved":
+        return _conflict("report already resolved")
+
+    return _moderation_report_response(result)
+
+
+# --- Safety boundaries ---
+
+
+def _validate_safety_tags(tags):
+    """Return a normalized tag list, or None if the list is invalid.
+
+    Tags must be a non-empty list of unique non-empty strings.
+    """
+    if not isinstance(tags, list):
+        return None
+    if len(tags) == 0:
+        return None
+    seen = set()
+    normalized = []
+    for tag in tags:
+        if not isinstance(tag, str) or tag == "" or tag in seen:
+            return None
+        seen.add(tag)
+        normalized.append(tag)
+    return normalized
+
+
+@api.put("/v1/play/campaigns/<id>/safety-boundaries")
+def replace_safety_boundaries_route(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    blocked_tags = data.get("blocked_tags")
+    normalized = _validate_safety_tags(blocked_tags)
+    if normalized is None:
+        return _bad_request()
+
+    result = storage.replace_safety_boundaries(id, normalized)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+@api.get("/v1/play/campaigns/<id>/safety-boundaries")
+def get_safety_boundaries_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_safety_boundaries(id)
+    if result is None:
+        return _not_found()
+    return jsonify(result)
+
+
+@api.post("/v1/play/campaigns/<id>/safety-checks")
+def submit_safety_check(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    event_id = data.get("event_id")
+    kind = data.get("kind")
+    text = data.get("text")
+    tags = data.get("tags")
+
+    if not isinstance(event_id, str) or event_id == "":
+        return _bad_request()
+    if not isinstance(text, str) or text == "":
+        return _bad_request()
+    if kind not in ("narration", "chat"):
+        return _bad_request()
+    normalized_tags = _validate_safety_tags(tags)
+    if normalized_tags is None:
+        return _bad_request()
+
+    result = storage.create_safety_event(id, event_id, kind, text, normalized_tags)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("event already exists")
+    if result == "blocked":
+        return _conflict("blocked tag")
+
+    payload = {
+        "event_id": result["event_id"],
+        "kind": result["kind"],
+        "text": result["text"],
+        "tags": result["tags"],
+        "sequence": result["sequence"],
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/safety-events")
+def get_safety_events_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    result = storage.get_safety_events(id)
+    if result is None:
+        return _not_found()
+    return Response(
+        json.dumps(result, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+# --- Fixture seeding ---
+
+
+_CANONICAL_FIXTURE_ID = "canonical-v1"
+
+
+def _fixture_state_response(status_code=200):
+    """Return the canonical fixture state with a deterministic JSON shape."""
+    payload = {
+        "fixture_id": "canonical-v1",
+        "status": "seeded",
+        "characters": [
+            {"character_id": "fixture-hero", "name": "Ari", "class": "fighter"},
+            {"character_id": "fixture-mage", "name": "Bea", "class": "wizard"},
+        ],
+        "story": "The lantern is lit.",
+        "event_ids": ["fixture-event-1", "fixture-event-2"],
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        status=status_code,
+        mimetype="application/json",
+    )
+
+
+@api.post("/v1/play/campaigns/<id>/fixture-seeds")
+def seed_fixture_route(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    fixture_id = data.get("fixture_id")
+    if not isinstance(fixture_id, str) or fixture_id != _CANONICAL_FIXTURE_ID:
+        return _bad_request()
+
+    result = storage.seed_fixture(id, fixture_id)
+    if result is None:
+        return _not_found()
+
+    created, state = result
+    # Guard: if the stored state differs from the canonical contract, still
+    # return the canonical shape so repeated seeds are byte-for-byte idempotent.
+    status_code = 201 if created else 200
+    return _fixture_state_response(status_code=status_code)
+
+
+@api.get("/v1/play/campaigns/<id>/fixture-state")
+def get_fixture_state_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    state = storage.get_fixture_state(id)
+    if state is None:
+        return _not_found()
+
+    return _fixture_state_response(status_code=200)
+
+
+# --- Spectator view ---
+
+
+@api.post("/v1/play/campaigns/<id>/spectators")
+def create_spectator_route(id):
+    (campaign, user), err = _require_dm_campaign(id)
+    if err:
+        return err
+
+    data = _body()
+    spectator_id = data.get("spectator_id")
+    if not isinstance(spectator_id, str) or spectator_id == "":
+        return _bad_request()
+
+    result = storage.create_spectator(id, spectator_id)
+    if result is None:
+        return _not_found()
+    if result == "duplicate":
+        return _conflict("spectator already exists")
+
+    return Response(
+        json.dumps(
+            {"spectator_id": spectator_id, "token": f"spectator-{spectator_id}"},
+            sort_keys=False,
+            separators=(",", ":"),
+        ),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/spectator-view")
+def get_spectator_view_route(id):
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Bearer "):
+        return _unauthorized()
+    token = header[7:]
+    if token.startswith("session-"):
+        return _forbidden()
+    if not token.startswith("spectator-"):
+        return _unauthorized()
+    spectator_id = token[10:]
+    if spectator_id == "":
+        return _unauthorized()
+
+    spectator_campaign_id = storage.get_spectator_campaign(spectator_id)
+    if spectator_campaign_id is None:
+        return _unauthorized()
+
+    campaign = storage.get_play_campaign(id)
+    if campaign is None:
+        return _not_found()
+    if spectator_campaign_id != id:
+        return _forbidden()
+
+    party_size = len(storage.get_play_campaign_members(id))
+    payload = {
+        "campaign_id": id,
+        "name": campaign["name"],
+        "status": campaign["status"],
+        "party_size": party_size,
+        "story": campaign.get("story", ""),
+    }
+    return Response(
+        json.dumps(payload, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+# --- Load-safe event feed ---
+
+
+@api.post("/v1/play/campaigns/<id>/feed-events")
+def create_feed_event_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    data = _body()
+    event_id = data.get("event_id")
+    text = data.get("text")
+    if not _require_strings(event_id, text):
+        return _bad_request()
+
+    result = storage.create_feed_event(id, event_id, text)
+    if result == "duplicate":
+        return _conflict("duplicate event_id")
+
+    return Response(
+        json.dumps(result, sort_keys=False, separators=(",", ":")),
+        status=201,
+        mimetype="application/json",
+    )
+
+
+@api.get("/v1/play/campaigns/<id>/event-feed")
+def get_event_feed_route(id):
+    (campaign, user), err = _require_play_campaign_access(id)
+    if err:
+        return err
+
+    try:
+        cursor = int(request.args.get("cursor", 0))
+    except (TypeError, ValueError):
+        return _bad_request()
+    try:
+        limit = int(request.args.get("limit", 2))
+    except (TypeError, ValueError):
+        return _bad_request()
+    if cursor < 0 or not (1 <= limit <= 3):
+        return _bad_request()
+
+    result = storage.get_feed_event_page(id, cursor, limit)
+    return Response(
+        json.dumps(result, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
 

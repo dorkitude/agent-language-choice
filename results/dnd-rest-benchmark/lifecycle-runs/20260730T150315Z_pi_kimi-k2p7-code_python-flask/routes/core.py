@@ -5,7 +5,9 @@ sessions, character helpers, auth, compendium entries, and Player's
 Handbook utilities.
 """
 
-from flask import jsonify
+from flask import Response, jsonify
+
+import json
 
 import domain
 import storage
@@ -18,8 +20,32 @@ from ._common import (
     _not_found,
     _parse_initiative_combatants,
     _require_strings,
+    is_maintenance_mode,
 )
 from . import api
+
+
+# --- API schema ---
+
+SCHEMA_RESPONSE = (
+    '{"version":"2026-07-29","endpoints":['
+    '{"method":"GET","path":"/v1/play/campaigns/{id}/rng-ledger","auth":"member"},'
+    '{"method":"GET","path":"/v1/schema","auth":"public"},'
+    '{"method":"POST","path":"/v1/play/campaigns","auth":"dm"},'
+    '{"method":"POST","path":"/v1/play/campaigns/{id}/fixture-seeds","auth":"dm"},'
+    '{"method":"POST","path":"/v1/play/campaigns/{id}/members","auth":"member"},'
+    '{"method":"POST","path":"/v1/play/campaigns/{id}/moderation/reports","auth":"member"},'
+    '{"method":"POST","path":"/v1/play/campaigns/{id}/rng-rolls","auth":"member"},'
+    '{"method":"PUT","path":"/v1/play/campaigns/{id}/moderation/reports/{report_id}/resolution","auth":"dm"},'
+    '{"method":"PUT","path":"/v1/play/campaigns/{id}/rng-seed","auth":"dm"},'
+    '{"method":"PUT","path":"/v1/play/campaigns/{id}/safety-boundaries","auth":"dm"}'
+    ']}'
+)
+
+
+@api.get("/v1/schema")
+def api_schema():
+    return Response(SCHEMA_RESPONSE, mimetype="application/json")
 
 
 # --- Health ---
@@ -28,6 +54,28 @@ from . import api
 @api.get("/health")
 def health():
     return jsonify(ok=True)
+
+
+@api.get("/healthz")
+def healthz():
+    return Response(
+        json.dumps({"status": "ok"}, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
+
+
+@api.get("/readyz")
+def readyz():
+    if is_maintenance_mode():
+        return Response(
+            json.dumps({"status": "maintenance", "schema_version": 2}, sort_keys=False, separators=(",", ":")),
+            status=503,
+            mimetype="application/json",
+        )
+    return Response(
+        json.dumps({"status": "ready", "schema_version": 2}, sort_keys=False, separators=(",", ":")),
+        mimetype="application/json",
+    )
 
 
 # --- Storage ---

@@ -27,6 +27,26 @@ def _require_strings(*values):
     return all(isinstance(value, str) and value != "" for value in values)
 
 
+# --- Global service state ---
+
+# Process-global maintenance switch.  Public readiness reflects this flag;
+# liveness is intentionally independent so orchestrators can still detect the
+# process when maintenance mode is active.
+_maintenance_mode = False
+
+
+def is_maintenance_mode():
+    """Return the current global maintenance flag."""
+    return _maintenance_mode
+
+
+def set_maintenance_mode(value):
+    """Set the global maintenance flag and return the new value."""
+    global _maintenance_mode
+    _maintenance_mode = bool(value)
+    return _maintenance_mode
+
+
 # --- Response helpers ---
 
 # These helpers keep the error messages centralized. The exact strings are part
@@ -47,6 +67,10 @@ def _forbidden():
 
 def _not_found():
     return jsonify(error="not found"), 404
+
+
+def _rate_limited(limit, remaining):
+    return jsonify(limit=limit, remaining=remaining), 429
 
 
 def _conflict(message):

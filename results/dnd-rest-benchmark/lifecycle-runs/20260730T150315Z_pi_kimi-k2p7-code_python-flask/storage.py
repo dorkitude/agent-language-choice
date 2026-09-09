@@ -13,6 +13,7 @@ import json
 import os
 import secrets
 import sqlite3
+import threading
 
 import domain
 
@@ -176,7 +177,11 @@ CREATE TABLE IF NOT EXISTS play_campaigns (
     story TEXT NOT NULL DEFAULT '',
     dm_notes TEXT NOT NULL DEFAULT '',
     phase TEXT NOT NULL DEFAULT 'exploration',
-    pre_combat_actor TEXT
+    pre_combat_actor TEXT,
+    rules TEXT,
+    tone TEXT,
+    consent TEXT,
+    safe_turn_current INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS play_campaign_members (
     campaign_id TEXT NOT NULL,
@@ -350,6 +355,17 @@ CREATE TABLE IF NOT EXISTS currency_transfers (
     PRIMARY KEY (campaign_id, transfer_id),
     FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS transactional_transfers (
+    campaign_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    from_character_id TEXT NOT NULL,
+    to_character_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    from_gold INTEGER NOT NULL,
+    to_gold INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, sequence),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS play_loot (
     campaign_id TEXT NOT NULL,
     loot_id TEXT NOT NULL,
@@ -474,9 +490,332 @@ CREATE TABLE IF NOT EXISTS play_world_events (
     PRIMARY KEY (campaign_id, event_id),
     FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS play_campaign_calendars (
+    campaign_id TEXT PRIMARY KEY,
+    day INTEGER NOT NULL,
+    season TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_settlements (
+    campaign_id TEXT NOT NULL,
+    settlement_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    services TEXT NOT NULL,
+    availability TEXT NOT NULL,
+    created_sequence INTEGER NOT NULL,
+    discovered_by TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY (campaign_id, settlement_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_shops (
+    campaign_id TEXT NOT NULL,
+    settlement_id TEXT NOT NULL,
+    shop_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    stock TEXT NOT NULL,
+    buy_price INTEGER NOT NULL,
+    sell_price INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, settlement_id, shop_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE,
+    FOREIGN KEY (campaign_id, settlement_id) REFERENCES play_settlements(campaign_id, settlement_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_recipes (
+    campaign_id TEXT NOT NULL,
+    recipe_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    ingredients TEXT NOT NULL,
+    output_item TEXT NOT NULL,
+    output_quantity INTEGER NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, recipe_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_downtime_activities (
+    campaign_id TEXT NOT NULL,
+    activity_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    cycles_required INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, activity_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_downtime_allocations (
+    campaign_id TEXT NOT NULL,
+    character_id TEXT NOT NULL,
+    activity_id TEXT NOT NULL,
+    cycles_completed INTEGER NOT NULL DEFAULT 0,
+    completions INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (campaign_id, character_id, activity_id),
+    FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id) ON DELETE CASCADE,
+    FOREIGN KEY (campaign_id, activity_id) REFERENCES play_downtime_activities(campaign_id, activity_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_content (
+    campaign_id TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    tags TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, content_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_notes (
+    campaign_id TEXT NOT NULL,
+    note_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, note_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_whispers (
+    campaign_id TEXT NOT NULL,
+    whisper_id TEXT NOT NULL,
+    from_character_id TEXT NOT NULL,
+    to_character_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, whisper_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE,
+    FOREIGN KEY (campaign_id, from_character_id) REFERENCES play_campaign_members(campaign_id, character_id) ON DELETE CASCADE,
+    FOREIGN KEY (campaign_id, to_character_id) REFERENCES play_campaign_members(campaign_id, character_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_invitations (
+    campaign_id TEXT NOT NULL,
+    invitation_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    character_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    PRIMARY KEY (campaign_id, invitation_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_delegations (
+    campaign_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    powers TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, username),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE,
+    FOREIGN KEY (campaign_id, username) REFERENCES play_campaign_members(campaign_id, player) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_delegation_audit (
+    campaign_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    action TEXT NOT NULL,
+    powers TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, sequence),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_actor_audit (
+    campaign_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    role TEXT NOT NULL,
+    correlation_id TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, sequence),
+    UNIQUE (campaign_id, correlation_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_projection_events (
+    campaign_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    event_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    value TEXT,
+    PRIMARY KEY (campaign_id, sequence),
+    UNIQUE (campaign_id, event_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_idempotent_events (
+    campaign_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    event_id TEXT NOT NULL,
+    value TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, sequence),
+    UNIQUE (campaign_id, event_id),
+    UNIQUE (campaign_id, idempotency_key),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_safe_turns (
+    campaign_id TEXT NOT NULL,
+    submission_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    accepted_turn INTEGER NOT NULL,
+    next_turn INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, submission_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_exports (
+    campaign_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    story TEXT NOT NULL,
+    status TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, version),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_imports (
+    campaign_id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL,
+    story TEXT NOT NULL,
+    status TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_migrations (
+    campaign_id TEXT PRIMARY KEY,
+    schema_version INTEGER NOT NULL,
+    story TEXT NOT NULL,
+    campaign_name TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_search_records (
+    campaign_id TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, record_id),
+    UNIQUE(campaign_id, text),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_rate_events (
+    campaign_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    event_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, sequence),
+    UNIQUE (campaign_id, event_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_metrics (
+    campaign_id TEXT PRIMARY KEY,
+    accepted_rate_events INTEGER NOT NULL DEFAULT 0,
+    rejected_rate_events INTEGER NOT NULL DEFAULT 0,
+    projection_events INTEGER NOT NULL DEFAULT 0,
+    uptime_ticks INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_backups (
+    campaign_id TEXT NOT NULL,
+    backup_id TEXT NOT NULL,
+    story TEXT NOT NULL,
+    status TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, backup_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_replay_events (
+    campaign_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, event_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_campaign_rng_seeds (
+    campaign_id TEXT PRIMARY KEY,
+    seed TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_rng_rolls (
+    campaign_id TEXT NOT NULL,
+    roll_id TEXT NOT NULL,
+    sides INTEGER NOT NULL,
+    result INTEGER NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, roll_id),
+    UNIQUE (campaign_id, sequence),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_moderation_reports (
+    campaign_id TEXT NOT NULL,
+    report_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    reporter TEXT NOT NULL,
+    resolver TEXT,
+    action TEXT,
+    note TEXT,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, report_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_safety_boundaries (
+    campaign_id TEXT PRIMARY KEY,
+    blocked_tags TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_safety_events (
+    campaign_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    tags TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, event_id),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_fixture_seeds (
+    campaign_id TEXT PRIMARY KEY,
+    fixture_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    characters_json TEXT NOT NULL,
+    story TEXT NOT NULL,
+    event_ids_json TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_spectators (
+    spectator_id TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL,
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS play_feed_events (
+    campaign_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, event_id),
+    UNIQUE (campaign_id, sequence),
+    FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id) ON DELETE CASCADE
+);
 """
 
 _DROP_TABLES = """
+DROP TABLE IF EXISTS play_safety_events;
+DROP TABLE IF EXISTS play_safety_boundaries;
+DROP TABLE IF EXISTS play_fixture_seeds;
+DROP TABLE IF EXISTS play_feed_events;
+DROP TABLE IF EXISTS play_spectators;
+DROP TABLE IF EXISTS play_actor_audit;
+DROP TABLE IF EXISTS play_idempotent_events;
+DROP TABLE IF EXISTS play_safe_turns;
+DROP TABLE IF EXISTS play_campaign_exports;
+DROP TABLE IF EXISTS play_campaign_imports;
+DROP TABLE IF EXISTS play_campaign_migrations;
+DROP TABLE IF EXISTS play_rate_events;
+DROP TABLE IF EXISTS play_campaign_metrics;
+DROP TABLE IF EXISTS play_replay_events;
+DROP TABLE IF EXISTS play_campaign_rng_seeds;
+DROP TABLE IF EXISTS play_rng_rolls;
+DROP TABLE IF EXISTS play_moderation_reports;
+DROP TABLE IF EXISTS play_campaign_backups;
+DROP TABLE IF EXISTS play_search_records;
+DROP TABLE IF EXISTS play_projection_events;
+DROP TABLE IF EXISTS play_delegation_audit;
+DROP TABLE IF EXISTS play_delegations;
+DROP TABLE IF EXISTS play_notes;
+DROP TABLE IF EXISTS play_whispers;
+DROP TABLE IF EXISTS play_campaign_invitations;
+DROP TABLE IF EXISTS play_content;
+DROP TABLE IF EXISTS play_downtime_allocations;
+DROP TABLE IF EXISTS play_downtime_activities;
+DROP TABLE IF EXISTS play_recipes;
+DROP TABLE IF EXISTS play_shops;
+DROP TABLE IF EXISTS play_settlements;
+DROP TABLE IF EXISTS play_campaign_calendars;
 DROP TABLE IF EXISTS play_world_events;
 DROP TABLE IF EXISTS play_quest_reward_grants;
 DROP TABLE IF EXISTS play_quest_rewards;
@@ -490,6 +829,7 @@ DROP TABLE IF EXISTS npc_dialogue;
 DROP TABLE IF EXISTS play_npcs;
 DROP TABLE IF EXISTS play_loot_votes;
 DROP TABLE IF EXISTS play_loot;
+DROP TABLE IF EXISTS transactional_transfers;
 DROP TABLE IF EXISTS currency_transfers;
 DROP TABLE IF EXISTS character_concentration;
 DROP TABLE IF EXISTS character_equipped_items;
@@ -565,6 +905,7 @@ _EXPECTED_TABLES = {
     "character_inventory",
     "character_equipped_items",
     "currency_transfers",
+    "transactional_transfers",
     "play_loot",
     "play_loot_votes",
     "play_npcs",
@@ -578,6 +919,38 @@ _EXPECTED_TABLES = {
     "play_quest_rewards",
     "play_quest_reward_grants",
     "play_world_events",
+    "play_campaign_calendars",
+    "play_settlements",
+    "play_shops",
+    "play_recipes",
+    "play_downtime_activities",
+    "play_downtime_allocations",
+    "play_content",
+    "play_notes",
+    "play_whispers",
+    "play_campaign_invitations",
+    "play_delegations",
+    "play_delegation_audit",
+    "play_actor_audit",
+    "play_idempotent_events",
+    "play_projection_events",
+    "play_safe_turns",
+    "play_campaign_exports",
+    "play_campaign_imports",
+    "play_campaign_migrations",
+    "play_search_records",
+    "play_rate_events",
+    "play_campaign_metrics",
+    "play_campaign_backups",
+    "play_replay_events",
+    "play_campaign_rng_seeds",
+    "play_rng_rolls",
+    "play_moderation_reports",
+    "play_safety_boundaries",
+    "play_safety_events",
+    "play_fixture_seeds",
+    "play_spectators",
+    "play_feed_events",
 }
 
 
@@ -627,6 +1000,9 @@ def init_db():
         _add_column_if_missing(conn, "play_campaign_members", "death_save_failures", "INTEGER NOT NULL DEFAULT 0")
         _add_column_if_missing(conn, "play_campaigns", "phase", "TEXT NOT NULL DEFAULT 'exploration'")
         _add_column_if_missing(conn, "play_campaigns", "pre_combat_actor", "TEXT")
+        _add_column_if_missing(conn, "play_campaigns", "rules", "TEXT")
+        _add_column_if_missing(conn, "play_campaigns", "tone", "TEXT")
+        _add_column_if_missing(conn, "play_campaigns", "consent", "TEXT")
         _add_column_if_missing(conn, "play_campaign_members", "owner", "TEXT")
         _add_column_if_missing(conn, "play_campaign_members", "race", "TEXT")
         _add_column_if_missing(conn, "play_campaign_members", "background", "TEXT")
@@ -634,6 +1010,7 @@ def init_db():
         _add_column_if_missing(conn, "play_campaign_members", "con_score", "INTEGER")
         _add_column_if_missing(conn, "play_campaign_members", "abilities", "TEXT")
         _add_column_if_missing(conn, "play_campaign_members", "gold", "INTEGER NOT NULL DEFAULT 10")
+        _add_column_if_missing(conn, "play_campaigns", "safe_turn_current", "INTEGER NOT NULL DEFAULT 1")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS character_equipped_items (
@@ -1545,7 +1922,7 @@ def get_play_campaign(camp_id):
     """Return a play campaign or None if missing."""
     with _get_db() as conn:
         row = conn.execute(
-            "SELECT id, name, owner, status, max_players, current_actor, turn_number, nudge_count "
+            "SELECT id, name, owner, status, max_players, current_actor, turn_number, nudge_count, phase "
             "FROM play_campaigns WHERE id = ?",
             (camp_id,),
         ).fetchone()
@@ -1560,6 +1937,7 @@ def get_play_campaign(camp_id):
             "current_actor": row["current_actor"],
             "turn_number": row["turn_number"],
             "nudge_count": row["nudge_count"],
+            "phase": row["phase"],
         }
 
 
@@ -1656,6 +2034,50 @@ def start_play_campaign(camp_id):
         )
         conn.commit()
     return {"id": camp_id, "status": "active", "current_actor": first_player, "turn_number": 1}
+
+
+def set_play_campaign_session_zero(camp_id, rules, tone, consent):
+    """Store session-zero settings for a play campaign.
+
+    Returns the settings dict on success, None if the campaign is missing,
+    or "not_lobby" if the campaign is not in lobby status.
+    """
+    consent_json = json.dumps(consent)
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT status FROM play_campaigns WHERE id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["status"] != "lobby":
+            return "not_lobby"
+        conn.execute(
+            "UPDATE play_campaigns SET rules = ?, tone = ?, consent = ? WHERE id = ?",
+            (rules, tone, consent_json, camp_id),
+        )
+        conn.commit()
+    return {"rules": rules, "tone": tone, "consent": list(consent)}
+
+
+def get_play_campaign_session_zero(camp_id):
+    """Return the session-zero settings for a campaign, or None if missing.
+
+    Returns None if the campaign does not exist or if settings have not
+    been configured.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT rules, tone, consent FROM play_campaigns WHERE id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is None or row["rules"] is None:
+            return None
+        try:
+            consent = json.loads(row["consent"])
+        except (TypeError, ValueError):
+            consent = []
+        return {"rules": row["rules"], "tone": row["tone"], "consent": consent}
 
 
 def join_play_campaign(camp_id, player, character_id, name, class_name, hp_max=None, hp_current=None):
@@ -2002,6 +2424,109 @@ def transfer_gold(camp_id, from_char_id, to_char_id, gold):
         "from_gold": from_gold - gold,
         "to_gold": to_gold + gold,
         "transfer_id": next_id,
+    }
+
+
+_TRANSACTION_LOCK = threading.Lock()
+
+
+def create_transactional_transfer(camp_id, requester, from_char_id, to_char_id, amount, simulate_failure):
+    """Campaign-scoped atomic currency transfer with optional simulated failure.
+
+    Returns a transfer summary on success, None if the campaign or either
+    character is missing, "forbidden" if the requester does not own the
+    source character, "self_transfer" or "invalid_amount" for malformed
+    requests, or "insufficient" when the source lacks enough gold.
+    When simulate_failure is true, validates and prepares the operation
+    but returns "simulated_failure" without writing anything.
+    """
+    if from_char_id == to_char_id:
+        return "self_transfer"
+    if type(amount) is not int or amount <= 0:
+        return "invalid_amount"
+
+    with _TRANSACTION_LOCK:
+        with _get_db() as conn:
+            if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+                return None
+
+            from_row = conn.execute(
+                "SELECT gold, owner FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+                (camp_id, from_char_id),
+            ).fetchone()
+            to_row = conn.execute(
+                "SELECT gold FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+                (camp_id, to_char_id),
+            ).fetchone()
+            if from_row is None or to_row is None:
+                return None
+
+            if from_row["owner"] != requester:
+                return "forbidden"
+
+            from_gold_before = from_row["gold"]
+            to_gold_before = to_row["gold"]
+            if from_gold_before < amount:
+                return "insufficient"
+
+            if simulate_failure:
+                return "simulated_failure"
+
+            next_sequence = conn.execute(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 FROM transactional_transfers WHERE campaign_id = ?",
+                (camp_id,),
+            ).fetchone()[0]
+
+            conn.execute(
+                "UPDATE play_campaign_members SET gold = gold - ? WHERE campaign_id = ? AND character_id = ?",
+                (amount, camp_id, from_char_id),
+            )
+            conn.execute(
+                "UPDATE play_campaign_members SET gold = gold + ? WHERE campaign_id = ? AND character_id = ?",
+                (amount, camp_id, to_char_id),
+            )
+            conn.execute(
+                "INSERT INTO transactional_transfers (campaign_id, sequence, from_character_id, to_character_id, amount, from_gold, to_gold) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (camp_id, next_sequence, from_char_id, to_char_id, amount, from_gold_before - amount, to_gold_before + amount),
+            )
+            conn.commit()
+
+    return {
+        "from_character_id": from_char_id,
+        "to_character_id": to_char_id,
+        "amount": amount,
+        "from_gold": from_gold_before - amount,
+        "to_gold": to_gold_before + amount,
+        "sequence": next_sequence,
+    }
+
+
+def get_transactional_transfers(camp_id):
+    """Return successful transactional transfers ordered by sequence.
+
+    Returns None if the campaign does not exist.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT from_character_id, to_character_id, amount, from_gold, to_gold, sequence "
+            "FROM transactional_transfers WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    return {
+        "transfers": [
+            {
+                "from_character_id": r["from_character_id"],
+                "to_character_id": r["to_character_id"],
+                "amount": r["amount"],
+                "from_gold": r["from_gold"],
+                "to_gold": r["to_gold"],
+                "sequence": r["sequence"],
+            }
+            for r in rows
+        ],
     }
 
 
@@ -2632,7 +3157,7 @@ def attune_character_equipped_item(camp_id, char_id, slot):
     }
 
 
-def create_narration(campaign_id, text):
+def create_narration(campaign_id, text, actor="dm"):
     """Append a narration event to a play campaign.
 
     Returns the event dict on success, or None if the campaign is missing.
@@ -2643,10 +3168,440 @@ def create_narration(campaign_id, text):
         sequence = _next_narration_sequence(conn, campaign_id)
         conn.execute(
             "INSERT INTO play_narrations (campaign_id, sequence, kind, actor, text) VALUES (?, ?, ?, ?, ?)",
-            (campaign_id, sequence, "narration", "dm", text),
+            (campaign_id, sequence, "narration", actor, text),
         )
         conn.commit()
-    return {"sequence": sequence, "kind": "narration", "actor": "dm", "text": text}
+    return {"sequence": sequence, "kind": "narration", "actor": actor, "text": text}
+
+
+def create_message(campaign_id, actor, text):
+    """Append a chat message to a play campaign.
+
+    Returns the event dict on success, or None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (campaign_id,)).fetchone() is None:
+            return None
+        sequence = _next_narration_sequence(conn, campaign_id)
+        conn.execute(
+            "INSERT INTO play_narrations (campaign_id, sequence, kind, actor, text) VALUES (?, ?, ?, ?, ?)",
+            (campaign_id, sequence, "chat", actor, text),
+        )
+        conn.commit()
+    return {"sequence": sequence, "kind": "chat", "actor": actor, "text": text}
+
+
+def _next_delegation_audit_sequence(conn, campaign_id):
+    """Return the next sequence number for a campaign's delegation audit."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq FROM play_delegation_audit WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    return row["next_seq"]
+
+
+def grant_play_campaign_delegation(camp_id, username, powers):
+    """Grant a delegation to a campaign member.
+
+    Returns the active delegation record on success, None if the campaign
+    is missing, "not_member" if the user is not a member, or
+    "duplicate_active" if the user already has an active delegation.
+    """
+    powers_json = json.dumps(powers)
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND player = ?",
+            (camp_id, username),
+        ).fetchone() is None:
+            return "not_member"
+        existing = conn.execute(
+            "SELECT active, powers FROM play_delegations WHERE campaign_id = ? AND username = ?",
+            (camp_id, username),
+        ).fetchone()
+        if existing is not None:
+            if existing["active"]:
+                return "duplicate_active"
+            conn.execute(
+                "UPDATE play_delegations SET active = 1, powers = ? WHERE campaign_id = ? AND username = ?",
+                (powers_json, camp_id, username),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO play_delegations (campaign_id, username, powers, active, sequence) VALUES (?, ?, ?, 1, ?)",
+                (camp_id, username, powers_json, _next_delegation_audit_sequence(conn, camp_id)),
+            )
+        audit_seq = _next_delegation_audit_sequence(conn, camp_id)
+        conn.execute(
+            "INSERT INTO play_delegation_audit (campaign_id, sequence, username, action, powers) VALUES (?, ?, ?, 'granted', ?)",
+            (camp_id, audit_seq, username, powers_json),
+        )
+        conn.commit()
+    return {"username": username, "powers": list(powers), "active": True}
+
+
+def revoke_play_campaign_delegation(camp_id, username):
+    """Revoke a campaign member's delegation.
+
+    Returns the inactive delegation record on success, None if the
+    campaign is missing, or "not_active" if there is no active delegation
+    for that user.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT active, powers FROM play_delegations WHERE campaign_id = ? AND username = ?",
+            (camp_id, username),
+        ).fetchone()
+        if row is None or not row["active"]:
+            return "not_active"
+        powers = json.loads(row["powers"])
+        conn.execute(
+            "UPDATE play_delegations SET active = 0 WHERE campaign_id = ? AND username = ?",
+            (camp_id, username),
+        )
+        audit_seq = _next_delegation_audit_sequence(conn, camp_id)
+        conn.execute(
+            "INSERT INTO play_delegation_audit (campaign_id, sequence, username, action, powers) VALUES (?, ?, ?, 'revoked', ?)",
+            (camp_id, audit_seq, username, row["powers"]),
+        )
+        conn.commit()
+    return {"username": username, "powers": powers, "active": False}
+
+
+def get_play_campaign_delegation(camp_id, username):
+    """Return a delegation record or None if it does not exist."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT username, powers, active FROM play_delegations WHERE campaign_id = ? AND username = ?",
+            (camp_id, username),
+        ).fetchone()
+        if row is None:
+            return None
+        return {"username": row["username"], "powers": json.loads(row["powers"]), "active": bool(row["active"])}
+
+
+def is_active_delegate(camp_id, username, power):
+    """Return True if the user has an active delegation for the given power."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT powers FROM play_delegations WHERE campaign_id = ? AND username = ? AND active = 1",
+            (camp_id, username),
+        ).fetchone()
+        if row is None:
+            return False
+        return power in json.loads(row["powers"])
+
+
+def get_play_campaign_delegation_audit(camp_id):
+    """Return the immutable delegation audit entries for a campaign.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT username, action, powers FROM play_delegation_audit WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    return [
+        {"username": r["username"], "action": r["action"], "powers": json.loads(r["powers"])}
+        for r in rows
+    ]
+
+
+def _next_actor_audit_sequence(conn, campaign_id):
+    """Return the next timestamp sequence for a campaign's actor audit."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq FROM play_actor_audit WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    return row["next_seq"]
+
+
+def create_actor_audit_event(camp_id, kind, actor, role, correlation_id):
+    """Create an immutable actor audit entry for a campaign.
+
+    Returns the audit entry dict on success, None if the campaign is missing,
+    or "duplicate" if the correlation_id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_actor_audit WHERE campaign_id = ? AND correlation_id = ?",
+            (camp_id, correlation_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        timestamp = _next_actor_audit_sequence(conn, camp_id)
+        conn.execute(
+            "INSERT INTO play_actor_audit (campaign_id, sequence, kind, actor, role, correlation_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (camp_id, timestamp, kind, actor, role, correlation_id),
+        )
+        conn.commit()
+    return {"kind": kind, "actor": actor, "role": role, "timestamp": timestamp, "correlation_id": correlation_id}
+
+
+def get_actor_audit_events(camp_id):
+    """Return the immutable actor audit entries for a campaign.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT kind, actor, role, sequence, correlation_id FROM play_actor_audit WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    return [
+        {"kind": r["kind"], "actor": r["actor"], "role": r["role"], "timestamp": r["sequence"], "correlation_id": r["correlation_id"]}
+        for r in rows
+    ]
+
+
+# --- Projection events ---
+
+
+def create_projection_event(camp_id, event_id, kind, value):
+    """Append a projection event to a play campaign.
+
+    Returns the stored event on success, None if the campaign is missing,
+    or "duplicate" if the event_id already exists in the campaign.
+
+    Successfully appended events increment the campaign's
+    `projection_events` metric. Duplicate or invalid requests do not change
+    any metric counters.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_projection_events WHERE campaign_id = ? AND event_id = ?",
+            (camp_id, event_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_projection_events WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_projection_events (campaign_id, sequence, event_id, kind, value) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (camp_id, sequence, event_id, kind, value),
+        )
+        _increment_campaign_metric(conn, camp_id, "projection_events")
+        conn.commit()
+    result = {"sequence": sequence, "event_id": event_id, "kind": kind}
+    if kind == "set-story":
+        result["value"] = value
+    return result
+
+
+def get_projection_events(camp_id):
+    """Return all projection events for a campaign in sequence order.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT sequence, event_id, kind, value FROM play_projection_events "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    events = []
+    for r in rows:
+        event = {"sequence": r["sequence"], "event_id": r["event_id"], "kind": r["kind"]}
+        if r["value"] is not None:
+            event["value"] = r["value"]
+        events.append(event)
+    return events
+
+
+def get_projection(camp_id):
+    """Return the deterministic projection rebuilt from ordered events.
+
+    Returns None if the campaign is missing.
+    """
+    events = get_projection_events(camp_id)
+    if events is None:
+        return None
+    story = ""
+    danger = 0
+    applied_event_ids = []
+    for event in events:
+        if event["kind"] == "set-story":
+            story = event["value"]
+        elif event["kind"] == "increment-danger":
+            danger += 1
+        applied_event_ids.append(event["event_id"])
+    return {
+        "story": story,
+        "danger": danger,
+        "applied_event_ids": applied_event_ids,
+    }
+
+
+# --- Idempotent events ---
+
+
+def create_idempotent_event(camp_id, idempotency_key, event_id, value):
+    """Create or replay a campaign-scoped idempotent event.
+
+    Returns ("created", event_dict) for a new event, ("replayed", event_dict)
+    for a matching idempotency key replay, None if the campaign is missing,
+    "mismatch" if the idempotency key was already used with a different
+    payload, or "duplicate_event_id" if the event_id already exists under a
+    different key.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        existing = conn.execute(
+            "SELECT event_id, value, sequence FROM play_idempotent_events "
+            "WHERE campaign_id = ? AND idempotency_key = ?",
+            (camp_id, idempotency_key),
+        ).fetchone()
+        if existing is not None:
+            event = {
+                "event_id": existing["event_id"],
+                "value": existing["value"],
+                "sequence": existing["sequence"],
+                "idempotency_key": idempotency_key,
+            }
+            if existing["event_id"] == event_id and existing["value"] == value:
+                return ("replayed", event)
+            return "mismatch"
+
+        if conn.execute(
+            "SELECT 1 FROM play_idempotent_events WHERE campaign_id = ? AND event_id = ?",
+            (camp_id, event_id),
+        ).fetchone() is not None:
+            return "duplicate_event_id"
+
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_idempotent_events WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_idempotent_events (campaign_id, sequence, event_id, value, idempotency_key) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (camp_id, sequence, event_id, value, idempotency_key),
+        )
+        conn.commit()
+    event = {"event_id": event_id, "value": value, "sequence": sequence, "idempotency_key": idempotency_key}
+    return ("created", event)
+
+
+def get_idempotent_events(camp_id):
+    """Return all idempotent events for a campaign ordered by sequence.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT event_id, value, sequence, idempotency_key FROM play_idempotent_events "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    return [
+        {
+            "event_id": r["event_id"],
+            "value": r["value"],
+            "sequence": r["sequence"],
+            "idempotency_key": r["idempotency_key"],
+        }
+        for r in rows
+    ]
+
+
+# --- Safe turns ---
+
+
+def submit_safe_turn(camp_id, submission_id, expected_turn, action):
+    """Accept or reject a campaign-scoped safe turn submission.
+
+    Returns ("accepted", event_dict) on success, ("stale", current_turn)
+    when expected_turn does not match the campaign's current safe-turn,
+    "duplicate" when submission_id already exists in the accepted history,
+    or None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        if conn.execute(
+            "SELECT 1 FROM play_safe_turns WHERE campaign_id = ? AND submission_id = ?",
+            (camp_id, submission_id),
+        ).fetchone() is not None:
+            return "duplicate"
+
+        current_turn = conn.execute(
+            "SELECT safe_turn_current FROM play_campaigns WHERE id = ?",
+            (camp_id,),
+        ).fetchone()["safe_turn_current"]
+
+        if expected_turn != current_turn:
+            return ("stale", current_turn)
+
+        next_turn = current_turn + 1
+        conn.execute(
+            "UPDATE play_campaigns SET safe_turn_current = ? WHERE id = ?",
+            (next_turn, camp_id),
+        )
+        conn.execute(
+            "INSERT INTO play_safe_turns (campaign_id, submission_id, action, accepted_turn, next_turn) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (camp_id, submission_id, action, current_turn, next_turn),
+        )
+        conn.commit()
+
+    event = {
+        "submission_id": submission_id,
+        "action": action,
+        "accepted_turn": current_turn,
+        "next_turn": next_turn,
+    }
+    return ("accepted", event)
+
+
+def get_safe_turns(camp_id):
+    """Return the campaign safe-turn state and accepted history.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        current_turn = conn.execute(
+            "SELECT safe_turn_current FROM play_campaigns WHERE id = ?",
+            (camp_id,),
+        ).fetchone()["safe_turn_current"]
+        rows = conn.execute(
+            "SELECT submission_id, action, accepted_turn, next_turn FROM play_safe_turns "
+            "WHERE campaign_id = ? ORDER BY accepted_turn",
+            (camp_id,),
+        ).fetchall()
+    return {
+        "current_turn": current_turn,
+        "accepted": [
+            {
+                "submission_id": r["submission_id"],
+                "action": r["action"],
+                "accepted_turn": r["accepted_turn"],
+                "next_turn": r["next_turn"],
+            }
+            for r in rows
+        ],
+    }
 
 
 def get_play_campaign_member(camp_id, player):
@@ -2664,6 +3619,148 @@ def get_play_campaign_member(camp_id, player):
         if row is None:
             return None
         return {"character_id": row["character_id"], "name": row["name"]}
+
+
+def create_play_campaign_invitation(camp_id, invitation_id, username, character_id):
+    """Create a pending invitation for a play campaign.
+
+    Returns the invitation dict on success, None if the campaign is missing,
+    "duplicate_id" if the invitation_id is already used in this campaign,
+    or "duplicate_active" if there is already a pending invitation for the
+    same username in this campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_invitations WHERE campaign_id = ? AND invitation_id = ?",
+            (camp_id, invitation_id),
+        ).fetchone() is not None:
+            return "duplicate_id"
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_invitations WHERE campaign_id = ? AND username = ? AND status = 'pending'",
+            (camp_id, username),
+        ).fetchone() is not None:
+            return "duplicate_active"
+        conn.execute(
+            "INSERT INTO play_campaign_invitations (campaign_id, invitation_id, username, character_id, status) "
+            "VALUES (?, ?, ?, ?, 'pending')",
+            (camp_id, invitation_id, username, character_id),
+        )
+        conn.commit()
+    return {"invitation_id": invitation_id, "username": username, "character_id": character_id, "status": "pending"}
+
+
+def get_play_campaign_invitation(camp_id, invitation_id):
+    """Return an invitation or None if it does not exist."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT invitation_id, username, character_id, status FROM play_campaign_invitations "
+            "WHERE campaign_id = ? AND invitation_id = ?",
+            (camp_id, invitation_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "invitation_id": row["invitation_id"],
+            "username": row["username"],
+            "character_id": row["character_id"],
+            "status": row["status"],
+        }
+
+
+def list_play_campaign_invitations(camp_id, username=None):
+    """Return invitations for a play campaign.
+
+    If username is None, return all invitations in creation order.
+    Otherwise, return only that user's invitations.
+    """
+    with _get_db() as conn:
+        if username is None:
+            rows = conn.execute(
+                "SELECT invitation_id, username, character_id, status FROM play_campaign_invitations "
+                "WHERE campaign_id = ? ORDER BY rowid",
+                (camp_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT invitation_id, username, character_id, status FROM play_campaign_invitations "
+                "WHERE campaign_id = ? AND username = ? ORDER BY rowid",
+                (camp_id, username),
+            ).fetchall()
+        return [
+            {"invitation_id": r["invitation_id"], "username": r["username"], "character_id": r["character_id"], "status": r["status"]}
+            for r in rows
+        ]
+
+
+def accept_play_campaign_invitation(camp_id, invitation_id, username):
+    """Accept an invitation and add the player as a campaign member.
+
+    Returns the accepted invitation dict on success, None if the invitation
+    or campaign is missing, "wrong_user" if the invitation is not for this
+    user, "already_accepted" if the invitation is not pending,
+    "already_member" if the user is already a member, "duplicate_character"
+    if the character_id is already used, or "full" if the party is full.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT username, character_id, status FROM play_campaign_invitations "
+            "WHERE campaign_id = ? AND invitation_id = ?",
+            (camp_id, invitation_id),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["username"] != username:
+            return "wrong_user"
+        if row["status"] != "pending":
+            return "already_accepted"
+        character_id = row["character_id"]
+
+        if conn.execute(
+            "SELECT 1 FROM play_campaigns WHERE id = ?",
+            (camp_id,),
+        ).fetchone() is None:
+            return None
+
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND player = ?",
+            (camp_id, username),
+        ).fetchone() is not None:
+            return "already_member"
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone() is not None:
+            return "duplicate_character"
+
+        cap = conn.execute(
+            "SELECT max_players FROM play_campaigns WHERE id = ?",
+            (camp_id,),
+        ).fetchone()["max_players"]
+        count = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM play_campaign_members WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()["cnt"]
+        if count >= cap:
+            return "full"
+
+        next_seq = conn.execute(
+            "SELECT COALESCE(MAX(join_sequence), 0) + 1 FROM play_campaign_members WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+
+        conn.execute(
+            "UPDATE play_campaign_invitations SET status = 'accepted' WHERE campaign_id = ? AND invitation_id = ?",
+            (camp_id, invitation_id),
+        )
+        conn.execute(
+            "INSERT INTO play_campaign_members (campaign_id, player, character_id, name, class, join_sequence, hp_current, hp_max, owner) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (camp_id, username, character_id, character_id, "adventurer", next_seq, 20, 20, username),
+        )
+        conn.commit()
+    return {"invitation_id": invitation_id, "username": username, "character_id": character_id, "status": "accepted"}
 
 
 def get_play_campaign_events(camp_id):
@@ -3890,7 +4987,7 @@ def end_encounter(camp_id, enc_id):
         if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
             return None
         camp_row = conn.execute(
-            "SELECT status, current_actor, phase, pre_combat_actor FROM play_campaigns WHERE id = ?",
+            "SELECT status, owner, current_actor, phase, pre_combat_actor FROM play_campaigns WHERE id = ?",
             (camp_id,),
         ).fetchone()
         if camp_row["phase"] != "combat":
@@ -3906,7 +5003,8 @@ def end_encounter(camp_id, enc_id):
                 "UPDATE play_encounters SET status = 'closed' WHERE campaign_id = ? AND encounter_id = ?",
                 (camp_id, enc_id),
             )
-        restored_actor = camp_row["pre_combat_actor"] if camp_row["pre_combat_actor"] is not None else camp_row["current_actor"]
+        # After combat the DM regains narrative control of the exploration turn queue.
+        restored_actor = camp_row["owner"]
         conn.execute(
             "UPDATE play_campaigns SET phase = ?, current_actor = ? WHERE id = ?",
             ("exploration", restored_actor, camp_id),
@@ -4829,3 +5927,2078 @@ def get_world_events(camp_id):
         ).fetchall()
     return [_world_event_row(r) for r in rows]
 
+
+# --- Campaign calendars ---
+
+
+def create_calendar(camp_id, day, season):
+    """Initialize the campaign calendar.
+
+    Returns the calendar dict on success, None if the campaign is missing,
+    or "duplicate" if the calendar already exists.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute("SELECT 1 FROM play_campaign_calendars WHERE campaign_id = ?", (camp_id,)).fetchone() is not None:
+            return "duplicate"
+        conn.execute(
+            "INSERT INTO play_campaign_calendars (campaign_id, day, season) VALUES (?, ?, ?)",
+            (camp_id, day, season),
+        )
+        conn.commit()
+    return {"day": day, "season": season}
+
+
+def get_calendar(camp_id):
+    """Return the campaign calendar as a raw day/season dict, or None.
+
+    Returns None if the campaign is missing or the calendar has not been
+    initialized.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT day, season FROM play_campaign_calendars WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"day": row["day"], "season": row["season"]}
+
+
+def advance_calendar(camp_id, days):
+    """Advance the campaign calendar by a number of days.
+
+    Returns the updated raw day/season dict on success, None if the
+    campaign or calendar is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT day, season FROM play_campaign_calendars WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        new_day = row["day"] + days
+        conn.execute(
+            "UPDATE play_campaign_calendars SET day = ? WHERE campaign_id = ?",
+            (new_day, camp_id),
+        )
+        conn.commit()
+    return {"day": new_day, "season": row["season"]}
+
+
+# --- Settlements ---
+
+
+def create_settlement(camp_id, settlement_id, name, services, availability):
+    """Create a settlement in a play campaign.
+
+    Returns the settlement on success, None if the campaign is missing,
+    or "duplicate" if the settlement id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_settlements WHERE campaign_id = ? AND settlement_id = ?",
+            (camp_id, settlement_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(created_sequence), 0) + 1 FROM play_settlements WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_settlements (campaign_id, settlement_id, name, services, availability, created_sequence, discovered_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (camp_id, settlement_id, name, json.dumps(services), availability, sequence, json.dumps([])),
+        )
+        conn.commit()
+    return {
+        "settlement_id": settlement_id,
+        "name": name,
+        "services": services,
+        "availability": availability,
+        "discovered_by": [],
+    }
+
+
+def get_settlement(camp_id, settlement_id):
+    """Return a settlement or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT settlement_id, name, services, availability, discovered_by "
+            "FROM play_settlements WHERE campaign_id = ? AND settlement_id = ?",
+            (camp_id, settlement_id),
+        ).fetchone()
+        if row is None:
+            return None
+    try:
+        services = json.loads(row["services"])
+    except json.JSONDecodeError:
+        services = []
+    try:
+        discovered_by = json.loads(row["discovered_by"])
+    except json.JSONDecodeError:
+        discovered_by = []
+    return {
+        "settlement_id": row["settlement_id"],
+        "name": row["name"],
+        "services": services,
+        "availability": row["availability"],
+        "discovered_by": discovered_by,
+    }
+
+
+def update_settlement(camp_id, settlement_id, name, services, availability):
+    """Replace a settlement's mutable fields.
+
+    Returns the settlement on success, or None if the settlement is missing.
+    Preserves existing discovered_by order.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT discovered_by FROM play_settlements WHERE campaign_id = ? AND settlement_id = ?",
+            (camp_id, settlement_id),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "UPDATE play_settlements SET name = ?, services = ?, availability = ? "
+            "WHERE campaign_id = ? AND settlement_id = ?",
+            (name, json.dumps(services), availability, camp_id, settlement_id),
+        )
+        conn.commit()
+    try:
+        discovered_by = json.loads(row["discovered_by"])
+    except json.JSONDecodeError:
+        discovered_by = []
+    return {
+        "settlement_id": settlement_id,
+        "name": name,
+        "services": services,
+        "availability": availability,
+        "discovered_by": discovered_by,
+    }
+
+
+def discover_settlement(camp_id, settlement_id, character_id):
+    """Record a character's discovery of a settlement.
+
+    Returns (settlement, created) where created is True if the character
+    was newly added to discovered_by, or False if already discovered.
+    Returns None if the settlement is missing.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT discovered_by FROM play_settlements WHERE campaign_id = ? AND settlement_id = ?",
+            (camp_id, settlement_id),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            discovered_by = json.loads(row["discovered_by"])
+        except json.JSONDecodeError:
+            discovered_by = []
+        if character_id in discovered_by:
+            created = False
+        else:
+            discovered_by.append(character_id)
+            created = True
+            conn.execute(
+                "UPDATE play_settlements SET discovered_by = ? WHERE campaign_id = ? AND settlement_id = ?",
+                (json.dumps(discovered_by), camp_id, settlement_id),
+            )
+            conn.commit()
+    return get_settlement(camp_id, settlement_id), created
+
+
+def get_settlements(camp_id):
+    """Return all settlements for a campaign in creation order, or None if the campaign is missing."""
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT settlement_id, name, services, availability, discovered_by "
+            "FROM play_settlements WHERE campaign_id = ? ORDER BY created_sequence",
+            (camp_id,),
+        ).fetchall()
+    settlements = []
+    for r in rows:
+        try:
+            services = json.loads(r["services"])
+        except json.JSONDecodeError:
+            services = []
+        try:
+            discovered_by = json.loads(r["discovered_by"])
+        except json.JSONDecodeError:
+            discovered_by = []
+        settlements.append({
+            "settlement_id": r["settlement_id"],
+            "name": r["name"],
+            "services": services,
+            "availability": r["availability"],
+            "discovered_by": discovered_by,
+        })
+    return settlements
+
+
+# --- Settlement shops ---
+
+
+def create_shop(camp_id, settlement_id, shop_id, name, stock, buy_price, sell_price):
+    """Create a shop in a settlement.
+
+    Returns the shop on success, None if the campaign or settlement is
+    missing, or "duplicate" if the shop_id already exists in the settlement.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_settlements WHERE campaign_id = ? AND settlement_id = ?",
+            (camp_id, settlement_id),
+        ).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_shops WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+            (camp_id, settlement_id, shop_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        conn.execute(
+            "INSERT INTO play_shops (campaign_id, settlement_id, shop_id, name, stock, buy_price, sell_price) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (camp_id, settlement_id, shop_id, name, json.dumps(stock), buy_price, sell_price),
+        )
+        conn.commit()
+    return {"shop_id": shop_id, "name": name, "stock": stock, "buy_price": buy_price, "sell_price": sell_price}
+
+
+def get_shop(camp_id, settlement_id, shop_id):
+    """Return a shop or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT shop_id, name, stock, buy_price, sell_price FROM play_shops "
+            "WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+            (camp_id, settlement_id, shop_id),
+        ).fetchone()
+        if row is None:
+            return None
+    try:
+        stock = json.loads(row["stock"])
+    except json.JSONDecodeError:
+        stock = {}
+    return {"shop_id": row["shop_id"], "name": row["name"], "stock": stock, "buy_price": row["buy_price"], "sell_price": row["sell_price"]}
+
+
+def buy_from_shop(camp_id, settlement_id, shop_id, character_id, item_id, quantity):
+    """Buy quantity of item_id from a shop for a character.
+
+    Returns a transaction summary on success, None if the shop or character
+    is missing, "invalid_item" if the item is not in the catalog,
+    "invalid_quantity" if the quantity is not a positive integer,
+    "insufficient_stock" if the shop cannot supply the quantity, or
+    "insufficient_funds" if the character lacks enough gold. All mutations
+    are performed in a single transaction.
+    """
+    if item_id not in VALID_INVENTORY_ITEMS:
+        return "invalid_item"
+    if not isinstance(quantity, int) or quantity <= 0:
+        return "invalid_quantity"
+
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT stock, buy_price FROM play_shops "
+            "WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+            (camp_id, settlement_id, shop_id),
+        ).fetchone()
+        if row is None:
+            return None
+        char_row = conn.execute(
+            "SELECT gold FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone()
+        if char_row is None:
+            return None
+
+        try:
+            stock = json.loads(row["stock"])
+        except json.JSONDecodeError:
+            stock = {}
+        current_stock = stock.get(item_id, 0)
+        if current_stock < quantity:
+            return "insufficient_stock"
+
+        total_cost = row["buy_price"] * quantity
+        if char_row["gold"] < total_cost:
+            return "insufficient_funds"
+
+        new_stock_count = current_stock - quantity
+        if new_stock_count == 0:
+            del stock[item_id]
+        else:
+            stock[item_id] = new_stock_count
+
+        new_gold = char_row["gold"] - total_cost
+
+        inv_row = conn.execute(
+            "SELECT quantity FROM character_inventory WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            (camp_id, character_id, item_id),
+        ).fetchone()
+        new_inv_quantity = (inv_row["quantity"] if inv_row else 0) + quantity
+
+        conn.execute(
+            "UPDATE play_shops SET stock = ? WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+            (json.dumps(stock), camp_id, settlement_id, shop_id),
+        )
+        conn.execute(
+            "UPDATE play_campaign_members SET gold = ? WHERE campaign_id = ? AND character_id = ?",
+            (new_gold, camp_id, character_id),
+        )
+        conn.execute(
+            "INSERT INTO character_inventory (campaign_id, character_id, item_id, quantity) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(campaign_id, character_id, item_id) DO UPDATE SET quantity = excluded.quantity",
+            (camp_id, character_id, item_id, new_inv_quantity),
+        )
+        conn.commit()
+
+    return {
+        "character_id": character_id,
+        "item_id": item_id,
+        "quantity": quantity,
+        "gold": new_gold,
+        "stock": new_stock_count,
+    }
+
+
+def sell_to_shop(camp_id, settlement_id, shop_id, character_id, item_id, quantity):
+    """Sell quantity of item_id from a character to a shop.
+
+    Returns a transaction summary on success, None if the shop or character
+    is missing, "invalid_item" if the item is not in the catalog,
+    "invalid_quantity" if the quantity is not a positive integer, or
+    "insufficient_inventory" if the character does not hold enough. All
+    mutations are performed in a single transaction.
+    """
+    if item_id not in VALID_INVENTORY_ITEMS:
+        return "invalid_item"
+    if not isinstance(quantity, int) or quantity <= 0:
+        return "invalid_quantity"
+
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT stock, sell_price FROM play_shops "
+            "WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+            (camp_id, settlement_id, shop_id),
+        ).fetchone()
+        if row is None:
+            return None
+        char_row = conn.execute(
+            "SELECT gold FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone()
+        if char_row is None:
+            return None
+
+        inv_row = conn.execute(
+            "SELECT quantity FROM character_inventory WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            (camp_id, character_id, item_id),
+        ).fetchone()
+        held = inv_row["quantity"] if inv_row else 0
+        if held < quantity:
+            return "insufficient_inventory"
+
+        total_price = row["sell_price"] * quantity
+        new_gold = char_row["gold"] + total_price
+
+        try:
+            stock = json.loads(row["stock"])
+        except json.JSONDecodeError:
+            stock = {}
+        new_stock_count = stock.get(item_id, 0) + quantity
+        stock[item_id] = new_stock_count
+
+        conn.execute(
+            "UPDATE play_shops SET stock = ? WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+            (json.dumps(stock), camp_id, settlement_id, shop_id),
+        )
+        conn.execute(
+            "UPDATE play_campaign_members SET gold = ? WHERE campaign_id = ? AND character_id = ?",
+            (new_gold, camp_id, character_id),
+        )
+        conn.commit()
+
+    return {
+        "character_id": character_id,
+        "item_id": item_id,
+        "quantity": quantity,
+        "gold": new_gold,
+        "stock": new_stock_count,
+    }
+
+
+# --- Campaign crafting recipes ---
+
+
+def _recipe_from_row(row):
+    """Build a recipe dict from a storage row."""
+    return {
+        "recipe_id": row["recipe_id"],
+        "name": row["name"],
+        "ingredients": json.loads(row["ingredients"]),
+        "output_item": row["output_item"],
+        "output_quantity": row["output_quantity"],
+    }
+
+
+def create_recipe(camp_id, recipe_id, name, ingredients, output_item, output_quantity):
+    """Create a campaign-scoped crafting recipe.
+
+    Ingredient keys and output_item must be valid campaign inventory item
+    catalog IDs. Returns the recipe on success, None if the campaign is
+    missing, "duplicate" if the recipe id already exists, or "invalid" if
+    the payload fails any recipe invariant.
+    """
+    if not isinstance(recipe_id, str) or recipe_id == "":
+        return "invalid"
+    if not isinstance(name, str) or name == "":
+        return "invalid"
+    if not isinstance(ingredients, dict) or len(ingredients) == 0:
+        return "invalid"
+    for item_id, qty in ingredients.items():
+        if not isinstance(item_id, str) or item_id not in VALID_INVENTORY_ITEMS:
+            return "invalid"
+        if not isinstance(qty, int) or qty <= 0:
+            return "invalid"
+    if not isinstance(output_item, str) or output_item not in VALID_INVENTORY_ITEMS:
+        return "invalid"
+    if not isinstance(output_quantity, int) or output_quantity <= 0:
+        return "invalid"
+
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_recipes WHERE campaign_id = ? AND recipe_id = ?",
+            (camp_id, recipe_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_recipes WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_recipes (campaign_id, recipe_id, name, ingredients, output_item, output_quantity, sequence) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (camp_id, recipe_id, name, json.dumps(ingredients), output_item, output_quantity, sequence),
+        )
+        conn.commit()
+    return _recipe_from_row({
+        "recipe_id": recipe_id,
+        "name": name,
+        "ingredients": json.dumps(ingredients),
+        "output_item": output_item,
+        "output_quantity": output_quantity,
+    })
+
+
+def get_recipe(camp_id, recipe_id):
+    """Return a campaign recipe by id, or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT recipe_id, name, ingredients, output_item, output_quantity FROM play_recipes "
+            "WHERE campaign_id = ? AND recipe_id = ?",
+            (camp_id, recipe_id),
+        ).fetchone()
+        if row is None:
+            return None
+    return _recipe_from_row(row)
+
+
+def get_recipes(camp_id):
+    """Return all campaign recipes in creation order, or None if the campaign is missing."""
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT recipe_id, name, ingredients, output_item, output_quantity FROM play_recipes "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    return [_recipe_from_row(r) for r in rows]
+
+
+def craft_recipe(camp_id, recipe_id, character_id):
+    """Atomically craft a recipe for a character.
+
+    Consumes all required ingredients and adds the output quantity to the
+    character's inventory. Returns the craft summary on success, None if the
+    recipe or character is missing, or "insufficient" if the character lacks
+    any required ingredient quantity.
+    """
+    with _get_db() as conn:
+        recipe_row = conn.execute(
+            "SELECT ingredients, output_item, output_quantity FROM play_recipes "
+            "WHERE campaign_id = ? AND recipe_id = ?",
+            (camp_id, recipe_id),
+        ).fetchone()
+        if recipe_row is None:
+            return None
+
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone() is None:
+            return "character_not_found"
+
+        ingredients = json.loads(recipe_row["ingredients"])
+
+        # Verify every ingredient is present in sufficient quantity before mutating state.
+        for item_id, required in ingredients.items():
+            row = conn.execute(
+                "SELECT quantity FROM character_inventory "
+                "WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+                (camp_id, character_id, item_id),
+            ).fetchone()
+            if row is None or row["quantity"] < required:
+                return "insufficient"
+
+        # Consume ingredients.
+        for item_id, required in ingredients.items():
+            row = conn.execute(
+                "SELECT quantity FROM character_inventory "
+                "WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+                (camp_id, character_id, item_id),
+            ).fetchone()
+            new_qty = row["quantity"] - required
+            if new_qty == 0:
+                conn.execute(
+                    "DELETE FROM character_inventory "
+                    "WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+                    (camp_id, character_id, item_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE character_inventory SET quantity = ? "
+                    "WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+                    (new_qty, camp_id, character_id, item_id),
+                )
+
+        # Add output.
+        output_item = recipe_row["output_item"]
+        output_quantity = recipe_row["output_quantity"]
+        row = conn.execute(
+            "SELECT quantity FROM character_inventory "
+            "WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            (camp_id, character_id, output_item),
+        ).fetchone()
+        new_output_qty = (row["quantity"] if row else 0) + output_quantity
+        conn.execute(
+            "INSERT INTO character_inventory (campaign_id, character_id, item_id, quantity) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(campaign_id, character_id, item_id) DO UPDATE SET quantity = excluded.quantity",
+            (camp_id, character_id, output_item, new_output_qty),
+        )
+        conn.commit()
+
+    return {
+        "character_id": character_id,
+        "recipe_id": recipe_id,
+        "output_item": output_item,
+        "output_quantity": output_quantity,
+    }
+
+
+# --- Recurring downtime ---
+
+
+def create_downtime_activity(camp_id, activity_id, name, cycles_required):
+    """Create a recurring downtime activity for a campaign.
+
+    Returns the activity on success, None if the campaign is missing,
+    or "duplicate" if the activity id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_downtime_activities WHERE campaign_id = ? AND activity_id = ?",
+            (camp_id, activity_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        conn.execute(
+            "INSERT INTO play_downtime_activities (campaign_id, activity_id, name, cycles_required) "
+            "VALUES (?, ?, ?, ?)",
+            (camp_id, activity_id, name, cycles_required),
+        )
+        conn.commit()
+    return {"activity_id": activity_id, "name": name, "cycles_required": cycles_required}
+
+
+def get_downtime_activity(camp_id, activity_id):
+    """Return a downtime activity or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT activity_id, name, cycles_required FROM play_downtime_activities "
+            "WHERE campaign_id = ? AND activity_id = ?",
+            (camp_id, activity_id),
+        ).fetchone()
+        if row is None:
+            return None
+    return {"activity_id": row["activity_id"], "name": row["name"], "cycles_required": row["cycles_required"]}
+
+
+def create_downtime_allocation(camp_id, character_id, activity_id):
+    """Allocate a downtime activity to a character.
+
+    Returns the allocation on success, None if the character or activity
+    is missing, or "duplicate" if the allocation already exists.
+    """
+    with _get_db() as conn:
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_downtime_activities WHERE campaign_id = ? AND activity_id = ?",
+            (camp_id, activity_id),
+        ).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_downtime_allocations WHERE campaign_id = ? AND character_id = ? AND activity_id = ?",
+            (camp_id, character_id, activity_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        conn.execute(
+            "INSERT INTO play_downtime_allocations (campaign_id, character_id, activity_id, cycles_completed, completions) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (camp_id, character_id, activity_id, 0, 0),
+        )
+        conn.commit()
+    return {"character_id": character_id, "activity_id": activity_id, "cycles_completed": 0, "completions": 0}
+
+
+def get_downtime_allocation(camp_id, character_id, activity_id):
+    """Return a downtime allocation or None if missing.
+
+    Returns None if the character, activity, or allocation does not exist.
+    """
+    with _get_db() as conn:
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_downtime_activities WHERE campaign_id = ? AND activity_id = ?",
+            (camp_id, activity_id),
+        ).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT cycles_completed, completions FROM play_downtime_allocations "
+            "WHERE campaign_id = ? AND character_id = ? AND activity_id = ?",
+            (camp_id, character_id, activity_id),
+        ).fetchone()
+        if row is None:
+            return None
+    return {
+        "character_id": character_id,
+        "activity_id": activity_id,
+        "cycles_completed": row["cycles_completed"],
+        "completions": row["completions"],
+    }
+
+
+def progress_downtime_allocation(camp_id, character_id, activity_id):
+    """Progress a character's downtime allocation by one cycle.
+
+    Returns the updated allocation on success, None if the character,
+    activity, or allocation is missing. When cycles_completed reaches
+    the activity's cycles_required, it resets to 0 and completions is
+    incremented so the activity can be progressed again.
+    """
+    with _get_db() as conn:
+        if conn.execute(
+            "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, character_id),
+        ).fetchone() is None:
+            return None
+        activity = conn.execute(
+            "SELECT cycles_required FROM play_downtime_activities "
+            "WHERE campaign_id = ? AND activity_id = ?",
+            (camp_id, activity_id),
+        ).fetchone()
+        if activity is None:
+            return None
+        row = conn.execute(
+            "SELECT cycles_completed, completions FROM play_downtime_allocations "
+            "WHERE campaign_id = ? AND character_id = ? AND activity_id = ?",
+            (camp_id, character_id, activity_id),
+        ).fetchone()
+        if row is None:
+            return None
+
+        cycles_completed = row["cycles_completed"] + 1
+        completions = row["completions"]
+        if cycles_completed >= activity["cycles_required"]:
+            cycles_completed = 0
+            completions += 1
+
+        conn.execute(
+            "UPDATE play_downtime_allocations SET cycles_completed = ?, completions = ? "
+            "WHERE campaign_id = ? AND character_id = ? AND activity_id = ?",
+            (cycles_completed, completions, camp_id, character_id, activity_id),
+        )
+        conn.commit()
+    return {
+        "character_id": character_id,
+        "activity_id": activity_id,
+        "cycles_completed": cycles_completed,
+        "completions": completions,
+    }
+
+
+# --- Campaign content ---
+
+
+def _next_content_sequence(conn, camp_id):
+    """Return the next sequence number for a campaign's content table."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq FROM play_content WHERE campaign_id = ?",
+        (camp_id,),
+    ).fetchone()
+    return row["next_seq"]
+
+
+def _validate_content_tags(tags, required=True):
+    """Return (normalized_tags, error_code) for a tag list.
+
+    When required is True, the list must be non-empty. All tags must be
+    unique, non-empty strings. On success error_code is None.
+    """
+    if not isinstance(tags, list):
+        return None, "invalid"
+    if required and len(tags) == 0:
+        return None, "invalid"
+    seen = set()
+    normalized = []
+    for tag in tags:
+        if not isinstance(tag, str) or tag == "" or tag in seen:
+            return None, "invalid"
+        seen.add(tag)
+        normalized.append(tag)
+    return normalized, None
+
+
+def create_content(camp_id, content_id, kind, text, tags):
+    """Create a tagged content record in a play campaign.
+
+    Returns the content dict on success, None if the campaign is missing,
+    False if the content_id already exists in the campaign, or "invalid" if
+    the payload fails the content contract.
+    """
+    if not isinstance(content_id, str) or content_id == "":
+        return "invalid"
+    if not isinstance(kind, str) or kind == "":
+        return "invalid"
+    if not isinstance(text, str) or text == "":
+        return "invalid"
+
+    normalized_tags, error = _validate_content_tags(tags, required=True)
+    if error:
+        return error
+
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_content WHERE campaign_id = ? AND content_id = ?",
+            (camp_id, content_id),
+        ).fetchone() is not None:
+            return False
+        sequence = _next_content_sequence(conn, camp_id)
+        conn.execute(
+            "INSERT INTO play_content (campaign_id, content_id, kind, text, tags, sequence) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (camp_id, content_id, kind, text, json.dumps(normalized_tags), sequence),
+        )
+        conn.commit()
+    return {"content_id": content_id, "kind": kind, "text": text, "tags": normalized_tags}
+
+
+def _content_from_row(row):
+    """Build a content dict from a storage row."""
+    try:
+        tags = json.loads(row["tags"])
+    except (TypeError, ValueError):
+        tags = []
+    return {
+        "content_id": row["content_id"],
+        "kind": row["kind"],
+        "text": row["text"],
+        "tags": tags,
+    }
+
+
+def get_content(camp_id, content_id):
+    """Return a content record or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT content_id, kind, text, tags FROM play_content "
+            "WHERE campaign_id = ? AND content_id = ?",
+            (camp_id, content_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return _content_from_row(row)
+
+
+def update_content_tags(camp_id, content_id, tags):
+    """Replace a content record's tags.
+
+    Returns the updated content dict on success, None if the campaign or
+    content record is missing, or "invalid" if the tag list is invalid.
+    """
+    normalized_tags, error = _validate_content_tags(tags, required=False)
+    if error:
+        return error
+
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_content WHERE campaign_id = ? AND content_id = ?",
+            (camp_id, content_id),
+        ).fetchone() is None:
+            return None
+        conn.execute(
+            "UPDATE play_content SET tags = ? WHERE campaign_id = ? AND content_id = ?",
+            (json.dumps(normalized_tags), camp_id, content_id),
+        )
+        conn.commit()
+    return get_content(camp_id, content_id)
+
+
+def list_content(camp_id):
+    """Return all content records for a campaign in creation order.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT content_id, kind, text, tags FROM play_content "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    return [_content_from_row(r) for r in rows]
+
+
+# --- Campaign notes ---
+
+
+def _next_note_sequence(conn, camp_id):
+    """Return the next sequence number for a campaign's notes."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq FROM play_notes WHERE campaign_id = ?",
+        (camp_id,),
+    ).fetchone()
+    return row["next_seq"]
+
+
+def create_note(camp_id, note_id, text, visibility, owner):
+    """Create a campaign note.
+
+    Returns the note dict on success, None if the campaign is missing, or
+    "duplicate" if the note_id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_notes WHERE campaign_id = ? AND note_id = ?",
+            (camp_id, note_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = _next_note_sequence(conn, camp_id)
+        conn.execute(
+            "INSERT INTO play_notes (campaign_id, note_id, text, visibility, owner, sequence) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (camp_id, note_id, text, visibility, owner, sequence),
+        )
+        conn.commit()
+    return {"note_id": note_id, "text": text, "visibility": visibility, "owner": owner}
+
+
+def _note_from_row(row):
+    """Build a note dict from a storage row."""
+    return {
+        "note_id": row["note_id"],
+        "text": row["text"],
+        "visibility": row["visibility"],
+        "owner": row["owner"],
+    }
+
+
+def get_note(camp_id, note_id):
+    """Return a campaign note or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT note_id, text, visibility, owner FROM play_notes "
+            "WHERE campaign_id = ? AND note_id = ?",
+            (camp_id, note_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return _note_from_row(row)
+
+
+def list_notes(camp_id, actor=None, is_dm=False):
+    """Return campaign notes visible to a viewer.
+
+    Returns all notes for the DM, otherwise party notes and the actor's own
+    private notes. Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if is_dm:
+            rows = conn.execute(
+                "SELECT note_id, text, visibility, owner FROM play_notes "
+                "WHERE campaign_id = ? ORDER BY sequence",
+                (camp_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT note_id, text, visibility, owner FROM play_notes "
+                "WHERE campaign_id = ? AND (visibility = ? OR owner = ?) ORDER BY sequence",
+                (camp_id, "party", actor),
+            ).fetchall()
+    return [_note_from_row(r) for r in rows]
+
+
+def update_note(camp_id, note_id, text, visibility):
+    """Update a note's text and visibility.
+
+    Returns the updated note dict on success, or None if the note does not
+    exist.
+    """
+    with _get_db() as conn:
+        if conn.execute(
+            "SELECT 1 FROM play_notes WHERE campaign_id = ? AND note_id = ?",
+            (camp_id, note_id),
+        ).fetchone() is None:
+            return None
+        conn.execute(
+            "UPDATE play_notes SET text = ?, visibility = ? WHERE campaign_id = ? AND note_id = ?",
+            (text, visibility, camp_id, note_id),
+        )
+        conn.commit()
+    return get_note(camp_id, note_id)
+
+
+# --- Character whispers ---
+
+
+def _next_whisper_sequence(conn, camp_id):
+    """Return the next sequence number for a campaign's whispers."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq FROM play_whispers WHERE campaign_id = ?",
+        (camp_id,),
+    ).fetchone()
+    return row["next_seq"]
+
+
+def create_whisper(camp_id, whisper_id, from_character_id, to_character_id, text):
+    """Create a character-to-character whisper in a campaign.
+
+    Returns the whisper dict on success, None if the campaign is missing,
+    or "duplicate" if the whisper_id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_whispers WHERE campaign_id = ? AND whisper_id = ?",
+            (camp_id, whisper_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = _next_whisper_sequence(conn, camp_id)
+        conn.execute(
+            "INSERT INTO play_whispers (campaign_id, whisper_id, from_character_id, to_character_id, text, sequence) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (camp_id, whisper_id, from_character_id, to_character_id, text, sequence),
+        )
+        conn.commit()
+    return {
+        "whisper_id": whisper_id,
+        "from_character_id": from_character_id,
+        "to_character_id": to_character_id,
+        "text": text,
+    }
+
+
+def _whisper_from_row(row):
+    """Build a whisper dict from a storage row."""
+    return {
+        "whisper_id": row["whisper_id"],
+        "from_character_id": row["from_character_id"],
+        "to_character_id": row["to_character_id"],
+        "text": row["text"],
+    }
+
+
+def list_whispers(camp_id, character_id=None, is_dm=False):
+    """Return campaign whispers visible to a viewer.
+
+    Returns all whispers for the DM, otherwise whispers where the viewer's
+    owned character is the sender or recipient. Returns None if the campaign
+    is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if is_dm:
+            rows = conn.execute(
+                "SELECT whisper_id, from_character_id, to_character_id, text FROM play_whispers "
+                "WHERE campaign_id = ? ORDER BY sequence",
+                (camp_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT whisper_id, from_character_id, to_character_id, text FROM play_whispers "
+                "WHERE campaign_id = ? AND (from_character_id = ? OR to_character_id = ?) ORDER BY sequence",
+                (camp_id, character_id, character_id),
+            ).fetchall()
+    return [_whisper_from_row(r) for r in rows]
+
+
+# --- Character sheets ---
+
+
+def get_character_sheet(camp_id, char_id):
+    """Return a basic character sheet for a campaign character.
+
+    Returns the deterministic basic sheet dict on success, or None if the
+    character does not exist. The sheet always shows level 1, hp_max 10,
+    armor_class 10, and proficiency_bonus 2, regardless of the character's
+    actual progression or equipment.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT character_id, owner, name, class "
+            "FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+            (camp_id, char_id),
+        ).fetchone()
+    if row is None:
+        return None
+
+    return {
+        "character_id": row["character_id"],
+        "owner": row["owner"],
+        "name": row["name"],
+        "class": row["class"],
+        "level": 1,
+        "proficiency_bonus": 2,
+        "hp_max": 10,
+        "armor_class": 10,
+    }
+
+
+# --- Versioned campaign exports ---
+
+
+def create_play_campaign_export(camp_id):
+    """Snapshot the campaign's current public story and status as a new export.
+
+    Returns the export dict on success, or None if the campaign is missing.
+    The new version is one greater than the campaign's previous export count.
+    """
+    with _get_db() as conn:
+        camp_row = conn.execute(
+            "SELECT story, status FROM play_campaigns WHERE id = ?", (camp_id,)
+        ).fetchone()
+        if camp_row is None:
+            return None
+
+        next_version_row = conn.execute(
+            "SELECT COALESCE(MAX(version), 0) + 1 AS next_version "
+            "FROM play_campaign_exports WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        version = next_version_row["next_version"]
+
+        conn.execute(
+            "INSERT INTO play_campaign_exports (campaign_id, version, story, status) "
+            "VALUES (?, ?, ?, ?)",
+            (camp_id, version, camp_row["story"], camp_row["status"]),
+        )
+        conn.commit()
+
+    return {"version": version, "story": camp_row["story"], "status": camp_row["status"]}
+
+
+def get_play_campaign_exports(camp_id):
+    """Return all exports for a campaign ordered by ascending version.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT version, story, status FROM play_campaign_exports "
+            "WHERE campaign_id = ? ORDER BY version",
+            (camp_id,),
+        ).fetchall()
+    return [{"version": r["version"], "story": r["story"], "status": r["status"]} for r in rows]
+
+
+def get_play_campaign_export(camp_id, version):
+    """Return a specific export snapshot, or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT version, story, status FROM play_campaign_exports "
+            "WHERE campaign_id = ? AND version = ?",
+            (camp_id, version),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"version": row["version"], "story": row["story"], "status": row["status"]}
+
+
+# --- Campaign backups ---
+
+
+def _backup_order_clause():
+    """Return an ORDER BY clause that sorts backup-1, backup-2, ... numerically."""
+    return "ORDER BY CAST(SUBSTR(backup_id, 8) AS INTEGER)"
+
+
+def create_play_campaign_backup(camp_id):
+    """Snapshot the campaign's current public story and status as a new backup.
+
+    Returns the backup dict on success, or None if the campaign is missing.
+    The backup_id is sequential in the form backup-1, backup-2, etc.
+    """
+    with _get_db() as conn:
+        camp_row = conn.execute(
+            "SELECT story, status FROM play_campaigns WHERE id = ?", (camp_id,)
+        ).fetchone()
+        if camp_row is None:
+            return None
+
+        next_num_row = conn.execute(
+            "SELECT COALESCE(MAX(CAST(SUBSTR(backup_id, 8) AS INTEGER)), 0) + 1 AS next_num "
+            "FROM play_campaign_backups WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        backup_id = f"backup-{next_num_row['next_num']}"
+
+        conn.execute(
+            "INSERT INTO play_campaign_backups (campaign_id, backup_id, story, status) "
+            "VALUES (?, ?, ?, ?)",
+            (camp_id, backup_id, camp_row["story"], camp_row["status"]),
+        )
+        conn.commit()
+
+    return {"backup_id": backup_id, "story": camp_row["story"], "status": camp_row["status"]}
+
+
+def get_play_campaign_backups(camp_id):
+    """Return all backups for a campaign ordered by creation sequence.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT backup_id, story, status FROM play_campaign_backups "
+            f"WHERE campaign_id = ? {_backup_order_clause()}",
+            (camp_id,),
+        ).fetchall()
+    return [{"backup_id": r["backup_id"], "story": r["story"], "status": r["status"]} for r in rows]
+
+
+def get_play_campaign_backup(camp_id, backup_id):
+    """Return a specific backup snapshot, or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT backup_id, story, status FROM play_campaign_backups "
+            "WHERE campaign_id = ? AND backup_id = ?",
+            (camp_id, backup_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"backup_id": row["backup_id"], "story": row["story"], "status": row["status"]}
+
+
+def restore_play_campaign_backup(camp_id, backup_id):
+    """Apply a backup snapshot's story and status to the campaign.
+
+    Returns the restored snapshot on success, None if the campaign or backup
+    is missing. The backup snapshot itself is not modified and no new backup
+    is created.
+    """
+    with _get_db() as conn:
+        backup_row = conn.execute(
+            "SELECT story, status FROM play_campaign_backups "
+            "WHERE campaign_id = ? AND backup_id = ?",
+            (camp_id, backup_id),
+        ).fetchone()
+        if backup_row is None:
+            return None
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        conn.execute(
+            "UPDATE play_campaigns SET story = ?, status = ? WHERE id = ?",
+            (backup_row["story"], backup_row["status"], camp_id),
+        )
+        conn.commit()
+
+    return {"backup_id": backup_id, "story": backup_row["story"], "status": backup_row["status"]}
+
+
+def import_play_campaign_snapshot(camp_id, snapshot):
+    """Atomically apply an imported snapshot to a campaign and record it.
+
+    The snapshot must already be validated by the caller. On success the
+    campaign's story and status are updated and the import is recorded;
+    returns the import dict. Returns None if the campaign does not exist.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        conn.execute(
+            "UPDATE play_campaigns SET story = ?, status = ? WHERE id = ?",
+            (snapshot["story"], snapshot["status"], camp_id),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO play_campaign_imports "
+            "(campaign_id, version, story, status) VALUES (?, ?, ?, ?)",
+            (camp_id, snapshot["version"], snapshot["story"], snapshot["status"]),
+        )
+        conn.commit()
+
+    return {"version": snapshot["version"], "story": snapshot["story"], "status": snapshot["status"]}
+
+
+def get_play_campaign_import_state(camp_id):
+    """Return the current imported snapshot for a campaign, or None.
+
+    Returns None when the campaign is missing or no import has been applied.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT version, story, status FROM play_campaign_imports WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"version": row["version"], "story": row["story"], "status": row["status"]}
+
+
+# --- Schema migrations ---
+
+
+def migrate_play_campaign(camp_id, schema_version, story):
+    """Migrate a legacy schema version 1 snapshot to schema version 2.
+
+    The only valid input schema_version is 1 and story must be a non-empty
+    string. Returns None if the campaign is missing, "invalid" if the input
+    is malformed, or {"state": state, "created": bool} on success. When
+    the same story is migrated again the existing state is returned with
+    created=False and no new state is written.
+    """
+    if schema_version != 1 or not isinstance(story, str) or story == "":
+        return "invalid"
+
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        row = conn.execute(
+            "SELECT schema_version, story, campaign_name FROM play_campaign_migrations WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is not None and row["story"] == story:
+            return {
+                "state": {
+                    "schema_version": row["schema_version"],
+                    "story": row["story"],
+                    "campaign_name": row["campaign_name"],
+                },
+                "created": False,
+            }
+
+        campaign_name = conn.execute(
+            "SELECT name FROM play_campaigns WHERE id = ?", (camp_id,)
+        ).fetchone()["name"]
+        state = {"schema_version": 2, "story": story, "campaign_name": campaign_name}
+        conn.execute(
+            "INSERT OR REPLACE INTO play_campaign_migrations (campaign_id, schema_version, story, campaign_name) "
+            "VALUES (?, ?, ?, ?)",
+            (camp_id, 2, story, campaign_name),
+        )
+        conn.commit()
+        return {"state": state, "created": True}
+
+
+def get_play_campaign_migration_state(camp_id):
+    """Return the current migrated state for a campaign, or None.
+
+    Returns None when the campaign is missing or no migration has been applied.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT schema_version, story, campaign_name FROM play_campaign_migrations WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {
+        "schema_version": row["schema_version"],
+        "story": row["story"],
+        "campaign_name": row["campaign_name"],
+    }
+
+
+# --- Search records ---
+
+
+def create_search_record(camp_id, record_id, text):
+    """Create a campaign-scoped search record.
+
+    Returns the record dict on success, None if the campaign is missing,
+    or False if the record_id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_search_records WHERE campaign_id = ? AND record_id = ?",
+            (camp_id, record_id),
+        ).fetchone() is not None:
+            return False
+        if conn.execute(
+            "SELECT 1 FROM play_search_records WHERE campaign_id = ? AND text = ?",
+            (camp_id, text),
+        ).fetchone() is not None:
+            return False
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_search_records WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_search_records (campaign_id, record_id, text, sequence) VALUES (?, ?, ?, ?)",
+            (camp_id, record_id, text, sequence),
+        )
+        conn.commit()
+    return {"record_id": record_id, "text": text}
+
+
+def list_search_records(camp_id, q=None, limit=2, cursor=0):
+    """Return paginated search records for a campaign.
+
+    Results are filtered by optional case-insensitive substring `q` over
+    `text`, ordered by creation sequence, and sliced by `cursor` and
+    `limit`. Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        sql = "SELECT record_id, text FROM play_search_records WHERE campaign_id = ?"
+        params = [camp_id]
+        if q:
+            sql += " AND LOWER(text) LIKE ?"
+            params.append("%" + q.lower() + "%")
+        sql += " ORDER BY sequence"
+        rows = conn.execute(sql, params).fetchall()
+
+    records = [{"record_id": r["record_id"], "text": r["text"]} for r in rows]
+    total = len(records)
+    start = cursor
+    end = min(start + limit, total)
+    page = records[start:end]
+    next_cursor = end if end < total else None
+    return {"records": page, "next_cursor": next_cursor}
+
+
+# --- Rate events ---
+
+
+RATE_EVENT_LIMIT = 2
+
+
+_METRIC_COLUMNS = frozenset([
+    "accepted_rate_events",
+    "rejected_rate_events",
+    "projection_events",
+])
+
+
+def _ensure_campaign_metrics(conn, camp_id):
+    """Create the metrics row for a campaign if it does not yet exist."""
+    conn.execute(
+        "INSERT OR IGNORE INTO play_campaign_metrics (campaign_id) VALUES (?)",
+        (camp_id,),
+    )
+
+
+def _increment_campaign_metric(conn, camp_id, metric):
+    """Increment a campaign metric counter in place.
+
+    `metric` must be a whitelisted column name.
+    """
+    if metric not in _METRIC_COLUMNS:
+        raise ValueError(f"unknown metric: {metric}")
+    _ensure_campaign_metrics(conn, camp_id)
+    conn.execute(
+        f"UPDATE play_campaign_metrics SET {metric} = {metric} + 1 WHERE campaign_id = ?",
+        (camp_id,),
+    )
+
+
+def get_campaign_metrics(camp_id):
+    """Return aggregate service metrics for a campaign.
+
+    Returns None if the campaign is missing. Fresh campaigns report all-zero
+    counters and an uptime_ticks value of 1.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        _ensure_campaign_metrics(conn, camp_id)
+        conn.commit()
+        row = conn.execute(
+            "SELECT accepted_rate_events, rejected_rate_events, projection_events, uptime_ticks "
+            "FROM play_campaign_metrics WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+    return {
+        "accepted_rate_events": row["accepted_rate_events"],
+        "rejected_rate_events": row["rejected_rate_events"],
+        "projection_events": row["projection_events"],
+        "uptime_ticks": row["uptime_ticks"],
+    }
+
+
+def create_rate_event(camp_id, actor, event_id):
+    """Create a campaign rate event for an actor.
+
+    Returns the created event on success, None if the campaign is missing,
+    "duplicate" if the event_id already exists in the campaign, or
+    "rate_limited" if the actor has already accepted two rate events.
+
+    Accepted events increment the campaign's `accepted_rate_events` metric;
+    rate-limited rejections increment `rejected_rate_events`. Duplicate or
+    invalid requests do not change any metric counters.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_rate_events WHERE campaign_id = ? AND event_id = ?",
+            (camp_id, event_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        accepted = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM play_rate_events WHERE campaign_id = ? AND actor = ?",
+            (camp_id, actor),
+        ).fetchone()["cnt"]
+        if accepted >= RATE_EVENT_LIMIT:
+            _increment_campaign_metric(conn, camp_id, "rejected_rate_events")
+            conn.commit()
+            return "rate_limited"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_rate_events WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_rate_events (campaign_id, sequence, event_id, actor) VALUES (?, ?, ?, ?)",
+            (camp_id, sequence, event_id, actor),
+        )
+        _increment_campaign_metric(conn, camp_id, "accepted_rate_events")
+        conn.commit()
+    return {"event_id": event_id, "actor": actor, "remaining": max(0, RATE_EVENT_LIMIT - accepted - 1)}
+
+
+def list_rate_events(camp_id, actor):
+    """Return accepted rate events for a campaign plus the actor's remaining.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT event_id, actor FROM play_rate_events WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+        accepted = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM play_rate_events WHERE campaign_id = ? AND actor = ?",
+            (camp_id, actor),
+        ).fetchone()["cnt"]
+    events = [{"event_id": r["event_id"], "actor": r["actor"]} for r in rows]
+    return {"events": events, "remaining": max(0, RATE_EVENT_LIMIT - accepted)}
+
+
+# --- Deterministic replay ---
+
+
+def create_replay_event(camp_id, event_id, kind, text):
+    """Append a deterministic replay event to a campaign.
+
+    Returns the event dict on success, None if the campaign is missing,
+    or "duplicate" if the event_id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_replay_events WHERE campaign_id = ? AND event_id = ?",
+            (camp_id, event_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_replay_events WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_replay_events (campaign_id, event_id, kind, text, sequence) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (camp_id, event_id, kind, text, sequence),
+        )
+        conn.commit()
+    return {"event_id": event_id, "kind": kind, "text": text, "sequence": sequence}
+
+
+def get_replay(camp_id):
+    """Return the deterministic replay state for a campaign.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT event_id, text FROM play_replay_events "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    event_ids = [r["event_id"] for r in rows]
+    story = "".join(r["text"] for r in rows)
+    digest = ",".join(event_ids) + "|" + story
+    return {"story": story, "event_ids": event_ids, "digest": digest}
+
+
+# --- Deterministic RNG ledger ---
+
+
+def set_play_campaign_rng_seed(camp_id, seed):
+    """Set the deterministic RNG seed for a campaign.
+
+    Returns True on success, None if the campaign is missing, or "exists"
+    if a seed has already been configured for the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT 1 FROM play_campaign_rng_seeds WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is not None:
+            return "exists"
+        conn.execute(
+            "INSERT INTO play_campaign_rng_seeds (campaign_id, seed) VALUES (?, ?)",
+            (camp_id, seed),
+        )
+        conn.commit()
+    return True
+
+
+def get_play_campaign_rng_seed(camp_id):
+    """Return the configured RNG seed for a campaign, or None if missing."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT seed FROM play_campaign_rng_seeds WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return row["seed"]
+
+
+def append_play_campaign_rng_roll(camp_id, roll_id, sides):
+    """Append a deterministic roll to a campaign RNG ledger.
+
+    Returns the roll record on success, None if the campaign is missing,
+    "no_seed" if no seed has been configured, or "duplicate" if the
+    roll_id already exists in the campaign ledger.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        seed_row = conn.execute(
+            "SELECT seed FROM play_campaign_rng_seeds WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        if seed_row is None:
+            return "no_seed"
+        if conn.execute(
+            "SELECT 1 FROM play_rng_rolls WHERE campaign_id = ? AND roll_id = ?",
+            (camp_id, roll_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_rng_rolls WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        result = domain.compute_rng_roll(seed_row["seed"], sequence, roll_id, sides)
+        conn.execute(
+            "INSERT INTO play_rng_rolls (campaign_id, roll_id, sides, result, sequence) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (camp_id, roll_id, sides, result, sequence),
+        )
+        conn.commit()
+    return {"roll_id": roll_id, "sides": sides, "result": result, "sequence": sequence}
+
+
+def get_play_campaign_rng_ledger(camp_id):
+    """Return the full RNG ledger for a campaign.
+
+    The returned dict contains the configured seed and an ordered list
+    of immutable roll records.  If no seed is configured, seed is None.
+    """
+    with _get_db() as conn:
+        seed_row = conn.execute(
+            "SELECT seed FROM play_campaign_rng_seeds WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        seed = seed_row["seed"] if seed_row else None
+        rows = conn.execute(
+            "SELECT roll_id, sides, result, sequence FROM play_rng_rolls "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    rolls = [
+        {"roll_id": r["roll_id"], "sides": r["sides"], "result": r["result"], "sequence": r["sequence"]}
+        for r in rows
+    ]
+    return {"seed": seed, "rolls": rolls}
+
+
+# --- Moderation workflow ---
+
+
+def create_moderation_report(camp_id, report_id, target_id, reason, reporter):
+    """Create a moderation report in a play campaign.
+
+    Returns the open report dict on success, None if the campaign is
+    missing, or "duplicate" if the report_id already exists in the campaign.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_moderation_reports WHERE campaign_id = ? AND report_id = ?",
+            (camp_id, report_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_moderation_reports WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_moderation_reports (campaign_id, report_id, target_id, reason, status, reporter, sequence) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (camp_id, report_id, target_id, reason, "open", reporter, sequence),
+        )
+        conn.commit()
+    return {
+        "report_id": report_id,
+        "target_id": target_id,
+        "reason": reason,
+        "status": "open",
+        "reporter": reporter,
+        "sequence": sequence,
+    }
+
+
+def get_moderation_reports(camp_id):
+    """Return all moderation reports for a play campaign in append order.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT report_id, target_id, reason, status, reporter, resolver, action, note, sequence "
+            "FROM play_moderation_reports WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    reports = []
+    for r in rows:
+        report = {
+            "report_id": r["report_id"],
+            "target_id": r["target_id"],
+            "reason": r["reason"],
+            "status": r["status"],
+            "reporter": r["reporter"],
+            "sequence": r["sequence"],
+        }
+        if r["status"] == "resolved":
+            report["action"] = r["action"]
+            report["note"] = r["note"]
+            report["resolver"] = r["resolver"]
+        reports.append(report)
+    return reports
+
+
+def resolve_moderation_report(camp_id, report_id, action, note, resolver):
+    """Resolve an open moderation report.
+
+    Returns the resolved report dict on success, None if the report is
+    missing, or "already_resolved" if the report is not open.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT target_id, reason, status, reporter, sequence "
+            "FROM play_moderation_reports WHERE campaign_id = ? AND report_id = ?",
+            (camp_id, report_id),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["status"] != "open":
+            return "already_resolved"
+        conn.execute(
+            "UPDATE play_moderation_reports SET status = ?, action = ?, note = ?, resolver = ? "
+            "WHERE campaign_id = ? AND report_id = ?",
+            ("resolved", action, note, resolver, camp_id, report_id),
+        )
+        conn.commit()
+    return {
+        "report_id": report_id,
+        "target_id": row["target_id"],
+        "reason": row["reason"],
+        "status": "resolved",
+        "reporter": row["reporter"],
+        "sequence": row["sequence"],
+        "action": action,
+        "note": note,
+        "resolver": resolver,
+    }
+
+
+# --- Safety boundaries and events ---
+
+
+def get_safety_boundaries(camp_id):
+    """Return the current safety boundary state for a campaign.
+
+    Returns None if the campaign is missing. When no boundaries have been
+    configured, returns an empty blocked_tags list.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        row = conn.execute(
+            "SELECT blocked_tags FROM play_safety_boundaries WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+    if row is None:
+        return {"blocked_tags": []}
+    try:
+        tags = json.loads(row["blocked_tags"])
+    except (TypeError, ValueError):
+        tags = []
+    return {"blocked_tags": sorted(tags)}
+
+
+def replace_safety_boundaries(camp_id, blocked_tags):
+    """Atomically replace the safety boundaries for a campaign.
+
+    Returns the updated boundary state on success, or None if the campaign
+    is missing. The caller is responsible for validating the tag list.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        tags_json = json.dumps(blocked_tags)
+        conn.execute(
+            "INSERT INTO play_safety_boundaries (campaign_id, blocked_tags) VALUES (?, ?) "
+            "ON CONFLICT(campaign_id) DO UPDATE SET blocked_tags = excluded.blocked_tags",
+            (camp_id, tags_json),
+        )
+        conn.commit()
+    return {"blocked_tags": sorted(blocked_tags)}
+
+
+def create_safety_event(camp_id, event_id, kind, text, tags):
+    """Append an accepted safety event to a campaign.
+
+    Returns the event dict on success, None if the campaign is missing,
+    "duplicate" if the event_id already exists in the campaign, or
+    "blocked" if any submitted tag is present in the current blocked_tags.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        if conn.execute(
+            "SELECT 1 FROM play_safety_events WHERE campaign_id = ? AND event_id = ?",
+            (camp_id, event_id),
+        ).fetchone() is not None:
+            return "duplicate"
+
+        boundary_row = conn.execute(
+            "SELECT blocked_tags FROM play_safety_boundaries WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        blocked = set()
+        if boundary_row is not None:
+            try:
+                blocked = set(json.loads(boundary_row["blocked_tags"]))
+            except (TypeError, ValueError):
+                blocked = set()
+        if any(tag in blocked for tag in tags):
+            return "blocked"
+
+        sequence = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_safety_events WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO play_safety_events (campaign_id, event_id, kind, text, tags, sequence) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (camp_id, event_id, kind, text, json.dumps(tags), sequence),
+        )
+        conn.commit()
+    return {
+        "event_id": event_id,
+        "kind": kind,
+        "text": text,
+        "tags": tags,
+        "sequence": sequence,
+    }
+
+
+def get_safety_events(camp_id):
+    """Return accepted safety events for a campaign in stable append order.
+
+    Returns None if the campaign is missing.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+        rows = conn.execute(
+            "SELECT event_id, kind, text, tags, sequence FROM play_safety_events "
+            "WHERE campaign_id = ? ORDER BY sequence",
+            (camp_id,),
+        ).fetchall()
+    events = []
+    for r in rows:
+        try:
+            tags = json.loads(r["tags"])
+        except (TypeError, ValueError):
+            tags = []
+        events.append({
+            "event_id": r["event_id"],
+            "kind": r["kind"],
+            "text": r["text"],
+            "tags": tags,
+            "sequence": r["sequence"],
+        })
+    return {"events": events}
+
+
+# --- Canonical fixture seeding ---
+
+_CANONICAL_FIXTURE = {
+    "fixture_id": "canonical-v1",
+    "status": "seeded",
+    "characters": [
+        {"character_id": "fixture-hero", "name": "Ari", "class": "fighter"},
+        {"character_id": "fixture-mage", "name": "Bea", "class": "wizard"},
+    ],
+    "story": "The lantern is lit.",
+    "event_ids": ["fixture-event-1", "fixture-event-2"],
+}
+
+
+def _fixture_state_from_row(row):
+    """Build the canonical fixture state dict from a storage row."""
+    try:
+        characters = json.loads(row["characters_json"])
+    except (TypeError, ValueError):
+        characters = []
+    try:
+        event_ids = json.loads(row["event_ids_json"])
+    except (TypeError, ValueError):
+        event_ids = []
+    return {
+        "fixture_id": row["fixture_id"],
+        "status": row["status"],
+        "characters": characters,
+        "story": row["story"],
+        "event_ids": event_ids,
+    }
+
+
+def seed_fixture(camp_id, fixture_id):
+    """Seed the canonical fixture for a campaign.
+
+    Returns (True, state) on first seed, or (False, state) when the fixture
+    is already seeded. Returns None if the campaign does not exist.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (camp_id,)).fetchone() is None:
+            return None
+
+        row = conn.execute(
+            "SELECT fixture_id, status, characters_json, story, event_ids_json "
+            "FROM play_fixture_seeds WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+        if row is not None:
+            return False, _fixture_state_from_row(row)
+
+        conn.execute(
+            "INSERT INTO play_fixture_seeds (campaign_id, fixture_id, status, characters_json, story, event_ids_json) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                camp_id,
+                fixture_id,
+                _CANONICAL_FIXTURE["status"],
+                json.dumps(_CANONICAL_FIXTURE["characters"]),
+                _CANONICAL_FIXTURE["story"],
+                json.dumps(_CANONICAL_FIXTURE["event_ids"]),
+            ),
+        )
+        conn.commit()
+
+    return True, dict(_CANONICAL_FIXTURE)
+
+
+def get_fixture_state(camp_id):
+    """Return the seeded fixture state for a campaign, or None if missing.
+
+    Returns None if the campaign does not exist or no fixture has been seeded.
+    """
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT fixture_id, status, characters_json, story, event_ids_json "
+            "FROM play_fixture_seeds WHERE campaign_id = ?",
+            (camp_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _fixture_state_from_row(row)
+
+
+# --- Spectators ---
+
+
+def create_spectator(campaign_id, spectator_id):
+    """Create a spectator ticket for a campaign.
+
+    Returns True on success, None if the campaign does not exist, or
+    "duplicate" if the spectator_id is already in use globally.
+    """
+    with _get_db() as conn:
+        if conn.execute("SELECT 1 FROM play_campaigns WHERE id = ?", (campaign_id,)).fetchone() is None:
+            return None
+        if conn.execute(
+            "SELECT 1 FROM play_spectators WHERE spectator_id = ?",
+            (spectator_id,),
+        ).fetchone() is not None:
+            return "duplicate"
+        conn.execute(
+            "INSERT INTO play_spectators (spectator_id, campaign_id) VALUES (?, ?)",
+            (spectator_id, campaign_id),
+        )
+        conn.commit()
+    return True
+
+
+def get_spectator_campaign(spectator_id):
+    """Return the campaign_id a spectator ticket belongs to, or None."""
+    with _get_db() as conn:
+        row = conn.execute(
+            "SELECT campaign_id FROM play_spectators WHERE spectator_id = ?",
+            (spectator_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return row["campaign_id"]
+
+
+# --- Load-safe event feed ---
+
+
+def create_feed_event(campaign_id, event_id, text):
+    """Append a feed event to a campaign.
+
+    Returns the created event dict on success, or "duplicate" if the
+    event_id already exists in the campaign feed.
+    """
+    with _get_db() as conn:
+        if conn.execute(
+            "SELECT 1 FROM play_feed_events WHERE campaign_id = ? AND event_id = ?",
+            (campaign_id, event_id),
+        ).fetchone() is not None:
+            return "duplicate"
+        row = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq "
+            "FROM play_feed_events WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()
+        sequence = row["next_seq"]
+        conn.execute(
+            "INSERT INTO play_feed_events (campaign_id, event_id, text, sequence) "
+            "VALUES (?, ?, ?, ?)",
+            (campaign_id, event_id, text, sequence),
+        )
+        conn.commit()
+    return {"event_id": event_id, "text": text, "sequence": sequence}
+
+
+def get_feed_event_page(campaign_id, cursor, limit):
+    """Return a stable cursor page of feed events for a campaign.
+
+    Reads never mutate the feed. next_cursor is cursor plus the number of
+    events returned.
+    """
+    with _get_db() as conn:
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM play_feed_events WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()
+        total = total_row["cnt"]
+        if cursor >= total:
+            return {"events": [], "next_cursor": cursor}
+        rows = conn.execute(
+            "SELECT event_id, text, sequence FROM play_feed_events "
+            "WHERE campaign_id = ? ORDER BY sequence LIMIT ? OFFSET ?",
+            (campaign_id, limit, cursor),
+        ).fetchall()
+        events = [
+            {"event_id": r["event_id"], "text": r["text"], "sequence": r["sequence"]}
+            for r in rows
+        ]
+        return {"events": events, "next_cursor": cursor + len(events)}
