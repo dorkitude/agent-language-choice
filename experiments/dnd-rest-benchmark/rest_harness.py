@@ -41,7 +41,7 @@ LIFECYCLE_AGENT_LOGS_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".agent-log
 CACHE_DIR = ROOT / "results" / "dnd-rest-benchmark" / ".cache"
 DASHBOARD_DATA = ROOT / "results" / "dnd-rest-benchmark" / "dashboard-data.json"
 EXPERIMENT_DB = ROOT / "results" / "dnd-rest-benchmark" / "experiment-state.sqlite3"
-INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended", "agent_killed", "harness_log_missing"}
+INFRA_EXIT_CLASSES = {"quota_limit", "auth_error", "rate_limit", "billing_suspended", "agent_killed", "harness_log_missing", "provider_capacity"}
 EVALUATOR_BUILD_LOCK = threading.Lock()
 # A lifecycle matrix advances several independent cells in worker threads, but all
 # cells publish into this one SQLite database.  SQLite permits one writer at a
@@ -1624,8 +1624,11 @@ def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: i
         "please run /login" in text
         or "invalid authentication credentials" in text
         or "needs authentication" in text
+        or "oauth session expired and could not be refreshed" in text
     ):
         return "auth_error"
+    if "selected model is at capacity" in text:
+        return "provider_capacity"
     if "rate limit" in text or "too many requests" in text or re.search(r"\b429\b", text):
         return "rate_limit"
     if returncode is not None and returncode < 0 and not stdout.strip() and not stderr.strip():
@@ -1679,16 +1682,34 @@ def shot_exit_class(shot: dict[str, Any], run_dir: Path | None = None) -> str:
 
 
 def needs_reclassified_agent_retry(data: dict[str, Any], run_dir: Path | None = None) -> bool:
-    """Whether an old false infrastructure classification needs one real retry.
+    """Whether corrected infrastructure classifications leave retry work pending.
 
     Earlier snapshots may have skipped evaluation solely because the broad
     transcript matcher labelled ordinary benchmark text as an infrastructure
     error.  Resume precisely those terminal shots after reclassification, but
     do not reopen ordinary feature failures that already exhausted their shots.
+    Also reopen an exhausted stage when a newly recognized provider failure
+    consumed an attempt that should have remained available to the model.
     """
     shots = data.get("shots") or []
     if not shots:
         return False
+    failed_stage = data.get("failed_stage")
+    if failed_stage:
+        stage_shots = [shot for shot in shots if shot.get("stage") == failed_stage]
+        newly_infra = any(
+            (shot.get("agent") or {}).get("exit_class") not in INFRA_EXIT_CLASSES
+            and shot_exit_class(shot, run_dir) in INFRA_EXIT_CLASSES
+            for shot in stage_shots
+        )
+        valid_attempts = sum(
+            not shot_eval_timed_out(shot)
+            and shot_exit_class(shot, run_dir) not in INFRA_EXIT_CLASSES
+            for shot in stage_shots
+        )
+        budget = 1 + int((data.get("metadata") or {}).get("max_fix_shots", 1))
+        if newly_infra and valid_attempts < budget:
+            return True
     terminal = shots[-1]
     stored = (terminal.get("agent") or {}).get("exit_class")
     return stored in INFRA_EXIT_CLASSES and shot_exit_class(terminal, run_dir) not in INFRA_EXIT_CLASSES
@@ -3124,7 +3145,7 @@ def list_infra_blocks(args: argparse.Namespace) -> int:
                    runs.run_dir
             FROM shots
             JOIN runs USING (run_id)
-            WHERE shots.agent_exit_class IN ('quota_limit', 'auth_error', 'rate_limit')
+            WHERE shots.agent_exit_class IN ('quota_limit', 'auth_error', 'rate_limit', 'provider_capacity')
             ORDER BY runs.created_at_utc, shots.shot
             """
         ).fetchall()

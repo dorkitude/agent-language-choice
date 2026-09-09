@@ -67,5 +67,32 @@ class LatestAttemptTests(unittest.TestCase):
                 self.assertTrue(h.completed_lifecycle_exists('codex','gpt-5.6-terra','go-stdlib',None))
                 self.assertIsNone(h.find_resumable_lifecycle_run('codex','gpt-5.6-terra','go-stdlib',stages))
 
+class ProviderCapacityTests(unittest.TestCase):
+    def test_capacity_error_is_infrastructure_but_quoted_content_is_not(self):
+        error=json.dumps({'type':'turn.failed','error':{'message':'Selected model is at capacity. Please try a different model.'}})
+        self.assertEqual(h.classify_agent_exit(error,'',False,1),'provider_capacity')
+        self.assertIn('provider_capacity',h.INFRA_EXIT_CLASSES)
+        content=json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'Selected model is at capacity.'}})
+        self.assertEqual(h.classify_agent_exit(content,'',False,0),'ok')
+
+    def test_expired_claude_oauth_is_auth_infrastructure(self):
+        error=json.dumps({'type':'result','is_error':True,'result':'Failed to authenticate: OAuth session expired and could not be refreshed'})
+        self.assertEqual(h.classify_agent_exit(error,'',False,1),'auth_error')
+
+    def test_reclassified_capacity_error_preserves_exhausted_stage_retry(self):
+        error=json.dumps({'type':'turn.failed','error':{'message':'Selected model is at capacity.'}})
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp)
+            logs=root/'shots'/'01_s_maintenance';logs.mkdir(parents=True)
+            (logs/'agent_stdout.txt').write_text(error)
+            capacity={'shot':1,'kind':'maintenance','stage':'s','agent':{'exit_class':'agent_error','returncode':1},'passed':False}
+            feature={'stage':'s','agent':{'exit_class':'ok','returncode':0},'passed':False}
+            data={'metadata':{'max_fix_shots':5},'failed_stage':'s','shots':[capacity]+[feature]*5}
+            self.assertTrue(h.needs_reclassified_agent_retry(data,root))
+            data['shots'].append(feature)
+            self.assertFalse(h.needs_reclassified_agent_retry(data,root))
+            data['shots']=[feature]*6
+            self.assertFalse(h.needs_reclassified_agent_retry(data,root))
+
 if __name__ == '__main__':
     unittest.main()
