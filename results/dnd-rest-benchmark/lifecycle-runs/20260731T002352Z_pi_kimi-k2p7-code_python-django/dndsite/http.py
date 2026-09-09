@@ -43,3 +43,7 @@ def not_found(message):
 
 def forbidden(message="forbidden"):
     return JsonResponse({"error": message}, status=403)
+
+
+def rate_limited(limit, remaining):
+    return JsonResponse({"limit": limit, "remaining": remaining}, status=429)

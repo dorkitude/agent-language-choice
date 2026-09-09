@@ -1,6 +1,31 @@
 """Pure, stateless D&D game-domain logic."""
 
-from .constants import CR_XP, LEVEL_THRESHOLDS
+from .constants import CR_XP, HIT_DICE, LEVEL_THRESHOLDS
+
+# Full-caster spell slots by character level. Level 1 is overridden to a
+# single first-level slot to match the stage-52 spell-casting contract.
+FULL_CASTER_SPELL_SLOTS = {
+    1: {1: 1},
+    2: {1: 3},
+    3: {1: 4, 2: 2},
+    4: {1: 4, 2: 3},
+    5: {1: 4, 2: 3, 3: 2},
+    6: {1: 4, 2: 3, 3: 3},
+    7: {1: 4, 2: 3, 3: 3, 4: 1},
+    8: {1: 4, 2: 3, 3: 3, 4: 2},
+    9: {1: 4, 2: 3, 3: 3, 4: 3, 5: 1},
+    10: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2},
+    11: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1},
+    12: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1},
+    13: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1},
+    14: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1},
+    15: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1},
+    16: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1},
+    17: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1},
+    18: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1},
+    19: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 1, 8: 1, 9: 1},
+    20: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 2, 8: 1, 9: 1},
+}
 
 
 def ability_modifier(score):
@@ -123,6 +148,27 @@ def encounter_recommendation(difficulty):
     }.get(difficulty, "unknown")
 
 
+def avg_hit_die(class_name):
+    """Return the fixed average hit-point gain per level beyond 1.
+
+    The deterministic gain is the rounded-up average of the class hit die, used
+    for level-up progression.
+    """
+    return HIT_DICE[class_name] // 2 + 1
+
+
+def skill_check_modifier(ability_score, level, proficient):
+    """Return a skill check modifier for a character.
+
+    The modifier is the character's ability modifier plus their proficiency
+    bonus when they are proficient in the skill.
+    """
+    modifier = ability_modifier(ability_score)
+    if proficient:
+        modifier += proficiency_bonus(level)
+    return modifier
+
+
 def parse_combatant(raw):
     """Validate and normalize a single combatant dict.
 
@@ -133,3 +179,37 @@ def parse_combatant(raw):
         "dex": int(raw["dex"]),
         "roll": int(raw["roll"]),
     }
+
+
+def max_spell_slots(level, slot_level):
+    """Return the maximum number of spell slots for a full caster.
+
+    ``slot_level`` is 1-based (1 for first-level spells). Cantrips
+    (slot_level 0) do not consume slots and therefore return 0.
+    """
+    return FULL_CASTER_SPELL_SLOTS.get(level, {}).get(slot_level, 0)
+
+
+SEASON_OFFSETS = {"spring": 0, "summer": 1, "autumn": 2, "winter": 3}
+WEATHER_BY_INDEX = {0: "clear", 1: "rain", 2: "wind", 3: "snow"}
+
+
+def weather_for(day, season):
+    """Return deterministic weather for a campaign day and season.
+
+    ``season`` must be one of ``spring``, ``summer``, ``autumn``, or ``winter``.
+    The caller is responsible for validating inputs.
+    """
+    return WEATHER_BY_INDEX[(day + SEASON_OFFSETS[season]) % 4]
+
+
+def deterministic_roll(seed, sequence, roll_id, sides):
+    """Return a deterministic die roll for a campaign RNG ledger.
+
+    The result is derived from ``seed + "|" + decimal(sequence) + "|" +
+    roll_id + "|" + decimal(sides)`` using an unsigned 32-bit rolling hash.
+    """
+    acc = 0
+    for b in f"{seed}|{sequence}|{roll_id}|{sides}".encode("utf-8"):
+        acc = (acc * 31 + b) & 0xFFFFFFFF
+    return (acc % sides) + 1
