@@ -102,3 +102,10 @@ class ProviderCapacityTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class InterruptedAgentTests(unittest.TestCase):
+    def test_sigterm_with_partial_output_is_recoverable(self):
+        transcript=json.dumps({'type':'turn.started'})
+        self.assertEqual(h.classify_agent_exit(transcript,'Reading additional input from stdin...',False,-15),'agent_killed')
+        self.assertEqual(h.classify_agent_exit(transcript,'',True,-15),'timeout')
+        self.assertEqual(h.classify_agent_exit(transcript,'',False,1),'agent_error')
