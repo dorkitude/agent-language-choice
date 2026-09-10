@@ -2534,6 +2534,13 @@ def selected_stages(value: str | None) -> list[LifecycleStage]:
 
 @lifecycle_locked
 def run_lifecycle_one(args: argparse.Namespace) -> int:
+    # A queued cell may finish in another runner before this worker starts.
+    # Recheck under the cell lock before creating or resuming any artifacts.
+    if getattr(args, "skip_existing", False) and completed_lifecycle_exists(
+        args.provider, args.model, args.target, args.stages
+    ):
+        print(f"[lifecycle] skip completed {args.model}/{args.target}", flush=True)
+        return 0
     target = targets()[args.target]
     stages = selected_stages(args.stages)
     cell_name = f"{args.model}/{target.id}"

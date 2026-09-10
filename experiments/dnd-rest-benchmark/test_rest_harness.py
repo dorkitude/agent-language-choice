@@ -109,3 +109,11 @@ class InterruptedAgentTests(unittest.TestCase):
         self.assertEqual(h.classify_agent_exit(transcript,'Reading additional input from stdin...',False,-15),'agent_killed')
         self.assertEqual(h.classify_agent_exit(transcript,'',True,-15),'timeout')
         self.assertEqual(h.classify_agent_exit(transcript,'',False,1),'agent_error')
+
+class QueuedCompletionTests(unittest.TestCase):
+    def test_completed_cell_is_skipped_when_worker_eventually_starts(self):
+        args=h.argparse.Namespace(skip_existing=True,provider='codex',
+            model='gpt-5.6-terra',target='typescript-nextjs',stages=None,resume=False)
+        with mock.patch.object(h,'completed_lifecycle_exists',return_value=True), \
+             mock.patch.object(h,'targets',side_effect=AssertionError('must not create a new run')):
+            self.assertEqual(h.run_lifecycle_one.__wrapped__(args),0)
