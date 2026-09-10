@@ -18,6 +18,23 @@ sys.modules[spec.name] = harness
 spec.loader.exec_module(harness)
 
 
+def reconciled_failure_status(row):
+    """Never count an unverified or retryable stored failure as terminal."""
+    if row['status'] != 'fail':
+        return row['status']
+    path = Path(row['result_path'])
+    try:
+        raw = path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != row['json_sha256']:
+            return 'partial'
+        data = json.loads(raw)
+    except (OSError, ValueError):
+        return 'partial'
+    if harness.needs_reclassified_agent_retry(data, path.parent):
+        return 'blocked'
+    return harness.run_status(data, path.parent)
+
+
 def snapshot(db):
     con = sqlite3.connect(f'file:{db}?mode=ro', uri=True)
     con.row_factory = sqlite3.Row
@@ -53,6 +70,8 @@ def snapshot(db):
             if row:
                 cell.update({k: row[k] for k in ('run_id', 'status', 'completed_stages', 'stage_count',
                     'total_shots', 'failed_stage', 'created_at_utc', 'completed_at_utc', 'updated_at_utc')})
+                cell['stored_status'] = row['status']
+                cell['status'] = reconciled_failure_status(row)
                 cell['artifact_present'] = Path(row['result_path']).exists()
                 cell['artifact_path'] = str(Path(row['result_path']).relative_to(ROOT)) if Path(row['result_path']).is_relative_to(ROOT) else None
                 fields = ('shot', 'stage', 'kind', 'attempt', 'status', 'passed', 'agent_exit_class',
@@ -72,6 +91,7 @@ def snapshot(db):
         'notes': [
             'A snapshot, not a live monitor. Rebuild to include new results.',
             'Completion means a terminal pass or deterministic failure, not that every model passed every stage.',
+            'Stored failures with pending reclassified retries remain unresolved; missing or changed failure artifacts require reconciliation.',
             'Blocked, partial, timeout, and missing cells are unresolved and excluded from terminal pass-rate denominators.',
             'Valid attempt counts exclude infrastructure-classified shots and evaluator-only deadlines. Unknown historical timeout flags remain unknown.',
             'Before September 9, undrained server log pipes could cause evaluator timeouts. Those outcomes are not evidence of model inability.',

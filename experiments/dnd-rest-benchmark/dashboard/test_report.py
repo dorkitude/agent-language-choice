@@ -4,6 +4,8 @@ import sqlite3
 import json
 import tempfile
 import unittest
+import hashlib
+from unittest.mock import patch
 
 P = pathlib.Path(__file__).with_name('build_report.py')
 SPEC = importlib.util.spec_from_file_location('build_report', P)
@@ -11,6 +13,21 @@ b = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(b)
 
 class SnapshotTests(unittest.TestCase):
+    def test_retryable_failure_and_snapshot_mismatch_are_unresolved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp)/'result.json'
+            path.write_text('{}')
+            row = dict(status='fail', result_path=str(path),
+                       json_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+            with patch.object(b.harness, 'needs_reclassified_agent_retry', return_value=True):
+                self.assertEqual(b.reconciled_failure_status(row), 'blocked')
+            with patch.object(b.harness, 'needs_reclassified_agent_retry', return_value=False), patch.object(b.harness, 'run_status', return_value='fail'):
+                self.assertEqual(b.reconciled_failure_status(row), 'fail')
+            path.write_text('{"changed":true}')
+            self.assertEqual(b.reconciled_failure_status(row), 'partial')
+            path.unlink()
+            self.assertEqual(b.reconciled_failure_status(row), 'partial')
+
     def test_latest_attempt_missing_cells_and_unknown_costs(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = pathlib.Path(tmp)/'state.sqlite3'
