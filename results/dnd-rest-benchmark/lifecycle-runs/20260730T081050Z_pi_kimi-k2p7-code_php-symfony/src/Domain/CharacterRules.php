@@ -9,7 +9,44 @@ namespace App\Domain;
  */
 final class CharacterRules
 {
-    private const ABILITY_NAMES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+    public const ABILITY_NAMES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+
+    public const SKILL_NAMES = [
+        'athletics',
+        'acrobatics',
+        'sleight_of_hand',
+        'sleight-of-hand',
+        'stealth',
+        'arcana',
+        'history',
+        'investigation',
+        'nature',
+        'religion',
+        'animal_handling',
+        'animal-handling',
+        'insight',
+        'medicine',
+        'perception',
+        'survival',
+        'deception',
+        'intimidation',
+        'performance',
+        'persuasion',
+    ];
+
+    public const RACES = [
+        'dragonborn', 'dwarf', 'elf', 'gnome', 'half-elf', 'half-orc', 'halfling', 'human', 'tiefling',
+    ];
+
+    public const CLASSES = [
+        'barbarian', 'bard', 'cleric', 'druid', 'fighter', 'monk', 'paladin', 'ranger', 'rogue', 'sorcerer', 'warlock', 'wizard',
+    ];
+
+    public const BACKGROUNDS = [
+        'acolyte', 'charlatan', 'criminal', 'entertainer', 'folk-hero', 'folk_hero',
+        'guild-artisan', 'guild_artisan', 'hermit', 'noble', 'outlander', 'sage',
+        'sailor', 'soldier', 'urchin',
+    ];
 
     public static function modifier(int $score): int
     {
@@ -25,6 +62,38 @@ final class CharacterRules
             $level <= 16 => 5,
             default => 6,
         };
+    }
+
+    public static function hitDieMax(string $class): int
+    {
+        return match ($class) {
+            'barbarian' => 12,
+            'fighter', 'paladin', 'ranger' => 10,
+            'bard', 'cleric', 'druid', 'monk', 'rogue', 'warlock' => 8,
+            'sorcerer', 'wizard' => 6,
+            default => 8,
+        };
+    }
+
+    public static function hitDieString(string $class): string
+    {
+        return '1d' . self::hitDieMax($class);
+    }
+
+    public static function hitDieAverage(string $class): int
+    {
+        return (int) floor(self::hitDieMax($class) / 2) + 1;
+    }
+
+    public static function levelUpHp(int $currentHp, string $class, int $conModifier, int $currentLevel, int $newLevel): int
+    {
+        $gainPerLevel = self::hitDieAverage($class) + $conModifier;
+        if ($gainPerLevel < 1) {
+            $gainPerLevel = 1;
+        }
+        $levelsGained = $newLevel - $currentLevel;
+
+        return $currentHp + $levelsGained * $gainPerLevel;
     }
 
     /**
