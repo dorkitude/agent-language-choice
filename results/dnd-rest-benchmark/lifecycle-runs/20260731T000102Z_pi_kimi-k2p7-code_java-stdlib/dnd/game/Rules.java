@@ -1,9 +1,11 @@
 package dnd.game;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import dnd.json.JsonUtils;
 
@@ -49,7 +51,164 @@ public final class Rules {
         LEVEL_THRESHOLDS.put(20, new int[]{2800, 5700, 8500, 12700});
     }
 
+    public static final Map<String, Integer> HIT_DICE = new HashMap<>();
+    static {
+        HIT_DICE.put("barbarian", 12);
+        HIT_DICE.put("bard", 8);
+        HIT_DICE.put("cleric", 8);
+        HIT_DICE.put("druid", 8);
+        HIT_DICE.put("fighter", 10);
+        HIT_DICE.put("monk", 8);
+        HIT_DICE.put("paladin", 10);
+        HIT_DICE.put("ranger", 10);
+        HIT_DICE.put("rogue", 8);
+        HIT_DICE.put("sorcerer", 6);
+        HIT_DICE.put("warlock", 8);
+        HIT_DICE.put("wizard", 6);
+    }
+
+    public static final Set<String> VALID_RACES = new HashSet<>();
+    static {
+        VALID_RACES.add("aarakocra");
+        VALID_RACES.add("aasimar");
+        VALID_RACES.add("bugbear");
+        VALID_RACES.add("dragonborn");
+        VALID_RACES.add("dwarf");
+        VALID_RACES.add("elf");
+        VALID_RACES.add("firbolg");
+        VALID_RACES.add("gnome");
+        VALID_RACES.add("goblin");
+        VALID_RACES.add("half-elf");
+        VALID_RACES.add("half-orc");
+        VALID_RACES.add("halfling");
+        VALID_RACES.add("hobgoblin");
+        VALID_RACES.add("human");
+        VALID_RACES.add("kenku");
+        VALID_RACES.add("kobold");
+        VALID_RACES.add("lizardfolk");
+        VALID_RACES.add("orc");
+        VALID_RACES.add("tabaxi");
+        VALID_RACES.add("tiefling");
+        VALID_RACES.add("triton");
+        VALID_RACES.add("yuan-ti");
+    }
+
+    public static final Set<String> VALID_CLASSES = new HashSet<>();
+    static {
+        VALID_CLASSES.add("barbarian");
+        VALID_CLASSES.add("bard");
+        VALID_CLASSES.add("cleric");
+        VALID_CLASSES.add("druid");
+        VALID_CLASSES.add("fighter");
+        VALID_CLASSES.add("monk");
+        VALID_CLASSES.add("paladin");
+        VALID_CLASSES.add("ranger");
+        VALID_CLASSES.add("rogue");
+        VALID_CLASSES.add("sorcerer");
+        VALID_CLASSES.add("warlock");
+        VALID_CLASSES.add("wizard");
+    }
+
+    public static final Set<String> VALID_BACKGROUNDS = new HashSet<>();
+    static {
+        VALID_BACKGROUNDS.add("acolyte");
+        VALID_BACKGROUNDS.add("charlatan");
+        VALID_BACKGROUNDS.add("criminal");
+        VALID_BACKGROUNDS.add("entertainer");
+        VALID_BACKGROUNDS.add("folk_hero");
+        VALID_BACKGROUNDS.add("guild_artisan");
+        VALID_BACKGROUNDS.add("hermit");
+        VALID_BACKGROUNDS.add("noble");
+        VALID_BACKGROUNDS.add("outlander");
+        VALID_BACKGROUNDS.add("sage");
+        VALID_BACKGROUNDS.add("sailor");
+        VALID_BACKGROUNDS.add("soldier");
+        VALID_BACKGROUNDS.add("urchin");
+    }
+
+    public static final Set<String> VALID_ABILITIES = new HashSet<>();
+    static {
+        VALID_ABILITIES.add("str");
+        VALID_ABILITIES.add("dex");
+        VALID_ABILITIES.add("con");
+        VALID_ABILITIES.add("int");
+        VALID_ABILITIES.add("wis");
+        VALID_ABILITIES.add("cha");
+    }
+
+    public static final Set<String> VALID_SKILLS = new HashSet<>();
+    static {
+        VALID_SKILLS.add("acrobatics");
+        VALID_SKILLS.add("animal-handling");
+        VALID_SKILLS.add("animal handling");
+        VALID_SKILLS.add("arcana");
+        VALID_SKILLS.add("athletics");
+        VALID_SKILLS.add("deception");
+        VALID_SKILLS.add("history");
+        VALID_SKILLS.add("insight");
+        VALID_SKILLS.add("intimidation");
+        VALID_SKILLS.add("investigation");
+        VALID_SKILLS.add("medicine");
+        VALID_SKILLS.add("nature");
+        VALID_SKILLS.add("perception");
+        VALID_SKILLS.add("performance");
+        VALID_SKILLS.add("persuasion");
+        VALID_SKILLS.add("religion");
+        VALID_SKILLS.add("sleight-of-hand");
+        VALID_SKILLS.add("sleight of hand");
+        VALID_SKILLS.add("stealth");
+        VALID_SKILLS.add("survival");
+    }
+
+    /**
+     * Determines whether a spell is valid for a character class.
+     * In this simplified system wizards may learn any spell, rogues may not
+     * learn spells, and all other classes are treated as non-spellcasters.
+     */
+    public static boolean isValidSpellForClass(String spellId, String className) {
+        if (spellId == null || className == null) return false;
+        String cls = className.toLowerCase();
+        if ("rogue".equals(cls)) return false;
+        if ("wizard".equals(cls)) return true;
+        return false;
+    }
+
+    /**
+     * Returns true for classes that can cast spells in this simplified system.
+     */
+    public static boolean isSpellcastingClass(String className) {
+        return "wizard".equals(className);
+    }
+
+    /**
+     * Returns the number of spell slots a character of the given class and level
+     * has for {@code slotLevel}. In this simplified system a wizard has one
+     * first-level slot per character level and no higher-level slots.
+     */
+    public static int spellSlots(String className, int level, int slotLevel) {
+        String cls = className == null ? null : className.toLowerCase();
+        if (level < 1 || slotLevel < 1 || slotLevel > 9) return 0;
+        if ("wizard".equals(cls)) {
+            return slotLevel == 1 ? level : 0;
+        }
+        return 0;
+    }
+
     private Rules() {}
+
+    public static boolean isValidAbility(String ability) {
+        return ability != null && VALID_ABILITIES.contains(ability.toLowerCase());
+    }
+
+    public static boolean isValidSkill(String skill) {
+        return skill != null && VALID_SKILLS.contains(skill.toLowerCase());
+    }
+
+    public static int hitDieAtLevel1(String className) {
+        Integer die = HIT_DICE.get(className.toLowerCase());
+        if (die == null) throw new RuntimeException("Unknown class hit die");
+        return die;
+    }
 
     public static int abilityModifier(int score) {
         return (int) Math.floor((score - 10) / 2.0);
