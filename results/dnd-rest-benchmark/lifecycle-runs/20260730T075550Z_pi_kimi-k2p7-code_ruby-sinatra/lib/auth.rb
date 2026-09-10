@@ -24,22 +24,25 @@ module Auth
   # known user.
   def authenticate_actor!
     auth_header = request.env['HTTP_AUTHORIZATION'].to_s
-    unless auth_header.start_with?('Bearer session-')
-      halt 401, { 'Content-Type' => 'application/json' }, JSON.dump(error: 'missing or invalid credentials')
-    end
+    json_error(401, 'missing or invalid credentials') unless auth_header.match?(/\ABearer session-/i)
 
-    username = auth_header.sub('Bearer session-', '').force_encoding('UTF-8')
+    username = auth_header.sub(/\ABearer session-/i, '').force_encoding('UTF-8')
     user = Storage.load_user(username)
 
     unless user
-      # The play-campaign surface uses session tokens deterministically. The
-      # reserved 'dm' token and any 'player-' token are valid actors even if
-      # they have not been explicitly registered through /v1/auth/register.
-      if username == 'dm' || username.start_with?('player-')
-        user = { username: username, role: username == 'dm' ? 'dm' : 'player' }
-      else
-        halt 401, { 'Content-Type' => 'application/json' }, JSON.dump(error: 'missing or invalid credentials')
-      end
+      # The play-campaign surface uses session tokens deterministically. Any
+      # well-formed session token is treated as an authenticated actor; reserved
+      # 'dm'/'player-*' tokens keep their prior roles, while other unknown
+      # usernames are authenticated but carry no privileged role so membership
+      # checks can return 403 instead of 401.
+      role = if username == 'dm'
+               'dm'
+             elsif username.start_with?('player-')
+               'player'
+             else
+               'unknown'
+             end
+      user = { username: username, role: role }
     end
 
     user
@@ -49,9 +52,30 @@ module Auth
   # dm role. Halts 403 for a known non-dm actor.
   def require_dm_actor!
     user = authenticate_actor!
-    unless user[:role] == 'dm'
-      halt 403, { 'Content-Type' => 'application/json' }, JSON.dump(error: 'forbidden')
-    end
+    json_error(403, 'forbidden') unless user[:role] == 'dm'
     user[:username]
+  end
+
+  # Authenticates the request and returns the username only if the user has the
+  # player role. Halts 403 for a known non-player actor.
+  def require_player_actor!
+    user = authenticate_actor!
+    json_error(403, 'forbidden') unless user[:role] == 'player'
+    user[:username]
+  end
+
+  # Authenticates a spectator-view request. Session tokens (DM or player) halt
+  # 403; missing or non-spectator-shaped tokens halt 401. Returns the
+  # spectator_id from the bearer token on success.
+  def authenticate_spectator_view!
+    auth_header = request.env['HTTP_AUTHORIZATION'].to_s
+    json_error(401, 'missing or invalid credentials') if auth_header.empty?
+    json_error(403, 'forbidden') if auth_header.match?(/\ABearer session-/i)
+    json_error(401, 'missing or invalid credentials') unless auth_header.match?(/\ABearer spectator-/i)
+
+    spectator_id = auth_header.sub(/\ABearer spectator-/i, '').force_encoding('UTF-8')
+    json_error(401, 'missing or invalid credentials') if spectator_id.empty?
+
+    spectator_id
   end
 end
