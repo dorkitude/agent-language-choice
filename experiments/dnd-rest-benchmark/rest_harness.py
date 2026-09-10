@@ -1602,7 +1602,7 @@ def classify_agent_exit(stdout: str, stderr: str, timed_out: bool, returncode: i
     """
     if timed_out:
         return "timeout"
-    if returncode == -signal.SIGTERM:
+    if returncode in (-signal.SIGTERM, -signal.SIGKILL):
         # An interrupted CLI is not a completed model attempt, even when it
         # emitted startup events or partial work. Preserve logs and retry.
         return "agent_killed"
