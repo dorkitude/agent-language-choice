@@ -23,3 +23,5 @@ Reconciliation after 12:03 UTC acquired each cell lock and preserved the raw JSO
 | `20260910T114107Z_codex_gpt-5.6-terra_ruby-sinatra` | 9 | blocked | 9 | `40e8187eedd80714607a487ab4c808100d1e6d4c67ee0fb047860f784cada7b2` |
 
 The original completed GPT runs remain intact. Duplicate reconciliation and remaining model runs are still required before final reporting. Local receipt: `results/dnd-rest-benchmark/.cache/resume-20260909/duplicate-gpt-reclassification-1205.json`.
+
+The subsequent Django duplicate, `20260910T105935Z_codex_gpt-5.6-terra_python-django`, was reindexed under its exclusive cell lock at 12:12 UTC: 26 completed stages, 14 infrastructure shots, corrected status blocked, needs retry true. Raw JSON remained unchanged: SHA-256 `37ed05b0da68a7ac5bf738e592743303eee80b0de159694179aab163440adb04`. Receipt: `results/dnd-rest-benchmark/.cache/resume-20260909/duplicate-django-reclassification.json`. This does not establish a new deterministic failure.
