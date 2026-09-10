@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
+require 'cgi'
+
 # HTTP request parsing.
 class Request
-  attr_reader :method, :path, :headers, :body
+  attr_reader :method, :path, :headers, :body, :query
 
-  def initialize(method, path, headers, body)
+  def initialize(method, path, query, headers, body)
     @method = method
     @path = path
+    @query = query
     @headers = headers
     @body = body
   end
@@ -20,7 +23,9 @@ class Request
 
     method = parts[0]
     full_path = parts[1]
-    path = full_path.split('?', 2).first.force_encoding(Encoding::UTF_8)
+    path_parts = full_path.split('?', 2)
+    path = path_parts[0].force_encoding(Encoding::UTF_8)
+    query = path_parts[1] || ''
 
     headers = {}
     loop do
@@ -39,6 +44,13 @@ class Request
       body = io.read(length) if length > 0
     end
 
-    new(method, path, headers, body)
+    new(method, path, query, headers, body)
+  end
+
+  def query_params
+    query.to_s.split('&').each_with_object({}) do |pair, h|
+      key, value = pair.split('=', 2)
+      h[CGI.unescape(key.to_s)] = CGI.unescape(value.to_s)
+    end
   end
 end

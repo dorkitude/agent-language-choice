@@ -16,6 +16,7 @@ require 'base64'
 require 'sqlite3'
 
 require_relative 'lib/config'
+require_relative 'lib/service_mode'
 require_relative 'lib/persistence'
 require_relative 'lib/pure_rules'
 require_relative 'lib/auth'
