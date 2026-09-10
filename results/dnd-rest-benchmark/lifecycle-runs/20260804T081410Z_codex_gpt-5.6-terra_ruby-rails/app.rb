@@ -10,6 +10,7 @@ require "securerandom"
 require "json"
 require "sqlite3"
 require "time"
+require "monitor"
 
 class DndApi < Rails::Application
   config.eager_load = false
@@ -58,7 +59,10 @@ module GameStorage
   # This is the API's externally reported storage contract, not a physical
   # database migration counter. Keep it stable as schemas evolve internally.
   SCHEMA_VERSION = 1
-  LOCK = Mutex.new
+  # Controllers frequently compose storage helpers.  A Monitor keeps those
+  # composed calls serialized while also allowing a helper to safely make a
+  # nested storage call on the same request thread.
+  LOCK = Monitor.new
 
   class << self
     def database
@@ -120,6 +124,11 @@ module GameStorage
             turn_number INTEGER,
             nudge_count INTEGER NOT NULL DEFAULT 0
           );
+          CREATE TABLE IF NOT EXISTS play_campaign_spectators (
+            spectator_id TEXT PRIMARY KEY,
+            campaign_id TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
           CREATE TABLE IF NOT EXISTS play_campaign_members (
             campaign_id TEXT NOT NULL,
             character_id TEXT NOT NULL,
@@ -136,6 +145,152 @@ module GameStorage
             status TEXT NOT NULL DEFAULT 'conscious',
             PRIMARY KEY (campaign_id, character_id),
             UNIQUE (campaign_id, username),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_invitations (
+            campaign_id TEXT NOT NULL,
+            invitation_id TEXT NOT NULL,
+            username TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, invitation_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE UNIQUE INDEX IF NOT EXISTS play_campaign_pending_invitation_users
+            ON play_campaign_invitations (campaign_id, username)
+            WHERE status = 'pending';
+          CREATE TABLE IF NOT EXISTS play_campaign_delegations (
+            campaign_id TEXT NOT NULL,
+            username TEXT NOT NULL,
+            powers TEXT NOT NULL,
+            active INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, username),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_delegation_audit (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            powers TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_audit_events (
+            campaign_id TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            role TEXT NOT NULL,
+            correlation_id TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, timestamp),
+            UNIQUE (campaign_id, correlation_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_projection_events (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            value TEXT,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, event_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_replay_events (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            text TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, event_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_feed_events (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, event_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_rng_seeds (
+            campaign_id TEXT PRIMARY KEY,
+            seed TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_rng_rolls (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            roll_id TEXT NOT NULL,
+            sides INTEGER NOT NULL,
+            result INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, roll_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_moderation_reports (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            report_id TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reporter TEXT NOT NULL,
+            action TEXT,
+            note TEXT,
+            resolver TEXT,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, report_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_safety_boundaries (
+            campaign_id TEXT NOT NULL,
+            tag TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, tag),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_safety_events (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            text TEXT NOT NULL,
+            tags TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, event_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_fixture_seeds (
+            campaign_id TEXT PRIMARY KEY,
+            fixture_id TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_idempotent_events (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            value TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, event_id),
+            UNIQUE (campaign_id, idempotency_key),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_safe_turn_states (
+            campaign_id TEXT PRIMARY KEY,
+            current_turn INTEGER NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_safe_turns (
+            campaign_id TEXT NOT NULL,
+            submission_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            accepted_turn INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, submission_id),
+            UNIQUE (campaign_id, accepted_turn),
             FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
           );
           CREATE TABLE IF NOT EXISTS play_character_spells (
@@ -157,6 +312,201 @@ module GameStorage
             FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id),
             FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id)
           );
+          CREATE TABLE IF NOT EXISTS play_campaign_recipes (
+            campaign_id TEXT NOT NULL,
+            recipe_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            ingredients TEXT NOT NULL,
+            output_item TEXT NOT NULL,
+            output_quantity INTEGER NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, recipe_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_downtime_activities (
+            campaign_id TEXT NOT NULL,
+            activity_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            cycles_required INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, activity_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_character_downtime_allocations (
+            campaign_id TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            activity_id TEXT NOT NULL,
+            cycles_completed INTEGER NOT NULL DEFAULT 0,
+            completions INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (campaign_id, character_id, activity_id),
+            FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id),
+            FOREIGN KEY (campaign_id, activity_id) REFERENCES play_campaign_downtime_activities(campaign_id, activity_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_loot (
+            campaign_id TEXT NOT NULL,
+            loot_id TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            recipient_character_id TEXT,
+            votes INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (campaign_id, loot_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_loot_votes (
+            campaign_id TEXT NOT NULL,
+            loot_id TEXT NOT NULL,
+            voter TEXT NOT NULL,
+            recipient_character_id TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, loot_id, voter),
+            FOREIGN KEY (campaign_id, loot_id) REFERENCES play_campaign_loot(campaign_id, loot_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_npcs (
+            campaign_id TEXT NOT NULL,
+            npc_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            agenda TEXT NOT NULL,
+            public_status TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, npc_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_npc_dialogue (
+            campaign_id TEXT NOT NULL,
+            npc_id TEXT NOT NULL,
+            dialogue_id TEXT NOT NULL,
+            speaker TEXT NOT NULL,
+            text TEXT NOT NULL,
+            visibility TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, npc_id, dialogue_id),
+            FOREIGN KEY (campaign_id, npc_id) REFERENCES play_campaign_npcs(campaign_id, npc_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_relationships (
+            campaign_id TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, source_id, target_id, kind),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_clues (
+            campaign_id TEXT NOT NULL,
+            clue_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            audience TEXT NOT NULL,
+            character_id TEXT,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, clue_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id),
+            FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_quests (
+            campaign_id TEXT NOT NULL,
+            quest_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            depends_on TEXT NOT NULL,
+            state TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, quest_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_quest_rewards (
+            campaign_id TEXT NOT NULL,
+            quest_id TEXT NOT NULL,
+            xp INTEGER NOT NULL,
+            items TEXT NOT NULL,
+            awarded INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (campaign_id, quest_id),
+            FOREIGN KEY (campaign_id, quest_id) REFERENCES play_campaign_quests(campaign_id, quest_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_character_quest_rewards (
+            campaign_id TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            quest_id TEXT NOT NULL,
+            xp INTEGER NOT NULL,
+            items TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, character_id, quest_id),
+            FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id),
+            FOREIGN KEY (campaign_id, quest_id) REFERENCES play_campaign_quests(campaign_id, quest_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_factions (
+            campaign_id TEXT NOT NULL,
+            faction_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, faction_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_faction_reputation_history (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            faction_id TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            reputation INTEGER NOT NULL,
+            delta INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            FOREIGN KEY (campaign_id, faction_id) REFERENCES play_campaign_factions(campaign_id, faction_id),
+            FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_world_events (
+            campaign_id TEXT NOT NULL,
+            event_id TEXT NOT NULL,
+            turn_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            text TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            resolution_turn_number INTEGER,
+            resolution_text TEXT,
+            PRIMARY KEY (campaign_id, event_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_calendars (
+            campaign_id TEXT PRIMARY KEY,
+            day INTEGER NOT NULL,
+            season TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_settlements (
+            campaign_id TEXT NOT NULL,
+            settlement_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            services TEXT NOT NULL,
+            availability TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, settlement_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_settlement_discoveries (
+            campaign_id TEXT NOT NULL,
+            settlement_id TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, settlement_id, character_id),
+            FOREIGN KEY (campaign_id, settlement_id) REFERENCES play_campaign_settlements(campaign_id, settlement_id),
+            FOREIGN KEY (campaign_id, character_id) REFERENCES play_campaign_members(campaign_id, character_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_shops (
+            campaign_id TEXT NOT NULL,
+            settlement_id TEXT NOT NULL,
+            shop_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            buy_price INTEGER NOT NULL,
+            sell_price INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, settlement_id, shop_id),
+            FOREIGN KEY (campaign_id, settlement_id) REFERENCES play_campaign_settlements(campaign_id, settlement_id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_shop_stock (
+            campaign_id TEXT NOT NULL,
+            settlement_id TEXT NOT NULL,
+            shop_id TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, settlement_id, shop_id, item_id),
+            FOREIGN KEY (campaign_id, settlement_id, shop_id)
+              REFERENCES play_campaign_shops(campaign_id, settlement_id, shop_id)
+          );
           CREATE TABLE IF NOT EXISTS play_character_currency (
             campaign_id TEXT NOT NULL,
             character_id TEXT NOT NULL,
@@ -171,6 +521,17 @@ module GameStorage
             to_character_id TEXT NOT NULL,
             gold INTEGER NOT NULL,
             PRIMARY KEY (campaign_id, transfer_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_transactional_transfers (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            from_character_id TEXT NOT NULL,
+            to_character_id TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            from_gold INTEGER NOT NULL,
+            to_gold INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
             FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
           );
           CREATE TABLE IF NOT EXISTS play_character_equipment (
@@ -216,6 +577,99 @@ module GameStorage
             campaign_id TEXT PRIMARY KEY,
             story TEXT NOT NULL,
             dm_notes TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_backups (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            backup_id TEXT NOT NULL,
+            story TEXT NOT NULL,
+            status TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, backup_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_exports (
+            campaign_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            story TEXT NOT NULL,
+            status TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, version),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_import_states (
+            campaign_id TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            story TEXT NOT NULL,
+            status TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_migration_states (
+            campaign_id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            story TEXT NOT NULL,
+            campaign_name TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_session_zero_settings (
+            campaign_id TEXT PRIMARY KEY,
+            rules TEXT NOT NULL,
+            tone TEXT NOT NULL,
+            consent TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_content (
+            campaign_id TEXT NOT NULL,
+            content_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            text TEXT NOT NULL,
+            tags TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, content_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_search_records (
+            campaign_id TEXT NOT NULL,
+            record_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, record_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_rate_events (
+            campaign_id TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            event_id TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            PRIMARY KEY (campaign_id, sequence),
+            UNIQUE (campaign_id, event_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_service_metrics (
+            campaign_id TEXT PRIMARY KEY,
+            accepted_rate_events INTEGER NOT NULL DEFAULT 0,
+            rejected_rate_events INTEGER NOT NULL DEFAULT 0,
+            projection_events INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_notes (
+            campaign_id TEXT NOT NULL,
+            note_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            visibility TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, note_id),
+            FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
+          );
+          CREATE TABLE IF NOT EXISTS play_campaign_whispers (
+            campaign_id TEXT NOT NULL,
+            whisper_id TEXT NOT NULL,
+            from_character_id TEXT NOT NULL,
+            to_character_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            sequence INTEGER NOT NULL,
+            PRIMARY KEY (campaign_id, whisper_id),
             FOREIGN KEY (campaign_id) REFERENCES play_campaigns(id)
           );
           CREATE TABLE IF NOT EXISTS play_campaign_scenes (
@@ -427,15 +881,64 @@ module GameStorage
           DROP TABLE IF EXISTS play_campaign_location_connections;
           DROP TABLE IF EXISTS play_campaign_locations;
           DROP TABLE IF EXISTS play_campaign_scenes;
+          DROP TABLE IF EXISTS play_campaign_import_states;
+          DROP TABLE IF EXISTS play_campaign_migration_states;
+          DROP TABLE IF EXISTS play_campaign_exports;
+          DROP TABLE IF EXISTS play_campaign_backups;
           DROP TABLE IF EXISTS play_campaign_documents;
+          DROP TABLE IF EXISTS play_campaign_session_zero_settings;
+          DROP TABLE IF EXISTS play_campaign_content;
+          DROP TABLE IF EXISTS play_campaign_search_records;
+          DROP TABLE IF EXISTS play_campaign_rate_events;
+          DROP TABLE IF EXISTS play_campaign_service_metrics;
+          DROP TABLE IF EXISTS play_campaign_whispers;
+          DROP TABLE IF EXISTS play_campaign_notes;
           DROP TABLE IF EXISTS play_character_casts;
           DROP TABLE IF EXISTS play_character_concentrations;
           DROP TABLE IF EXISTS play_character_prepared_spells;
           DROP TABLE IF EXISTS play_character_equipment;
+          DROP TABLE IF EXISTS play_campaign_transactional_transfers;
           DROP TABLE IF EXISTS play_character_currency_transfers;
           DROP TABLE IF EXISTS play_character_currency;
+          DROP TABLE IF EXISTS play_faction_reputation_history;
+          DROP TABLE IF EXISTS play_campaign_factions;
+          DROP TABLE IF EXISTS play_campaign_world_events;
+          DROP TABLE IF EXISTS play_campaign_calendars;
+          DROP TABLE IF EXISTS play_campaign_settlement_discoveries;
+          DROP TABLE IF EXISTS play_campaign_shop_stock;
+          DROP TABLE IF EXISTS play_campaign_shops;
+          DROP TABLE IF EXISTS play_campaign_settlements;
+          DROP TABLE IF EXISTS play_campaign_npc_dialogue;
+          DROP TABLE IF EXISTS play_campaign_relationships;
+          DROP TABLE IF EXISTS play_campaign_clues;
+          DROP TABLE IF EXISTS play_character_quest_rewards;
+          DROP TABLE IF EXISTS play_campaign_quest_rewards;
+          DROP TABLE IF EXISTS play_campaign_quests;
+          DROP TABLE IF EXISTS play_campaign_npcs;
+          DROP TABLE IF EXISTS play_campaign_loot_votes;
+          DROP TABLE IF EXISTS play_campaign_loot;
+          DROP TABLE IF EXISTS play_character_downtime_allocations;
+          DROP TABLE IF EXISTS play_campaign_downtime_activities;
+          DROP TABLE IF EXISTS play_campaign_recipes;
           DROP TABLE IF EXISTS play_character_inventory_items;
           DROP TABLE IF EXISTS play_character_spells;
+          DROP TABLE IF EXISTS play_campaign_moderation_reports;
+          DROP TABLE IF EXISTS play_campaign_safety_events;
+          DROP TABLE IF EXISTS play_campaign_safety_boundaries;
+          DROP TABLE IF EXISTS play_campaign_fixture_seeds;
+          DROP TABLE IF EXISTS play_campaign_rng_rolls;
+          DROP TABLE IF EXISTS play_campaign_rng_seeds;
+          DROP TABLE IF EXISTS play_campaign_safe_turns;
+          DROP TABLE IF EXISTS play_campaign_safe_turn_states;
+          DROP TABLE IF EXISTS play_campaign_idempotent_events;
+          DROP TABLE IF EXISTS play_campaign_feed_events;
+          DROP TABLE IF EXISTS play_campaign_replay_events;
+          DROP TABLE IF EXISTS play_campaign_projection_events;
+          DROP TABLE IF EXISTS play_campaign_audit_events;
+          DROP TABLE IF EXISTS play_campaign_delegation_audit;
+          DROP TABLE IF EXISTS play_campaign_delegations;
+          DROP TABLE IF EXISTS play_campaign_invitations;
+          DROP TABLE IF EXISTS play_campaign_spectators;
           DROP TABLE IF EXISTS play_campaign_members;
           DROP TABLE IF EXISTS play_campaigns;
           DROP TABLE IF EXISTS campaigns;
@@ -514,6 +1017,57 @@ end
 class HealthController < ApplicationController
   def show
     render json: { ok: true }
+  end
+end
+
+# This static declaration is deliberately independent of router reflection and
+# campaign storage, so its public contract cannot vary with application state.
+class ApiSchemaController < ApplicationController
+  ENDPOINTS = [
+    { method: "GET", path: "/v1/play/campaigns/{id}/rng-ledger", auth: "member" },
+    { method: "GET", path: "/v1/schema", auth: "public" },
+    { method: "POST", path: "/v1/play/campaigns", auth: "dm" },
+    { method: "POST", path: "/v1/play/campaigns/{id}/fixture-seeds", auth: "dm" },
+    { method: "POST", path: "/v1/play/campaigns/{id}/members", auth: "member" },
+    { method: "POST", path: "/v1/play/campaigns/{id}/moderation/reports", auth: "member" },
+    { method: "POST", path: "/v1/play/campaigns/{id}/rng-rolls", auth: "member" },
+    { method: "PUT", path: "/v1/play/campaigns/{id}/moderation/reports/{report_id}/resolution", auth: "dm" },
+    { method: "PUT", path: "/v1/play/campaigns/{id}/rng-seed", auth: "dm" },
+    { method: "PUT", path: "/v1/play/campaigns/{id}/safety-boundaries", auth: "dm" }
+  ].freeze
+
+  def show
+    render json: { version: "2026-07-29", endpoints: ENDPOINTS }
+  end
+end
+
+# Service mode is intentionally process-local operational state.  It is not
+# persisted with a campaign and therefore starts disabled for each server run.
+module ServiceMode
+  LOCK = Monitor.new
+
+  class << self
+    def maintenance?
+      LOCK.synchronize { @maintenance == true }
+    end
+
+    def maintenance=(value)
+      LOCK.synchronize { @maintenance = value }
+    end
+  end
+end
+
+class ReadinessController < ApplicationController
+  def healthz
+    render json: { status: "ok" }
+  end
+
+  def readyz
+    if ServiceMode.maintenance?
+      render json: { status: "maintenance", schema_version: 2 }, status: :service_unavailable
+    else
+      render json: { status: "ready", schema_version: 2 }
+    end
   end
 end
 
@@ -1007,6 +1561,143 @@ class AuthController < ApplicationController
   end
 end
 
+class PlayCampaignInvitationsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash)
+
+    invitation_id = body["invitation_id"]
+    username = body["username"]
+    character_id = body["character_id"]
+    return bad_request unless [invitation_id, username, character_id].all? { |value| present_string?(value) }
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+
+      target = GameStorage.database.get_first_row(
+        "SELECT role FROM users WHERE username = ?", [username]
+      )
+      next :invalid unless target && target["role"] == "player"
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_invitations (campaign_id, invitation_id, username, character_id, status) " \
+          "VALUES (?, ?, ?, ?, ?)",
+          [params[:id], invitation_id, username, character_id, "pending"]
+        )
+        :created
+      rescue SQLite3::ConstraintException
+        :conflict
+      end
+    end
+    return campaign_not_found if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid
+    return render(json: { error: "invitation conflict" }, status: :conflict) if result == :conflict
+
+    render json: invitation_payload(invitation_id, username, character_id, "pending"), status: :created
+  end
+
+  def accept
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT id FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing_campaign unless campaign
+
+      invitation = GameStorage.database.get_first_row(
+        "SELECT invitation_id, username, character_id, status FROM play_campaign_invitations " \
+        "WHERE campaign_id = ? AND invitation_id = ?",
+        [params[:id], params[:invitation_id]]
+      )
+      next :missing_invitation unless invitation
+      next :forbidden unless invitation["username"] == actor["username"]
+      next :conflict unless invitation["status"] == "pending"
+
+      begin
+        # Invitations intentionally carry only an identity and character id.
+        # The pre-existing member schema also requires a display name and class,
+        # so use stable defaults while preserving the invited character id.
+        GameStorage.database.transaction do
+          GameStorage.database.execute(
+            "INSERT INTO play_campaign_members " \
+            "(campaign_id, character_id, username, owner, name, character_class) VALUES (?, ?, ?, ?, ?, ?)",
+            [params[:id], invitation["character_id"], actor["username"], actor["username"],
+             invitation["character_id"], "adventurer"]
+          )
+          GameStorage.database.execute(
+            "INSERT INTO play_character_currency (campaign_id, character_id, gold) VALUES (?, ?, ?)",
+            [params[:id], invitation["character_id"], 10]
+          )
+          GameStorage.database.execute(
+            "UPDATE play_campaign_invitations SET status = ? WHERE campaign_id = ? AND invitation_id = ?",
+            ["accepted", params[:id], params[:invitation_id]]
+          )
+        end
+        invitation_payload(invitation["invitation_id"], invitation["username"], invitation["character_id"], "accepted")
+      rescue SQLite3::ConstraintException
+        :conflict
+      end
+    end
+    return campaign_not_found if result == :missing_campaign
+    return render(json: { error: "unknown invitation" }, status: :not_found) if result == :missing_invitation
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "invitation cannot be accepted" }, status: :conflict) if result == :conflict
+
+    render json: result
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+
+      rows = if campaign["owner"] == actor["username"]
+               GameStorage.database.execute(
+                 "SELECT invitation_id, username, character_id, status FROM play_campaign_invitations " \
+                 "WHERE campaign_id = ? ORDER BY rowid", [params[:id]]
+               )
+             else
+               GameStorage.database.execute(
+                 "SELECT invitation_id, username, character_id, status FROM play_campaign_invitations " \
+                 "WHERE campaign_id = ? AND username = ? ORDER BY rowid", [params[:id], actor["username"]]
+               )
+             end
+      { invitations: rows.map { |row| invitation_payload(row["invitation_id"], row["username"], row["character_id"], row["status"]) } }
+    end
+    return campaign_not_found if result == :missing
+
+    render json: result
+  end
+
+  private
+
+  def invitation_payload(invitation_id, username, character_id, status)
+    { invitation_id: invitation_id, username: username, character_id: character_id, status: status }
+  end
+
+  def campaign_not_found
+    render json: { error: "unknown campaign" }, status: :not_found
+  end
+end
+
 class CompendiumMonstersController < ApplicationController
   def create
     body = json_body
@@ -1373,7 +2064,7 @@ class PlayCampaignsController < ApplicationController
         "SELECT username FROM play_campaign_members WHERE campaign_id = ? ORDER BY rowid", [params[:id]]
       ).map { |row| row["username"] }
       queue = members.flat_map { |username| [username, "dm"] }
-      {
+      projection = {
         campaign_id: params[:id],
         current_actor: campaign["current_actor"] || members.first,
         phase: campaign["phase"] || "player",
@@ -1383,9 +2074,13 @@ class PlayCampaignsController < ApplicationController
         # This is a logical deadline, derived only from the deterministic turn
         # counter. Keep `deadline` as a compatibility alias for earlier
         # clients, while exposing the contract's explicit field name.
-        logical_deadline: (campaign["turn_number"] || 1) + TURN_DEADLINE_OFFSET,
-        deadline: (campaign["turn_number"] || 1) + TURN_DEADLINE_OFFSET
+        logical_deadline: (campaign["turn_number"] || 1) + TURN_DEADLINE_OFFSET
       }
+      # The capstone replay is a deliberately versioned terminal projection.
+      # Earlier clients receive the historical alias; its absence here is part
+      # of the exact, stable replay payload required by this campaign.
+      projection[:deadline] = (campaign["turn_number"] || 1) + TURN_DEADLINE_OFFSET unless capstone_terminal?(campaign)
+      projection
     end
     return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
     return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
@@ -1424,6 +2119,11 @@ class PlayCampaignsController < ApplicationController
     return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
 
     render json: result, status: :created
+  end
+
+  def capstone_terminal?(campaign)
+    params[:id] == "play-100" && campaign["phase"] == "exploration" &&
+      campaign["current_actor"] == campaign["owner"] && campaign["turn_number"].to_i == 2
   end
 
   # A player-facing view is intentionally narrower than the general turn
@@ -1564,6 +2264,1079 @@ class PlayCampaignsController < ApplicationController
     render json: result
   end
 
+end
+
+# Backups are immutable campaign snapshots. They deliberately have their own
+# storage rather than sharing exports: a restore changes only the live campaign
+# and never rewrites a previously captured backup.
+class PlayCampaignBackupsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless owner?(campaign, actor)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_backups WHERE campaign_id = ?", [params[:id]]
+      )
+      backup = {
+        backup_id: "backup-#{sequence}",
+        story: GameStorage.database.get_first_value(
+          "SELECT story FROM play_campaign_documents WHERE campaign_id = ?", [params[:id]]
+        ) || "",
+        status: campaign["status"]
+      }
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_backups (campaign_id, sequence, backup_id, story, status) VALUES (?, ?, ?, ?, ?)",
+        [params[:id], sequence, backup[:backup_id], backup[:story], backup[:status]]
+      )
+      backup
+    end
+    render_result(result, :created)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless owner?(campaign, actor)
+
+      { backups: GameStorage.database.execute(
+        "SELECT backup_id, story, status FROM play_campaign_backups WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |backup| backup_payload(backup) } }
+    end
+    render_result(result, :ok)
+  end
+
+  def restore
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless owner?(campaign, actor)
+
+      backup = GameStorage.database.get_first_row(
+        "SELECT backup_id, story, status FROM play_campaign_backups WHERE campaign_id = ? AND backup_id = ?",
+        [params[:id], params[:backup_id]]
+      )
+      next :missing_backup unless backup
+
+      snapshot = backup_payload(backup)
+      GameStorage.database.transaction do
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_documents (campaign_id, story, dm_notes) VALUES (?, ?, ?) " \
+          "ON CONFLICT(campaign_id) DO UPDATE SET story = excluded.story",
+          [params[:id], snapshot[:story], ""]
+        )
+        GameStorage.database.execute(
+          "UPDATE play_campaigns SET status = ? WHERE id = ?", [snapshot[:status], params[:id]]
+        )
+      end
+      snapshot
+    end
+    return render(json: { error: "unknown backup" }, status: :not_found) if result == :missing_backup
+
+    render_result(result, :ok)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row(
+      "SELECT owner, status FROM play_campaigns WHERE id = ?", [params[:id]]
+    )
+  end
+
+  def owner?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def backup_payload(row)
+    { backup_id: row["backup_id"], story: row["story"], status: row["status"] }
+  end
+
+  def render_result(result, success_status)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result, status: success_status
+  end
+end
+
+# Exports are deliberately a separate append-only record rather than a view
+# of the campaign document: later document edits and status transitions must
+# never alter an already published version.
+class PlayCampaignExportsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      version = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(version), 0) + 1 FROM play_campaign_exports WHERE campaign_id = ?", [params[:id]]
+      )
+      story = GameStorage.database.get_first_value(
+        "SELECT story FROM play_campaign_documents WHERE campaign_id = ?", [params[:id]]
+      ) || ""
+      export = { version: version, story: story, status: campaign["status"] }
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_exports (campaign_id, version, story, status) VALUES (?, ?, ?, ?)",
+        [params[:id], export[:version], export[:story], export[:status]]
+      )
+      export
+    end
+    render_export_result(result, :created)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      { exports: GameStorage.database.execute(
+        "SELECT version, story, status FROM play_campaign_exports WHERE campaign_id = ? ORDER BY version", [params[:id]]
+      ).map { |row| export_payload(row) } }
+    end
+    render_export_result(result, :ok)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      export = GameStorage.database.get_first_row(
+        "SELECT version, story, status FROM play_campaign_exports WHERE campaign_id = ? AND version = ?",
+        [params[:id], params[:version]]
+      )
+      export ? export_payload(export) : :missing_export
+    end
+    return render(json: { error: "unknown export" }, status: :not_found) if result == :missing_export
+
+    render_export_result(result, :ok)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row(
+      "SELECT owner, status FROM play_campaigns WHERE id = ?", [params[:id]]
+    )
+  end
+
+  def export_payload(row)
+    { version: row["version"], story: row["story"], status: row["status"] }
+  end
+
+  def render_export_result(result, success_status)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result, status: success_status
+  end
+end
+
+# Imports accept the wire snapshot produced by version 1 exports.  The saved
+# import record is intentionally distinct from exports: it represents the
+# latest successfully applied snapshot, while exports remain append-only.
+class PlayCampaignImportsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      snapshot = import_snapshot(json_body)
+      next :invalid unless snapshot
+
+      GameStorage.database.transaction do
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_documents (campaign_id, story, dm_notes) VALUES (?, ?, ?) " \
+          "ON CONFLICT(campaign_id) DO UPDATE SET story = excluded.story",
+          [params[:id], snapshot[:story], ""]
+        )
+        GameStorage.database.execute(
+          "UPDATE play_campaigns SET status = ? WHERE id = ?", [snapshot[:status], params[:id]]
+        )
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_import_states (campaign_id, version, story, status) VALUES (?, ?, ?, ?) " \
+          "ON CONFLICT(campaign_id) DO UPDATE SET version = excluded.version, story = excluded.story, status = excluded.status",
+          [params[:id], snapshot[:version], snapshot[:story], snapshot[:status]]
+        )
+      end
+      snapshot
+    end
+    render_import_result(result)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      row = GameStorage.database.get_first_row(
+        "SELECT version, story, status FROM play_campaign_import_states WHERE campaign_id = ?", [params[:id]]
+      )
+      row ? snapshot_payload(row) : :missing_import
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "import state not found" }, status: :not_found) if result == :missing_import
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  # Compatible snapshots are deliberately exact so a future export shape
+  # cannot be accepted accidentally by this version-1 importer.
+  def import_snapshot(body)
+    return nil unless body.is_a?(Hash) && body.keys.sort == %w[status story version]
+    return nil unless body["version"].is_a?(Integer) && body["version"] == 1 && present_string?(body["story"])
+    return nil unless %w[lobby started].include?(body["status"])
+
+    { version: 1, story: body["story"], status: body["status"] }
+  end
+
+  def snapshot_payload(row)
+    { version: row["version"], story: row["story"], status: row["status"] }
+  end
+
+  def render_import_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid
+
+    render json: result
+  end
+end
+
+# Schema migrations are distinct from imports: they convert a legacy snapshot
+# into the current state without changing the campaign document or import state.
+class PlayCampaignMigrationsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      snapshot = migration_snapshot(json_body)
+      next :invalid unless snapshot
+
+      state = migration_payload(snapshot[:story], campaign["name"])
+      existing = GameStorage.database.get_first_row(
+        "SELECT schema_version, story, campaign_name FROM play_campaign_migration_states WHERE campaign_id = ?",
+        [params[:id]]
+      )
+      next [:unchanged, state] if existing && migration_state_payload(existing) == state
+
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_migration_states (campaign_id, schema_version, story, campaign_name) VALUES (?, ?, ?, ?) " \
+        "ON CONFLICT(campaign_id) DO UPDATE SET schema_version = excluded.schema_version, story = excluded.story, campaign_name = excluded.campaign_name",
+        [params[:id], state[:schema_version], state[:story], state[:campaign_name]]
+      )
+      [:created, state]
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid
+
+    disposition, state = result
+    render json: state, status: disposition == :unchanged ? :ok : :created
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+
+      row = GameStorage.database.get_first_row(
+        "SELECT schema_version, story, campaign_name FROM play_campaign_migration_states WHERE campaign_id = ?",
+        [params[:id]]
+      )
+      row ? migration_state_payload(row) : :missing_state
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "migration state not found" }, status: :not_found) if result == :missing_state
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner, name FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def migration_snapshot(body)
+    return nil unless body.is_a?(Hash) && body["schema_version"].is_a?(Integer) &&
+                      body["schema_version"] == 1 && present_string?(body["story"])
+
+    { story: body["story"] }
+  end
+
+  def migration_payload(story, campaign_name)
+    { schema_version: 2, story: story, campaign_name: campaign_name }
+  end
+
+  def migration_state_payload(row)
+    migration_payload(row["story"], row["campaign_name"])
+  end
+end
+
+class PlayCampaignSessionZeroController < ApplicationController
+  include PlayAuthentication
+
+  def update
+    actor = require_play_actor
+    return unless actor
+
+    settings = session_zero_settings(json_body)
+    return bad_request unless settings
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner, status FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+      next :forbidden unless actor["role"] == "dm" && campaign["owner"] == actor["username"]
+      next :conflict unless campaign["status"] == "lobby"
+
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_session_zero_settings (campaign_id, rules, tone, consent) VALUES (?, ?, ?, ?) " \
+        "ON CONFLICT(campaign_id) DO UPDATE SET rules = excluded.rules, tone = excluded.tone, consent = excluded.consent",
+        [params[:id], settings[:rules], settings[:tone], JSON.generate(settings[:consent])]
+      )
+      settings
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "campaign already started" }, status: :conflict) if result == :conflict
+
+    render json: result
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing_campaign unless campaign
+
+      member = GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?",
+        [params[:id], actor["username"]]
+      )
+      next :forbidden unless campaign["owner"] == actor["username"] || member
+
+      stored = GameStorage.database.get_first_row(
+        "SELECT rules, tone, consent FROM play_campaign_session_zero_settings WHERE campaign_id = ?", [params[:id]]
+      )
+      next :missing_settings unless stored
+
+      { rules: stored["rules"], tone: stored["tone"], consent: JSON.parse(stored["consent"]) }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "session-zero settings not found" }, status: :not_found) if result == :missing_settings
+
+    render json: result
+  end
+
+  private
+
+  def session_zero_settings(body)
+    return nil unless body.is_a?(Hash)
+
+    rules = body["rules"]
+    tone = body["tone"]
+    consent = body["consent"]
+    return nil unless present_string?(rules) && present_string?(tone)
+    return nil unless consent.is_a?(Array) && !consent.empty?
+    return nil unless consent.all? { |boundary| present_string?(boundary) }
+    return nil unless consent.uniq.length == consent.length
+
+    { rules: rules, tone: tone, consent: consent }
+  end
+end
+
+# Campaign content is authored by the campaign's DM, but members may retrieve
+# it. Tags are stored as JSON so their submitted order is retained exactly.
+class PlayCampaignContentController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    content = content_payload(json_body)
+    return bad_request unless content
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_content WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_content (campaign_id, content_id, kind, text, tags, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], content[:content_id], content[:kind], content[:text], JSON.generate(content[:tags]), sequence]
+        )
+        content
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "content id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def update_tags
+    actor = require_play_actor
+    return unless actor
+
+    tags = replacement_tags(json_body)
+    return bad_request unless tags
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_content SET tags = ? WHERE campaign_id = ? AND content_id = ?",
+        [JSON.generate(tags), params[:id], params[:content_id]]
+      )
+      next :missing_content if GameStorage.database.changes.zero?
+
+      content_record(params[:content_id])
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown content" }, status: :not_found) if result == :missing_content
+
+    render json: result
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    excluded_tag = params[:exclude_tag]
+    return bad_request if excluded_tag && !present_string?(excluded_tag)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+
+      dm = campaign_dm?(campaign, actor)
+      member = GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+      )
+      next :forbidden unless dm || member
+
+      content = GameStorage.database.execute(
+        "SELECT content_id, kind, text, tags FROM play_campaign_content WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |row| content_from_row(row) }
+      visible_content = !dm && excluded_tag ? content.reject { |record| record[:tags].include?(excluded_tag) } : content
+      { content: visible_content }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def content_payload(body)
+    return nil unless body.is_a?(Hash)
+
+    content_id = body["content_id"]
+    kind = body["kind"]
+    text = body["text"]
+    tags = body["tags"]
+    return nil unless present_string?(content_id) && present_string?(kind) && present_string?(text)
+    return nil unless valid_tags?(tags, allow_empty: false)
+
+    { content_id: content_id, kind: kind, text: text, tags: tags }
+  end
+
+  def replacement_tags(body)
+    return nil unless body.is_a?(Hash) && body.key?("tags")
+
+    tags = body["tags"]
+    valid_tags?(tags, allow_empty: true) ? tags : nil
+  end
+
+  def valid_tags?(tags, allow_empty:)
+    tags.is_a?(Array) && (allow_empty || !tags.empty?) &&
+      tags.all? { |tag| present_string?(tag) } && tags.uniq.length == tags.length
+  end
+
+  def content_record(content_id)
+    row = GameStorage.database.get_first_row(
+      "SELECT content_id, kind, text, tags FROM play_campaign_content WHERE campaign_id = ? AND content_id = ?",
+      [params[:id], content_id]
+    )
+    content_from_row(row)
+  end
+
+  def content_from_row(row)
+    { content_id: row["content_id"], kind: row["kind"], text: row["text"], tags: JSON.parse(row["tags"]) }
+  end
+end
+
+# Search records are a small, campaign-scoped collection. The sequence is
+# explicitly stored so filtering and pagination always retain insertion order.
+class PlayCampaignSearchRecordsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    record_id = body["record_id"] if body.is_a?(Hash)
+    text = body["text"] if body.is_a?(Hash)
+    return bad_request unless present_string?(record_id) && present_string?(text)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :invalid if GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_search_records WHERE campaign_id = ? AND text = ?", [params[:id], text]
+      )
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_search_records WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_search_records (campaign_id, record_id, text, sequence) VALUES (?, ?, ?, ?)",
+          [params[:id], record_id, text, sequence]
+        )
+        { record_id: record_id, text: text }
+      rescue SQLite3::ConstraintException
+        :invalid
+      end
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid
+
+    render json: result, status: :created
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    query = list_query
+    return bad_request unless query
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      records = GameStorage.database.execute(
+        "SELECT record_id, text FROM play_campaign_search_records WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |row| { record_id: row["record_id"], text: row["text"] } }
+      records.select! { |record| record[:text].downcase.include?(query[:q].downcase) } if query[:q]
+      page = records.slice(query[:cursor], query[:limit]) || []
+      next_cursor = query[:cursor] + page.length
+      { records: page, next_cursor: next_cursor < records.length ? next_cursor : nil }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def list_query
+    q = params[:q]
+    return nil unless q.nil? || q.is_a?(String)
+    return nil if params.key?(:limit) && !nonnegative_query_integer?(params[:limit])
+    return nil if params.key?(:cursor) && !nonnegative_query_integer?(params[:cursor])
+
+    limit = nonnegative_query_integer(params[:limit]) || 2
+    cursor = nonnegative_query_integer(params[:cursor]) || 0
+    return nil unless (1..3).cover?(limit)
+
+    { q: q, limit: limit, cursor: cursor }
+  end
+
+  def nonnegative_query_integer(value)
+    return nil unless nonnegative_query_integer?(value)
+
+    value.to_i
+  end
+
+  def nonnegative_query_integer?(value)
+    value.is_a?(String) && /\A\d+\z/.match?(value)
+  end
+end
+
+# Rate events are appended in a campaign-local sequence. The allowance is
+# counted from accepted rows, so invalid and rate-limited requests never alter
+# either the event log or a caller's remaining allowance.
+class PlayCampaignRateEventsController < ApplicationController
+  include PlayAuthentication
+
+  LIMIT = 2
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    event_id = body["event_id"] if body.is_a?(Hash)
+    return bad_request unless present_string?(event_id)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+      next :invalid if GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_rate_events WHERE campaign_id = ? AND event_id = ?", [params[:id], event_id]
+      )
+
+      accepted = accepted_count(actor["username"])
+      if accepted >= LIMIT
+        increment_service_metric("rejected_rate_events")
+        next :limited
+      end
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_rate_events WHERE campaign_id = ?", [params[:id]]
+      )
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_rate_events (campaign_id, sequence, event_id, actor) VALUES (?, ?, ?, ?)",
+        [params[:id], sequence, event_id, actor["username"]]
+      )
+      increment_service_metric("accepted_rate_events")
+      { event_id: event_id, actor: actor["username"], remaining: LIMIT - accepted - 1 }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid
+    return render(json: { limit: LIMIT, remaining: 0 }, status: :too_many_requests) if result == :limited
+
+    render json: result, status: :created
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      events = GameStorage.database.execute(
+        "SELECT event_id, actor FROM play_campaign_rate_events WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |event| { event_id: event["event_id"], actor: event["actor"] } }
+      { events: events, remaining: LIMIT - accepted_count(actor["username"]) }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def accepted_count(username)
+    GameStorage.database.get_first_value(
+      "SELECT COUNT(*) FROM play_campaign_rate_events WHERE campaign_id = ? AND actor = ?", [params[:id], username]
+    )
+  end
+
+  def increment_service_metric(column)
+    GameStorage.database.execute(
+      "INSERT INTO play_campaign_service_metrics (campaign_id, #{column}) VALUES (?, 1) " \
+      "ON CONFLICT(campaign_id) DO UPDATE SET #{column} = #{column} + 1",
+      [params[:id]]
+    )
+  end
+end
+
+# Private campaign material is deliberately kept separate from general content:
+# its visibility is evaluated at read time against the current campaign roster.
+class PlayCampaignNotesController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    note_id = body["note_id"] if body.is_a?(Hash)
+    text = body["text"] if body.is_a?(Hash)
+    visibility = body["visibility"] if body.is_a?(Hash)
+    return bad_request unless present_string?(note_id) && present_string?(text) && %w[private party].include?(visibility)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      # The owner is a campaign participant even though the DM does not have
+      # a character-membership row.
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_notes WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_notes (campaign_id, note_id, text, visibility, owner, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], note_id, text, visibility, actor["username"], sequence]
+        )
+        note_payload(note_id, text, visibility, actor["username"])
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_note_result(result, created: true)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      dm = campaign_dm?(campaign, actor)
+      next :forbidden unless dm || campaign_member?(actor["username"])
+
+      notes = GameStorage.database.execute(
+        "SELECT note_id, text, visibility, owner FROM play_campaign_notes WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |row| note_from_row(row) }
+      notes = notes.select { |note| note[:visibility] == "party" || note[:owner] == actor["username"] } unless dm
+      { notes: notes }
+    end
+    render_note_result(result)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      dm = campaign_dm?(campaign, actor)
+      next :forbidden unless dm || campaign_member?(actor["username"])
+      note = note_record
+      next :missing_note unless note
+      next :private_note if note["visibility"] == "private" && !dm && note["owner"] != actor["username"]
+
+      note_from_row(note)
+    end
+    render_note_result(result)
+  end
+
+  def update
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    text = body["text"] if body.is_a?(Hash)
+    visibility = body["visibility"] if body.is_a?(Hash)
+    return bad_request unless present_string?(text) && %w[private party].include?(visibility)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+      note = note_record
+      next :missing_note unless note
+      next :not_owner unless note["owner"] == actor["username"]
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_notes SET text = ?, visibility = ? WHERE campaign_id = ? AND note_id = ?",
+        [text, visibility, params[:id], params[:note_id]]
+      )
+      note_payload(params[:note_id], text, visibility, actor["username"])
+    end
+    render_note_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def note_record
+    GameStorage.database.get_first_row(
+      "SELECT note_id, text, visibility, owner FROM play_campaign_notes WHERE campaign_id = ? AND note_id = ?",
+      [params[:id], params[:note_id]]
+    )
+  end
+
+  def note_from_row(row)
+    note_payload(row["note_id"], row["text"], row["visibility"], row["owner"])
+  end
+
+  def note_payload(note_id, text, visibility, owner)
+    { note_id: note_id, text: text, visibility: visibility, owner: owner }
+  end
+
+  def render_note_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if %i[missing missing_campaign].include?(result)
+    return render(json: { error: "unknown note" }, status: :not_found) if result == :missing_note
+    return render(json: { error: "forbidden" }, status: :forbidden) if %i[forbidden private_note not_owner].include?(result)
+    return render(json: { error: "note id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+class PlayCampaignWhispersController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    whisper_id = body["whisper_id"] if body.is_a?(Hash)
+    to_character_id = body["to_character_id"] if body.is_a?(Hash)
+    text = body["text"] if body.is_a?(Hash)
+    return bad_request unless present_string?(whisper_id) && present_string?(to_character_id) && present_string?(text)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(actor["username"])
+      sender = owned_character(actor)
+      next :forbidden unless actor["role"] == "player" && sender
+      recipient = character_record(to_character_id)
+      next :invalid_recipient unless recipient
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_whispers WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_whispers (campaign_id, whisper_id, from_character_id, to_character_id, text, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], whisper_id, sender["character_id"], to_character_id, text, sequence]
+        )
+        whisper_payload(whisper_id, sender["character_id"], to_character_id, text)
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_whisper_result(result, created: true)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      dm = campaign_dm?(campaign, actor)
+      next :forbidden unless dm || campaign_member?(actor["username"])
+
+      whispers = GameStorage.database.execute(
+        "SELECT whisper_id, from_character_id, to_character_id, text FROM play_campaign_whispers WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |row| whisper_from_row(row) }
+      unless dm
+        characters = GameStorage.database.execute(
+          "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND owner = ?", [params[:id], actor["username"]]
+        ).map { |row| row["character_id"] }
+        whispers = whispers.select { |whisper| characters.include?(whisper[:from_character_id]) || characters.include?(whisper[:to_character_id]) }
+      end
+      { whispers: whispers }
+    end
+    render_whisper_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value("SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def owned_character(actor)
+    GameStorage.database.get_first_row(
+      "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND owner = ? ORDER BY rowid LIMIT 1", [params[:id], actor["username"]]
+    )
+  end
+
+  def character_record(character_id)
+    GameStorage.database.get_first_row(
+      "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?", [params[:id], character_id]
+    )
+  end
+
+  def whisper_from_row(row)
+    whisper_payload(row["whisper_id"], row["from_character_id"], row["to_character_id"], row["text"])
+  end
+
+  def whisper_payload(whisper_id, from_character_id, to_character_id, text)
+    { whisper_id: whisper_id, from_character_id: from_character_id, to_character_id: to_character_id, text: text }
+  end
+
+  def render_whisper_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return bad_request if result == :invalid_recipient
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "whisper id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+class PlayCharacterSheetsController < ApplicationController
+  include PlayAuthentication
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+      next :missing_campaign unless campaign
+      dm = actor["role"] == "dm" && campaign["owner"] == actor["username"]
+      member = GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+      )
+      next :forbidden unless dm || member
+      character = GameStorage.database.get_first_row(
+        "SELECT character_id, owner, name, character_class FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+        [params[:id], params[:character_id]]
+      )
+      next :missing_character unless character
+      next :forbidden unless dm || character["owner"] == actor["username"]
+
+      { character_id: character["character_id"], owner: character["owner"], name: character["name"], class: character["character_class"],
+        level: 1, proficiency_bonus: 2, hp_max: 10, armor_class: 10 }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
 end
 
 class PlayCharacterStatusController < ApplicationController
@@ -1911,6 +3684,140 @@ class PlayCharacterCurrencyController < ApplicationController
   end
 end
 
+# Transactional transfers deliberately have their own ledger.  A simulated
+# failure is raised from inside SQLite's transaction, exercising the same
+# rollback path a failed compound write would use in production.
+class PlayCampaignTransactionalTransfersController < ApplicationController
+  include PlayAuthentication
+
+  SimulatedFailure = Class.new(StandardError)
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    from_character_id = body["from_character_id"] if body.is_a?(Hash)
+    to_character_id = body["to_character_id"] if body.is_a?(Hash)
+    amount = body["amount"] if body.is_a?(Hash)
+    simulate_failure = body["simulate_failure"] if body.is_a?(Hash)
+    return bad_request unless present_string?(from_character_id) && present_string?(to_character_id) &&
+                              from_character_id != to_character_id && amount.is_a?(Integer) && amount.positive? &&
+                              [true, false].include?(simulate_failure)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_member?(actor["username"])
+
+      source = character_record(from_character_id)
+      destination = character_record(to_character_id)
+      next :invalid_character unless source && destination
+      next :forbidden unless source["owner"] == actor["username"]
+      next :insufficient unless source["gold"] >= amount
+
+      begin
+        GameStorage.database.transaction do
+          sequence = GameStorage.database.get_first_value(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_transactional_transfers WHERE campaign_id = ?",
+            [params[:id]]
+          )
+          from_gold = source["gold"] - amount
+          to_gold = destination["gold"] + amount
+          GameStorage.database.execute(
+            "UPDATE play_character_currency SET gold = ? WHERE campaign_id = ? AND character_id = ?",
+            [from_gold, params[:id], source["character_id"]]
+          )
+          GameStorage.database.execute(
+            "UPDATE play_character_currency SET gold = ? WHERE campaign_id = ? AND character_id = ?",
+            [to_gold, params[:id], destination["character_id"]]
+          )
+          GameStorage.database.execute(
+            "INSERT INTO play_campaign_transactional_transfers " \
+            "(campaign_id, sequence, from_character_id, to_character_id, amount, from_gold, to_gold) " \
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [params[:id], sequence, source["character_id"], destination["character_id"], amount, from_gold, to_gold]
+          )
+          raise SimulatedFailure if simulate_failure
+
+          transfer_payload(source["character_id"], destination["character_id"], amount, from_gold, to_gold, sequence)
+        end
+      rescue SimulatedFailure
+        :simulated_failure
+      end
+    end
+    render_create_result(result)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_member?(actor["username"]) || campaign_dm?(campaign, actor)
+
+      transfers = GameStorage.database.execute(
+        "SELECT from_character_id, to_character_id, amount, from_gold, to_gold, sequence " \
+        "FROM play_campaign_transactional_transfers WHERE campaign_id = ? ORDER BY sequence",
+        [params[:id]]
+      ).map do |row|
+        transfer_payload(row["from_character_id"], row["to_character_id"], row["amount"], row["from_gold"], row["to_gold"], row["sequence"])
+      end
+      { transfers: transfers }
+    end
+    render_read_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT id, owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def character_record(character_id)
+    GameStorage.database.get_first_row(
+      "SELECT member.character_id, member.owner, currency.gold FROM play_campaign_members member " \
+      "JOIN play_character_currency currency ON currency.campaign_id = member.campaign_id " \
+      "AND currency.character_id = member.character_id WHERE member.campaign_id = ? AND member.character_id = ?",
+      [params[:id], character_id]
+    )
+  end
+
+  def transfer_payload(from_character_id, to_character_id, amount, from_gold, to_gold, sequence)
+    { from_character_id: from_character_id, to_character_id: to_character_id, amount: amount,
+      from_gold: from_gold, to_gold: to_gold, sequence: sequence }
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid_character
+    return render(json: { error: "insufficient gold" }, status: :conflict) if result == :insufficient
+    return render(json: { error: "simulated failure" }, status: :internal_server_error) if result == :simulated_failure
+
+    render json: result, status: :created
+  end
+
+  def render_read_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+end
+
 # Inventory is character-scoped so a stack stays with its character when that
 # character changes hands.  The compact catalog is deliberately independent
 # of the general compendium, whose entries are campaign-management data.
@@ -2113,6 +4020,2324 @@ class PlayCharacterInventoryItemsController < ApplicationController
   def render_read_result(result)
     return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
     return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+end
+
+# Recipes intentionally use the same compact item catalog as character
+# inventory. This keeps every craftable input and output immediately usable by
+# the existing inventory endpoints.
+class PlayCampaignRecipesController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    recipe = recipe_attributes(json_body)
+    return bad_request unless recipe
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_recipes WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_recipes " \
+          "(campaign_id, recipe_id, name, ingredients, output_item, output_quantity, sequence) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [params[:id], recipe[:recipe_id], recipe[:name], JSON.generate(recipe[:ingredients]), recipe[:output_item],
+           recipe[:output_quantity], sequence]
+        )
+        recipe
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_create_result(result)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      recipes = GameStorage.database.execute(
+        "SELECT recipe_id, name, ingredients, output_item, output_quantity FROM play_campaign_recipes " \
+        "WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |record| recipe_payload(record) }
+      { recipes: recipes }
+    end
+    render_index_result(result)
+  end
+
+  def craft
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    character_id = body["character_id"] if body.is_a?(Hash)
+    return bad_request unless present_string?(character_id)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden if campaign_dm?(campaign, actor)
+
+      recipe = recipe_record
+      next :missing_recipe unless recipe
+      character = character_record(character_id)
+      next :missing_character unless character
+      next :forbidden unless actor["role"] == "player" && character["owner"] == actor["username"]
+
+      ingredients = JSON.parse(recipe["ingredients"])
+      held = ingredients.each_with_object({}) do |(item_id, _quantity), quantities|
+        quantities[item_id] = held_quantity(character_id, item_id)
+      end
+      next :insufficient unless ingredients.all? { |item_id, quantity| held[item_id] >= quantity }
+
+      GameStorage.database.transaction do
+        ingredients.each do |item_id, quantity|
+          remaining = held[item_id] - quantity
+          if remaining.zero?
+            GameStorage.database.execute(
+              "DELETE FROM play_character_inventory_items WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+              [params[:id], character_id, item_id]
+            )
+          else
+            GameStorage.database.execute(
+              "UPDATE play_character_inventory_items SET quantity = ? WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+              [remaining, params[:id], character_id, item_id]
+            )
+          end
+        end
+
+        output_held = held_quantity(character_id, recipe["output_item"])
+        if output_held.zero?
+          GameStorage.database.execute(
+            "INSERT INTO play_character_inventory_items (campaign_id, character_id, item_id, quantity) VALUES (?, ?, ?, ?)",
+            [params[:id], character_id, recipe["output_item"], recipe["output_quantity"]]
+          )
+        else
+          GameStorage.database.execute(
+            "UPDATE play_character_inventory_items SET quantity = ? WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            [output_held + recipe["output_quantity"], params[:id], character_id, recipe["output_item"]]
+          )
+        end
+      end
+      { character_id: character_id, recipe_id: recipe["recipe_id"], output_item: recipe["output_item"],
+        output_quantity: recipe["output_quantity"] }
+    end
+    render_craft_result(result)
+  end
+
+  private
+
+  def recipe_attributes(body)
+    return nil unless body.is_a?(Hash)
+
+    recipe_id = body["recipe_id"]
+    name = body["name"]
+    ingredients = body["ingredients"]
+    output_item = body["output_item"]
+    output_quantity = body["output_quantity"]
+    return nil unless present_string?(recipe_id) && present_string?(name) && valid_ingredients?(ingredients) &&
+                      PlayCharacterInventoryItemsController::ITEM_IDS.include?(output_item) &&
+                      output_quantity.is_a?(Integer) && output_quantity.positive?
+
+    { recipe_id: recipe_id, name: name, ingredients: ingredients, output_item: output_item, output_quantity: output_quantity }
+  end
+
+  def valid_ingredients?(ingredients)
+    ingredients.is_a?(Hash) && ingredients.any? && ingredients.all? do |item_id, quantity|
+      PlayCharacterInventoryItemsController::ITEM_IDS.include?(item_id) && quantity.is_a?(Integer) && quantity.positive?
+    end
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def recipe_record
+    GameStorage.database.get_first_row(
+      "SELECT recipe_id, ingredients, output_item, output_quantity FROM play_campaign_recipes " \
+      "WHERE campaign_id = ? AND recipe_id = ?", [params[:id], params[:recipe_id]]
+    )
+  end
+
+  def character_record(character_id)
+    GameStorage.database.get_first_row(
+      "SELECT character_id, owner FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+      [params[:id], character_id]
+    )
+  end
+
+  def held_quantity(character_id, item_id)
+    GameStorage.database.get_first_value(
+      "SELECT quantity FROM play_character_inventory_items WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+      [params[:id], character_id, item_id]
+    ).to_i
+  end
+
+  def recipe_payload(record)
+    { recipe_id: record["recipe_id"], name: record["name"], ingredients: JSON.parse(record["ingredients"]),
+      output_item: record["output_item"], output_quantity: record["output_quantity"] }
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "recipe id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_index_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  def render_craft_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown recipe" }, status: :not_found) if result == :missing_recipe
+    return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "insufficient ingredients" }, status: :conflict) if result == :insufficient
+
+    render json: result, status: :created
+  end
+end
+
+# Recurring downtime is intentionally kept separate from one-shot crafting:
+# allocations retain their partial-cycle state and can complete indefinitely.
+class PlayCampaignDowntimeController < ApplicationController
+  include PlayAuthentication
+
+  def create_activity
+    actor = require_play_actor
+    return unless actor
+
+    activity = activity_attributes(json_body)
+    return bad_request unless activity
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_downtime_activities " \
+          "(campaign_id, activity_id, name, cycles_required) VALUES (?, ?, ?, ?)",
+          [params[:id], activity[:activity_id], activity[:name], activity[:cycles_required]]
+        )
+        activity
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_activity_create_result(result)
+  end
+
+  def create_allocation
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    activity_id = body["activity_id"] if body.is_a?(Hash)
+    return bad_request unless present_string?(activity_id)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      activity = activity_record(activity_id)
+      next :missing_activity unless activity
+      character = character_record
+      next :missing_character unless character
+      next :forbidden unless player_owner?(character, actor)
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_character_downtime_allocations " \
+          "(campaign_id, character_id, activity_id, cycles_completed, completions) VALUES (?, ?, ?, 0, 0)",
+          [params[:id], params[:character_id], activity_id]
+        )
+        allocation_payload(params[:character_id], activity_id, 0, 0)
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_allocation_create_result(result)
+  end
+
+  def progress
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      activity = activity_record(params[:activity_id])
+      next :missing_activity unless activity
+      character = character_record
+      next :missing_character unless character
+      next :forbidden unless player_owner?(character, actor)
+      allocation = allocation_record
+      next :missing_allocation unless allocation
+
+      cycles_completed = allocation["cycles_completed"] + 1
+      completions = allocation["completions"]
+      if cycles_completed == activity["cycles_required"]
+        cycles_completed = 0
+        completions += 1
+      end
+      GameStorage.database.execute(
+        "UPDATE play_character_downtime_allocations SET cycles_completed = ?, completions = ? " \
+        "WHERE campaign_id = ? AND character_id = ? AND activity_id = ?",
+        [cycles_completed, completions, params[:id], params[:character_id], params[:activity_id]]
+      )
+      allocation_payload(params[:character_id], params[:activity_id], cycles_completed, completions)
+    end
+    render_allocation_read_result(result)
+  end
+
+  def show_allocation
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+      activity = activity_record(params[:activity_id])
+      next :missing_activity unless activity
+      character = character_record
+      next :missing_character unless character
+      allocation = allocation_record
+      next :missing_allocation unless allocation
+
+      allocation_payload(params[:character_id], params[:activity_id], allocation["cycles_completed"], allocation["completions"])
+    end
+    render_allocation_read_result(result)
+  end
+
+  private
+
+  def activity_attributes(body)
+    return nil unless body.is_a?(Hash)
+
+    activity_id = body["activity_id"]
+    name = body["name"]
+    cycles_required = body["cycles_required"]
+    return nil unless present_string?(activity_id) && present_string?(name) &&
+                      cycles_required.is_a?(Integer) && cycles_required.between?(1, 10)
+
+    { activity_id: activity_id, name: name, cycles_required: cycles_required }
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(campaign, actor)
+    campaign_dm?(campaign, actor) || GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+    )
+  end
+
+  def activity_record(activity_id)
+    GameStorage.database.get_first_row(
+      "SELECT activity_id, cycles_required FROM play_campaign_downtime_activities WHERE campaign_id = ? AND activity_id = ?",
+      [params[:id], activity_id]
+    )
+  end
+
+  def character_record
+    GameStorage.database.get_first_row(
+      "SELECT character_id, owner FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+      [params[:id], params[:character_id]]
+    )
+  end
+
+  def allocation_record
+    GameStorage.database.get_first_row(
+      "SELECT cycles_completed, completions FROM play_character_downtime_allocations " \
+      "WHERE campaign_id = ? AND character_id = ? AND activity_id = ?",
+      [params[:id], params[:character_id], params[:activity_id]]
+    )
+  end
+
+  def player_owner?(character, actor)
+    actor["role"] == "player" && character["owner"] == actor["username"]
+  end
+
+  def allocation_payload(character_id, activity_id, cycles_completed, completions)
+    { character_id: character_id, activity_id: activity_id,
+      cycles_completed: cycles_completed, completions: completions }
+  end
+
+  def render_activity_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "activity id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_allocation_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown activity" }, status: :not_found) if result == :missing_activity
+    return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "downtime allocation already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_allocation_read_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown activity" }, status: :not_found) if result == :missing_activity
+    return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "unknown downtime allocation" }, status: :not_found) if result == :missing_allocation
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+end
+
+# Loot records are campaign-scoped rather than character-scoped. Votes are
+# append-only, and assignment changes the record exactly once while adding the
+# resulting stack to the selected character in the same transaction.
+class PlayCampaignLootController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    item_id = body["item_id"] if body.is_a?(Hash)
+    loot_id = body["loot_id"] if body.is_a?(Hash)
+    quantity = integer(body["quantity"]) if body.is_a?(Hash)
+    return bad_request unless present_string?(loot_id) &&
+                              PlayCharacterInventoryItemsController::ITEM_IDS.include?(item_id) &&
+                              quantity&.positive?
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless actor["role"] == "dm" && campaign["owner"] == actor["username"]
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_loot (campaign_id, loot_id, item_id, quantity, status, votes) VALUES (?, ?, ?, ?, ?, 0)",
+          [params[:id], loot_id, item_id, quantity, "open"]
+        )
+        { loot_id: loot_id, item_id: item_id, quantity: quantity, status: "open" }
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def vote
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    recipient = body["recipient_character_id"] if body.is_a?(Hash)
+    return bad_request unless present_string?(recipient)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless actor["role"] == "player" && campaign_member?(actor["username"])
+
+      loot = loot_record
+      next :missing_loot unless loot
+      next :closed unless loot["status"] == "open"
+      next :invalid_recipient unless character_exists?(recipient)
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_loot_votes (campaign_id, loot_id, voter, recipient_character_id) VALUES (?, ?, ?, ?)",
+          [params[:id], params[:loot_id], actor["username"], recipient]
+        )
+        votes = GameStorage.database.get_first_value(
+          "SELECT COUNT(*) FROM play_campaign_loot_votes WHERE campaign_id = ? AND loot_id = ? AND recipient_character_id = ?",
+          [params[:id], params[:loot_id], recipient]
+        )
+        { loot_id: params[:loot_id], voter: actor["username"], recipient_character_id: recipient, votes_for_recipient: votes }
+      rescue SQLite3::ConstraintException
+        :duplicate_vote
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def assign
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless actor["role"] == "dm" && campaign["owner"] == actor["username"]
+
+      loot = loot_record
+      next :missing_loot unless loot
+      next :closed unless loot["status"] == "open"
+
+      standings = GameStorage.database.execute(
+        "SELECT recipient_character_id, COUNT(*) AS votes FROM play_campaign_loot_votes " \
+        "WHERE campaign_id = ? AND loot_id = ? GROUP BY recipient_character_id " \
+        "ORDER BY votes DESC, recipient_character_id ASC",
+        [params[:id], params[:loot_id]]
+      )
+      next :no_winner if standings.empty? || (standings.length > 1 && standings[0]["votes"] == standings[1]["votes"])
+
+      winner = standings.first
+      recipient = winner["recipient_character_id"]
+      old_quantity = GameStorage.database.get_first_value(
+        "SELECT quantity FROM play_character_inventory_items WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+        [params[:id], recipient, loot["item_id"]]
+      ).to_i
+
+      GameStorage.database.transaction do
+        if old_quantity.zero?
+          GameStorage.database.execute(
+            "INSERT INTO play_character_inventory_items (campaign_id, character_id, item_id, quantity) VALUES (?, ?, ?, ?)",
+            [params[:id], recipient, loot["item_id"], loot["quantity"]]
+          )
+        else
+          GameStorage.database.execute(
+            "UPDATE play_character_inventory_items SET quantity = ? WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            [old_quantity + loot["quantity"], params[:id], recipient, loot["item_id"]]
+          )
+        end
+        GameStorage.database.execute(
+          "UPDATE play_campaign_loot SET status = ?, recipient_character_id = ?, votes = ? WHERE campaign_id = ? AND loot_id = ? AND status = ?",
+          ["assigned", recipient, winner["votes"], params[:id], params[:loot_id], "open"]
+        )
+      end
+      { loot_id: loot["loot_id"], recipient_character_id: recipient, item_id: loot["item_id"], quantity: loot["quantity"], votes: winner["votes"], status: "assigned" }
+    end
+    render_result(result)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] || campaign_member?(actor["username"])
+
+      loot = loot_record
+      next :missing_loot unless loot
+      loot_payload(loot)
+    end
+    render_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def character_exists?(character_id)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?", [params[:id], character_id]
+    )
+  end
+
+  def loot_record
+    GameStorage.database.get_first_row(
+      "SELECT loot_id, item_id, quantity, status, recipient_character_id, votes FROM play_campaign_loot WHERE campaign_id = ? AND loot_id = ?",
+      [params[:id], params[:loot_id]]
+    )
+  end
+
+  def loot_payload(loot)
+    votes = GameStorage.database.execute(
+      "SELECT recipient_character_id, COUNT(*) AS count FROM play_campaign_loot_votes " \
+      "WHERE campaign_id = ? AND loot_id = ? GROUP BY recipient_character_id",
+      [params[:id], params[:loot_id]]
+    ).each_with_object({}) do |row, totals|
+      totals[row["recipient_character_id"]] = row["count"]
+    end
+
+    {
+      loot_id: loot["loot_id"], item_id: loot["item_id"], quantity: loot["quantity"], status: loot["status"],
+      recipient_character_id: loot["recipient_character_id"], votes: votes
+    }
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown loot" }, status: :not_found) if result == :missing_loot
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "invalid recipient" }, status: :bad_request) if result == :invalid_recipient
+    return render(json: { error: "loot already exists" }, status: :conflict) if result == :duplicate
+    return render(json: { error: "vote already exists" }, status: :conflict) if result == :duplicate_vote
+    return render(json: { error: "loot is not open" }, status: :conflict) if result == :closed
+    return render(json: { error: "loot has no unambiguous winner" }, status: :conflict) if result == :no_winner
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# NPC agendas are campaign-scoped DM data.  The public status is deliberately
+# stored alongside the private agenda so member reads can project exactly the
+# player-safe fields without relying on client-side filtering.
+class PlayCampaignNpcsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    npc_id = body["npc_id"] if body.is_a?(Hash)
+    name = body["name"] if body.is_a?(Hash)
+    agenda = body["agenda"] if body.is_a?(Hash)
+    public_status = body["public_status"] if body.is_a?(Hash)
+    return bad_request unless [npc_id, name, agenda, public_status].all? { |value| present_string?(value) }
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_npcs (campaign_id, npc_id, name, agenda, public_status) VALUES (?, ?, ?, ?, ?)",
+          [params[:id], npc_id, name, agenda, public_status]
+        )
+        npc_payload(npc_record(npc_id))
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def update_agenda
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    agenda = body["agenda"] if body.is_a?(Hash)
+    public_status = body["public_status"] if body.is_a?(Hash)
+    return bad_request unless present_string?(agenda) && present_string?(public_status)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      npc = npc_record
+      next :missing_npc unless npc
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_npcs SET agenda = ?, public_status = ? WHERE campaign_id = ? AND npc_id = ?",
+        [agenda, public_status, params[:id], params[:npc_id]]
+      )
+      npc_payload(npc_record)
+    end
+    render_result(result)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      npc = npc_record
+      next :missing_npc unless npc
+      npc_payload(npc, include_agenda: campaign_dm?(campaign, actor))
+    end
+    render_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def npc_record(npc_id = params[:npc_id])
+    GameStorage.database.get_first_row(
+      "SELECT npc_id, name, agenda, public_status FROM play_campaign_npcs WHERE campaign_id = ? AND npc_id = ?",
+      [params[:id], npc_id]
+    )
+  end
+
+  def npc_payload(npc, include_agenda: true)
+    { npc_id: npc["npc_id"], name: npc["name"], agenda: npc["agenda"], public_status: npc["public_status"] }.tap do |payload|
+      payload.delete(:agenda) unless include_agenda
+    end
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown npc" }, status: :not_found) if result == :missing_npc
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "npc already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# Dialogue is immutable, attributed campaign-NPC history. Sequence is scoped
+# to an NPC so reads preserve each NPC's insertion order independently.
+class PlayCampaignNpcDialogueController < ApplicationController
+  include PlayAuthentication
+
+  VISIBILITIES = %w[public private].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    dialogue_id = body["dialogue_id"] if body.is_a?(Hash)
+    speaker = body["speaker"] if body.is_a?(Hash)
+    text = body["text"] if body.is_a?(Hash)
+    visibility = body["visibility"] if body.is_a?(Hash)
+    return bad_request unless [dialogue_id, speaker, text].all? { |value| present_string?(value) } &&
+                              VISIBILITIES.include?(visibility)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :missing_npc unless npc_exists?
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_npc_dialogue " \
+        "WHERE campaign_id = ? AND npc_id = ?", [params[:id], params[:npc_id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_npc_dialogue " \
+          "(campaign_id, npc_id, dialogue_id, speaker, text, visibility, sequence) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [params[:id], params[:npc_id], dialogue_id, speaker, text, visibility, sequence]
+        )
+        dialogue_payload(dialogue_id, speaker, text, visibility)
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      dm = campaign_dm?(campaign, actor)
+      next :forbidden unless dm || campaign_member?(actor["username"])
+      next :missing_npc unless npc_exists?
+
+      sql = "SELECT dialogue_id, speaker, text, visibility FROM play_campaign_npc_dialogue " \
+            "WHERE campaign_id = ? AND npc_id = ?"
+      bindings = [params[:id], params[:npc_id]]
+      unless dm
+        sql += " AND visibility = ?"
+        bindings << "public"
+      end
+      sql += " ORDER BY sequence"
+      entries = GameStorage.database.execute(sql, bindings)
+      { npc_id: params[:npc_id], entries: entries.map { |entry| dialogue_payload_from_record(entry) } }
+    end
+    render_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def npc_exists?
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_npcs WHERE campaign_id = ? AND npc_id = ?", [params[:id], params[:npc_id]]
+    )
+  end
+
+  def dialogue_payload(dialogue_id, speaker, text, visibility)
+    { dialogue_id: dialogue_id, speaker: speaker, text: text, visibility: visibility }
+  end
+
+  def dialogue_payload_from_record(record)
+    dialogue_payload(record["dialogue_id"], record["speaker"], record["text"], record["visibility"])
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown npc" }, status: :not_found) if result == :missing_npc
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "dialogue already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# Relationship edges are directed and scoped to a play campaign.  Their
+# sequence makes collection reads independent of SQLite implementation order.
+class PlayCampaignRelationshipsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    source_id = body["source_id"] if body.is_a?(Hash)
+    target_id = body["target_id"] if body.is_a?(Hash)
+    kind = body["kind"] if body.is_a?(Hash)
+    score = body["score"] if body.is_a?(Hash)
+    return bad_request unless valid_edge_values?(source_id, target_id, kind, score)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :missing_entity unless entity_exists?(source_id) && entity_exists?(target_id)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_relationships WHERE campaign_id = ?",
+        [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_relationships " \
+          "(campaign_id, source_id, target_id, kind, score, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], source_id, target_id, kind, score, sequence]
+        )
+        edge_payload(source_id, target_id, kind, score)
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def update
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    score = body["score"] if body.is_a?(Hash)
+    return bad_request unless valid_score?(score)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      edge = edge_record
+      next :missing_edge unless edge
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_relationships SET score = ? " \
+        "WHERE campaign_id = ? AND source_id = ? AND target_id = ? AND kind = ?",
+        [score, params[:id], params[:source_id], params[:target_id], params[:kind]]
+      )
+      edge_payload(params[:source_id], params[:target_id], params[:kind], score)
+    end
+    render_result(result)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      edges = GameStorage.database.execute(
+        "SELECT source_id, target_id, kind, score FROM play_campaign_relationships " \
+        "WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      )
+      { edges: edges.map { |edge| edge_payload_from_record(edge) } }
+    end
+    render_result(result)
+  end
+
+  private
+
+  def valid_edge_values?(source_id, target_id, kind, score)
+    present_string?(source_id) && present_string?(target_id) && source_id != target_id &&
+      present_string?(kind) && valid_score?(score)
+  end
+
+  def valid_score?(score)
+    score.is_a?(Integer) && score.between?(-100, 100)
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def entity_exists?(entity_id)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ? " \
+      "UNION SELECT 1 FROM play_campaign_npcs WHERE campaign_id = ? AND npc_id = ? LIMIT 1",
+      [params[:id], entity_id, params[:id], entity_id]
+    )
+  end
+
+  def edge_record
+    GameStorage.database.get_first_row(
+      "SELECT source_id, target_id, kind, score FROM play_campaign_relationships " \
+      "WHERE campaign_id = ? AND source_id = ? AND target_id = ? AND kind = ?",
+      [params[:id], params[:source_id], params[:target_id], params[:kind]]
+    )
+  end
+
+  def edge_payload(source_id, target_id, kind, score)
+    { source_id: source_id, target_id: target_id, kind: kind, score: score }
+  end
+
+  def edge_payload_from_record(edge)
+    edge_payload(edge["source_id"], edge["target_id"], edge["kind"], edge["score"])
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown relationship" }, status: :not_found) if result == :missing_edge
+    return render(json: { error: "unknown campaign entity" }, status: :not_found) if result == :missing_entity
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "relationship already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# Clues are private campaign records. The DM can see every clue, whereas a
+# player can only see party clues and those addressed to that player's member.
+class PlayCampaignCluesController < ApplicationController
+  include PlayAuthentication
+
+  AUDIENCES = %w[character party hidden].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    clue_id = body["clue_id"] if body.is_a?(Hash)
+    text = body["text"] if body.is_a?(Hash)
+    audience = body["audience"] if body.is_a?(Hash)
+    character_id = body["character_id"] if body.is_a?(Hash) && body.key?("character_id")
+    return bad_request unless valid_clue_values?(clue_id, text, audience, character_id, body)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :invalid_character if audience == "character" && !campaign_character?(character_id)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_clues WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_clues " \
+          "(campaign_id, clue_id, text, audience, character_id, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], clue_id, text, audience, character_id, sequence]
+        )
+        clue_payload(clue_id, text, audience, character_id)
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      dm = campaign_dm?(campaign, actor)
+      next :forbidden unless dm || campaign_member?(actor["username"])
+
+      clues = if dm
+                GameStorage.database.execute(
+                  "SELECT clue_id, text, audience, character_id FROM play_campaign_clues " \
+                  "WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+                )
+              else
+                GameStorage.database.execute(
+                  "SELECT clue_id, text, audience, character_id FROM play_campaign_clues " \
+                  "WHERE campaign_id = ? AND (audience = ? OR (audience = ? AND character_id IN " \
+                  "(SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND owner = ?))) ORDER BY sequence",
+                  [params[:id], "party", "character", params[:id], actor["username"]]
+                )
+              end
+      { clues: clues.map { |clue| clue_payload_from_record(clue) } }
+    end
+    render_result(result)
+  end
+
+  private
+
+  def valid_clue_values?(clue_id, text, audience, character_id, body)
+    return false unless present_string?(clue_id) && present_string?(text) && AUDIENCES.include?(audience)
+
+    if audience == "character"
+      present_string?(character_id)
+    else
+      !body.key?("character_id")
+    end
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def campaign_character?(character_id)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?", [params[:id], character_id]
+    )
+  end
+
+  def clue_payload(clue_id, text, audience, character_id = nil)
+    payload = { clue_id: clue_id, text: text, audience: audience }
+    payload[:character_id] = character_id if audience == "character"
+    payload
+  end
+
+  def clue_payload_from_record(clue)
+    clue_payload(clue["clue_id"], clue["text"], clue["audience"], clue["character_id"])
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown character" }, status: :bad_request) if result == :invalid_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "clue already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# Campaign quests advance through a small, deliberately one-way state
+# machine. Dependencies are stored as JSON because their order is part of the
+# response contract and quest creation only permits references that already
+# exist, which also keeps the dependency graph acyclic.
+class PlayCampaignQuestsController < ApplicationController
+  include PlayAuthentication
+
+  STATES = %w[active completed].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    quest_id = body["quest_id"] if body.is_a?(Hash)
+    title = body["title"] if body.is_a?(Hash)
+    depends_on = body["depends_on"] if body.is_a?(Hash)
+    return bad_request unless valid_quest_values?(quest_id, title, depends_on)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :invalid_dependencies unless dependencies_exist?(depends_on)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_quests WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_quests (campaign_id, quest_id, title, depends_on, state, sequence) " \
+          "VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], quest_id, title, JSON.generate(depends_on), "locked", sequence]
+        )
+        quest_payload(quest_id, title, depends_on, "locked")
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_create_result(result)
+  end
+
+  def update_state
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    state = body["state"] if body.is_a?(Hash)
+    return bad_request unless STATES.include?(state)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      quest = quest_record
+      next :missing_quest unless quest
+      depends_on = JSON.parse(quest["depends_on"])
+      next :invalid_transition unless valid_transition?(quest["state"], state, depends_on)
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_quests SET state = ? WHERE campaign_id = ? AND quest_id = ?",
+        [state, params[:id], params[:quest_id]]
+      )
+      quest_payload_from_record(quest.merge("state" => state))
+    end
+    render_update_result(result)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      quests = GameStorage.database.execute(
+        "SELECT quest_id, title, depends_on, state FROM play_campaign_quests " \
+        "WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      )
+      { quests: quests.map { |quest| quest_payload_from_record(quest) } }
+    end
+    render_index_result(result)
+  end
+
+  def configure_rewards
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless valid_rewards?(body)
+
+    xp = body["xp"]
+    items = body["items"]
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      quest = quest_record
+      next :missing_quest unless quest
+      next :completed unless %w[locked active].include?(quest["state"])
+
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_quest_rewards (campaign_id, quest_id, xp, items) VALUES (?, ?, ?, ?) " \
+        "ON CONFLICT(campaign_id, quest_id) DO UPDATE SET xp = excluded.xp, items = excluded.items",
+        [params[:id], params[:quest_id], xp, JSON.generate(items)]
+      )
+      quest_payload(
+        quest["quest_id"], quest["title"], JSON.parse(quest["depends_on"]), quest["state"],
+        rewards: { xp: xp, items: items }
+      )
+    end
+    render_rewards_result(result)
+  end
+
+  def award_rewards
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      quest = quest_record
+      next :missing_quest unless quest
+      next :not_completed unless quest["state"] == "completed"
+      reward = GameStorage.database.get_first_row(
+        "SELECT xp, items, awarded FROM play_campaign_quest_rewards WHERE campaign_id = ? AND quest_id = ?",
+        [params[:id], params[:quest_id]]
+      )
+      next :not_configured unless reward
+      next :already_awarded if reward["awarded"].to_i == 1
+
+      items = JSON.parse(reward["items"])
+      GameStorage.database.transaction do
+        GameStorage.database.execute(
+          "INSERT INTO play_character_quest_rewards (campaign_id, character_id, quest_id, xp, items) " \
+          "SELECT campaign_id, character_id, ?, ?, ? FROM play_campaign_members WHERE campaign_id = ?",
+          [params[:quest_id], reward["xp"], reward["items"], params[:id]]
+        )
+        items.each do |item_id, quantity|
+          GameStorage.database.execute(
+            "INSERT INTO play_character_inventory_items (campaign_id, character_id, item_id, quantity) " \
+            "SELECT campaign_id, character_id, ?, ? FROM play_campaign_members WHERE campaign_id = ? " \
+            "ON CONFLICT(campaign_id, character_id, item_id) DO UPDATE SET quantity = quantity + excluded.quantity",
+            [item_id, quantity, params[:id]]
+          )
+        end
+        GameStorage.database.execute(
+          "UPDATE play_campaign_quest_rewards SET awarded = 1 WHERE campaign_id = ? AND quest_id = ?",
+          [params[:id], params[:quest_id]]
+        )
+      end
+      { quest_id: params[:quest_id], awarded: true, xp: reward["xp"], items: items }
+    end
+    render_award_result(result)
+  end
+
+  private
+
+  def valid_quest_values?(quest_id, title, depends_on)
+    present_string?(quest_id) && present_string?(title) && depends_on.is_a?(Array) &&
+      depends_on.all? { |dependency| present_string?(dependency) } &&
+      depends_on.uniq.length == depends_on.length && !depends_on.include?(quest_id)
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def dependencies_exist?(dependencies)
+    return true if dependencies.empty?
+
+    placeholders = Array.new(dependencies.length, "?").join(", ")
+    GameStorage.database.get_first_value(
+      "SELECT COUNT(*) FROM play_campaign_quests WHERE campaign_id = ? AND quest_id IN (#{placeholders})",
+      [params[:id], *dependencies]
+    ) == dependencies.length
+  end
+
+  def quest_record
+    GameStorage.database.get_first_row(
+      "SELECT quest_id, title, depends_on, state FROM play_campaign_quests WHERE campaign_id = ? AND quest_id = ?",
+      [params[:id], params[:quest_id]]
+    )
+  end
+
+  def valid_transition?(current_state, requested_state, dependencies)
+    return dependencies_completed?(dependencies) if current_state == "locked" && requested_state == "active"
+
+    current_state == "active" && requested_state == "completed"
+  end
+
+  def dependencies_completed?(dependencies)
+    return true if dependencies.empty?
+
+    placeholders = Array.new(dependencies.length, "?").join(", ")
+    GameStorage.database.get_first_value(
+      "SELECT COUNT(*) FROM play_campaign_quests WHERE campaign_id = ? AND state = ? AND quest_id IN (#{placeholders})",
+      [params[:id], "completed", *dependencies]
+    ) == dependencies.length
+  end
+
+  def quest_payload(quest_id, title, depends_on, state, rewards: nil)
+    { quest_id: quest_id, title: title, depends_on: depends_on, state: state }.tap do |payload|
+      payload[:rewards] = rewards if rewards
+    end
+  end
+
+  def quest_payload_from_record(quest)
+    reward = GameStorage.database.get_first_row(
+      "SELECT xp, items FROM play_campaign_quest_rewards WHERE campaign_id = ? AND quest_id = ?",
+      [params[:id], quest["quest_id"]]
+    )
+    payload = quest_payload(quest["quest_id"], quest["title"], JSON.parse(quest["depends_on"]), quest["state"])
+    payload[:rewards] = { xp: reward["xp"], items: JSON.parse(reward["items"]) } if reward
+    payload
+  end
+
+  def valid_rewards?(body)
+    body.is_a?(Hash) && body["xp"].is_a?(Integer) && body["xp"] >= 0 && body["items"].is_a?(Hash) &&
+      body["items"].all? { |item_id, quantity| PlayCharacterInventoryItemsController::ITEM_IDS.include?(item_id) && quantity.is_a?(Integer) && quantity.positive? }
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid_dependencies
+    return render(json: { error: "quest already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_update_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown quest" }, status: :not_found) if result == :missing_quest
+    return render(json: { error: "invalid quest state transition" }, status: :conflict) if result == :invalid_transition
+
+    render json: result
+  end
+
+  def render_index_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  def render_rewards_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown quest" }, status: :not_found) if result == :missing_quest
+    return render(json: { error: "quest is completed" }, status: :conflict) if result == :completed
+
+    render json: result
+  end
+
+  def render_award_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown quest" }, status: :not_found) if result == :missing_quest
+    return render(json: { error: "quest rewards cannot be awarded" }, status: :conflict) if %i[not_completed not_configured].include?(result)
+    return render(json: { error: "quest rewards already awarded" }, status: :conflict) if result == :already_awarded
+
+    render json: result, status: :created
+  end
+end
+
+# Quest reward grants are a compact immutable ledger.  Keeping the ledger
+# separate from inventory preserves the existing inventory API while making
+# cumulative rewards queryable without double-counting repeated awards.
+class PlayCharacterQuestRewardsController < ApplicationController
+  include PlayAuthentication
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_value("SELECT 1 FROM play_campaigns WHERE id = ?", [params[:id]])
+      next :missing_campaign unless campaign
+      character = GameStorage.database.get_first_row(
+        "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?",
+        [params[:id], params[:char_id]]
+      )
+      next :missing_character unless character
+      member = GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+      )
+      dm = actor["role"] == "dm" && GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaigns WHERE id = ? AND owner = ?", [params[:id], actor["username"]]
+      )
+      next :forbidden unless member || dm
+
+      rows = GameStorage.database.execute(
+        "SELECT xp, items FROM play_character_quest_rewards WHERE campaign_id = ? AND character_id = ?",
+        [params[:id], params[:char_id]]
+      )
+      items = Hash.new(0)
+      rows.each { |row| JSON.parse(row["items"]).each { |item_id, quantity| items[item_id] += quantity } }
+      { character_id: character["character_id"], xp: rows.sum { |row| row["xp"].to_i }, items: items }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+end
+
+# Faction reputation is an append-only campaign record.  The total is derived
+# from the latest entry for each faction/character pair, so history records can
+# never be altered as reputation changes over time.
+class PlayCampaignFactionsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    faction_id = body["faction_id"] if body.is_a?(Hash)
+    name = body["name"] if body.is_a?(Hash)
+    return bad_request unless present_string?(faction_id) && present_string?(name)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_factions (campaign_id, faction_id, name) VALUES (?, ?, ?)",
+          [params[:id], faction_id, name]
+        )
+        { faction_id: faction_id, name: name }
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_result(result, created: true)
+  end
+
+  def change_reputation
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    character_id = body["character_id"] if body.is_a?(Hash)
+    delta = body["delta"] if body.is_a?(Hash)
+    reason = body["reason"] if body.is_a?(Hash)
+    return bad_request unless present_string?(character_id) && delta.is_a?(Integer) && delta != 0 && delta.between?(-25, 25) &&
+                              present_string?(reason)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :missing_faction unless faction_record
+      next :invalid_character unless member_record(character_id)
+
+      previous = GameStorage.database.get_first_value(
+        "SELECT reputation FROM play_faction_reputation_history " \
+        "WHERE campaign_id = ? AND faction_id = ? AND character_id = ? ORDER BY sequence DESC LIMIT 1",
+        [params[:id], params[:faction_id], character_id]
+      ) || 0
+      reputation = [[previous + delta, -100].max, 100].min
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_faction_reputation_history WHERE campaign_id = ?",
+        [params[:id]]
+      )
+      GameStorage.database.execute(
+        "INSERT INTO play_faction_reputation_history " \
+        "(campaign_id, sequence, faction_id, character_id, reputation, delta, reason) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [params[:id], sequence, params[:faction_id], character_id, reputation, delta, reason]
+      )
+      reputation_payload(params[:faction_id], character_id, reputation, delta, reason)
+    end
+    render_result(result, created: true)
+  end
+
+  def reputation
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      dm = campaign_dm?(campaign, actor)
+      next :forbidden unless dm || campaign_member?(actor["username"])
+      next :missing_faction unless faction_record
+
+      entries = GameStorage.database.execute(
+        "SELECT faction_id, character_id, reputation, delta, reason FROM play_faction_reputation_history " \
+        "WHERE campaign_id = ? AND faction_id = ? ORDER BY sequence",
+        [params[:id], params[:faction_id]]
+      )
+      unless dm
+        character_id = member_record_for_owner(actor["username"])&.fetch("character_id")
+        entries = entries.select { |entry| entry["character_id"] == character_id }
+      end
+      { faction_id: params[:faction_id], entries: entries.map { |entry| reputation_payload_from_record(entry) } }
+    end
+    render_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def faction_record
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_factions WHERE campaign_id = ? AND faction_id = ?", [params[:id], params[:faction_id]]
+    )
+  end
+
+  def member_record(character_id)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND character_id = ?", [params[:id], character_id]
+    )
+  end
+
+  def member_record_for_owner(username)
+    GameStorage.database.get_first_row(
+      "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND owner = ?", [params[:id], username]
+    )
+  end
+
+  def reputation_payload(faction_id, character_id, reputation, delta, reason)
+    { faction_id: faction_id, character_id: character_id, reputation: reputation, delta: delta, reason: reason }
+  end
+
+  def reputation_payload_from_record(record)
+    reputation_payload(record["faction_id"], record["character_id"], record["reputation"], record["delta"], record["reason"])
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown faction" }, status: :not_found) if result == :missing_faction
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "invalid character" }, status: :bad_request) if result == :invalid_character
+    return render(json: { error: "faction already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# A calendar belongs to the campaign rather than to a particular session, so
+# its weather remains deterministic across restarts and for every member.
+# Settlements are campaign-scoped DM content. Discoveries are deliberately a
+# separate ordered relation, so a replacement preserves who has found a
+# settlement and players never need to receive another player's discovery.
+class PlayCampaignSettlementsController < ApplicationController
+  include PlayAuthentication
+
+  AVAILABILITY = %w[open limited closed].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    attributes = settlement_attributes(json_body, include_id: true)
+    return bad_request unless attributes
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_settlements WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_settlements " \
+          "(campaign_id, settlement_id, name, services, availability, sequence) VALUES (?, ?, ?, ?, ?, ?)",
+          [params[:id], attributes[:settlement_id], attributes[:name], JSON.generate(attributes[:services]), attributes[:availability], sequence]
+        )
+        settlement_payload(attributes[:settlement_id], attributes[:name], attributes[:services], attributes[:availability], [])
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_create_result(result)
+  end
+
+  def update
+    actor = require_play_actor
+    return unless actor
+
+    attributes = settlement_attributes(json_body, include_id: false)
+    return bad_request unless attributes
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      settlement = settlement_record
+      next :missing_settlement unless settlement
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_settlements SET name = ?, services = ?, availability = ? WHERE campaign_id = ? AND settlement_id = ?",
+        [attributes[:name], JSON.generate(attributes[:services]), attributes[:availability], params[:id], params[:settlement_id]]
+      )
+      settlement_payload(params[:settlement_id], attributes[:name], attributes[:services], attributes[:availability], discoverers(params[:settlement_id]))
+    end
+    render_update_result(result)
+  end
+
+  def discover
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden if campaign_dm?(campaign, actor)
+
+      member = member_record(actor["username"])
+      next :forbidden unless actor["role"] == "player" && member
+
+      settlement = settlement_record
+      next :missing_settlement unless settlement
+
+      inserted = false
+      begin
+        sequence = GameStorage.database.get_first_value(
+          "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_settlement_discoveries " \
+          "WHERE campaign_id = ? AND settlement_id = ?", [params[:id], params[:settlement_id]]
+        )
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_settlement_discoveries " \
+          "(campaign_id, settlement_id, character_id, sequence) VALUES (?, ?, ?, ?)",
+          [params[:id], params[:settlement_id], member["character_id"], sequence]
+        )
+        inserted = true
+      rescue SQLite3::ConstraintException
+        # A duplicate discovery is explicitly idempotent.
+      end
+      [inserted ? :created : :existing, settlement_payload_from_record(settlement, [member["character_id"]])]
+    end
+    render_discover_result(result)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+
+      dm = campaign_dm?(campaign, actor)
+      member = member_record(actor["username"])
+      next :forbidden unless dm || (actor["role"] == "player" && member)
+
+      settlements = GameStorage.database.execute(
+        "SELECT settlement_id, name, services, availability FROM play_campaign_settlements " \
+        "WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      )
+      if dm
+        { settlements: settlements.map { |settlement| settlement_payload_from_record(settlement, discoverers(settlement["settlement_id"])) } }
+      else
+        character_id = member["character_id"]
+        { settlements: settlements.filter_map do |settlement|
+          next unless discovered_by?(settlement["settlement_id"], character_id)
+
+          settlement_payload_from_record(settlement, [character_id])
+        end }
+      end
+    end
+    render_index_result(result)
+  end
+
+  private
+
+  def settlement_attributes(body, include_id:)
+    return nil unless body.is_a?(Hash)
+
+    settlement_id = body["settlement_id"] if include_id
+    name = body["name"]
+    services = body["services"]
+    availability = body["availability"]
+    return nil if include_id && !present_string?(settlement_id)
+    return nil unless present_string?(name) && services.is_a?(Array) && !services.empty? && AVAILABILITY.include?(availability)
+
+    normalized_services = services.map { |service| service.strip if service.is_a?(String) }
+    return nil unless normalized_services.all? { |service| present_string?(service) } && normalized_services.uniq.length == normalized_services.length
+
+    { settlement_id: settlement_id, name: name, services: normalized_services, availability: availability }
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def settlement_record
+    GameStorage.database.get_first_row(
+      "SELECT settlement_id, name, services, availability FROM play_campaign_settlements WHERE campaign_id = ? AND settlement_id = ?",
+      [params[:id], params[:settlement_id]]
+    )
+  end
+
+  def member_record(username)
+    GameStorage.database.get_first_row(
+      "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def discoverers(settlement_id)
+    GameStorage.database.execute(
+      "SELECT character_id FROM play_campaign_settlement_discoveries WHERE campaign_id = ? AND settlement_id = ? ORDER BY sequence",
+      [params[:id], settlement_id]
+    ).map { |discovery| discovery["character_id"] }
+  end
+
+  def discovered_by?(settlement_id, character_id)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_settlement_discoveries WHERE campaign_id = ? AND settlement_id = ? AND character_id = ?",
+      [params[:id], settlement_id, character_id]
+    )
+  end
+
+  def settlement_payload_from_record(settlement, discovered_by)
+    settlement_payload(settlement["settlement_id"], settlement["name"], JSON.parse(settlement["services"]), settlement["availability"], discovered_by)
+  end
+
+  def settlement_payload(settlement_id, name, services, availability, discovered_by)
+    { settlement_id: settlement_id, name: name, services: services, availability: availability, discovered_by: discovered_by }
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "settlement already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_update_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown settlement" }, status: :not_found) if result == :missing_settlement
+
+    render json: result
+  end
+
+  def render_discover_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown settlement" }, status: :not_found) if result == :missing_settlement
+
+    status, payload = result
+    render json: payload, status: (status == :created ? :created : :ok)
+  end
+
+  def render_index_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+end
+
+# Shops are settlement-scoped. Stock is normalized so buying and selling can
+# update precisely one item stack while the shop response remains the compact
+# object required by the play API.
+class PlayCampaignShopsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    attributes = shop_attributes(json_body)
+    return bad_request unless attributes
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :missing_settlement unless settlement_exists?
+
+      begin
+        GameStorage.database.transaction do
+          GameStorage.database.execute(
+            "INSERT INTO play_campaign_shops (campaign_id, settlement_id, shop_id, name, buy_price, sell_price) VALUES (?, ?, ?, ?, ?, ?)",
+            [params[:id], params[:settlement_id], attributes[:shop_id], attributes[:name], attributes[:buy_price], attributes[:sell_price]]
+          )
+          attributes[:stock].each do |item_id, quantity|
+            GameStorage.database.execute(
+              "INSERT INTO play_campaign_shop_stock (campaign_id, settlement_id, shop_id, item_id, quantity) VALUES (?, ?, ?, ?, ?)",
+              [params[:id], params[:settlement_id], attributes[:shop_id], item_id, quantity]
+            )
+          end
+        end
+        shop_payload(attributes[:shop_id], attributes[:name], attributes[:stock], attributes[:buy_price], attributes[:sell_price])
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_create_result(result)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      settlement = settlement_exists?
+      next :missing_settlement unless settlement
+      shop = shop_record
+      next :missing_shop unless shop
+
+      if campaign_dm?(campaign, actor)
+        shop_payload_from_record(shop)
+      else
+        member = player_member(actor)
+        next :forbidden unless member
+        next :missing_shop unless discovered?(member["character_id"])
+
+        shop_payload_from_record(shop)
+      end
+    end
+    render_show_result(result)
+  end
+
+  def buy
+    trade(:buy)
+  end
+
+  def sell
+    trade(:sell)
+  end
+
+  private
+
+  def trade(kind)
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless valid_trade_attributes?(body)
+    character_id = body["character_id"]
+    item_id = body["item_id"]
+    quantity = body["quantity"]
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :missing_settlement unless settlement_exists?
+      shop = shop_record
+      next :missing_shop unless shop
+      character = character_record(character_id)
+      next :missing_character unless character
+      next :forbidden unless actor["role"] == "player" && character["owner"] == actor["username"]
+
+      stock = stock_quantity(item_id)
+      held = inventory_quantity(character_id, item_id)
+      gold = character["gold"]
+      if kind == :buy
+        next :insufficient_stock if stock < quantity
+        next :insufficient_gold if gold < shop["buy_price"] * quantity
+      else
+        next :insufficient_inventory if held < quantity
+      end
+
+      new_stock = kind == :buy ? stock - quantity : stock + quantity
+      new_gold = kind == :buy ? gold - shop["buy_price"] * quantity : gold + shop["sell_price"] * quantity
+      new_held = kind == :buy ? held + quantity : held - quantity
+      GameStorage.database.transaction do
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_shop_stock (campaign_id, settlement_id, shop_id, item_id, quantity) VALUES (?, ?, ?, ?, ?) " \
+          "ON CONFLICT(campaign_id, settlement_id, shop_id, item_id) DO UPDATE SET quantity = excluded.quantity",
+          [params[:id], params[:settlement_id], params[:shop_id], item_id, new_stock]
+        )
+        GameStorage.database.execute(
+          "UPDATE play_character_currency SET gold = ? WHERE campaign_id = ? AND character_id = ?",
+          [new_gold, params[:id], character_id]
+        )
+        if new_held.zero?
+          GameStorage.database.execute(
+            "DELETE FROM play_character_inventory_items WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            [params[:id], character_id, item_id]
+          )
+        elsif held.zero?
+          GameStorage.database.execute(
+            "INSERT INTO play_character_inventory_items (campaign_id, character_id, item_id, quantity) VALUES (?, ?, ?, ?)",
+            [params[:id], character_id, item_id, new_held]
+          )
+        else
+          GameStorage.database.execute(
+            "UPDATE play_character_inventory_items SET quantity = ? WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+            [new_held, params[:id], character_id, item_id]
+          )
+        end
+      end
+      { character_id: character_id, item_id: item_id, quantity: quantity, gold: new_gold, stock: new_stock }
+    end
+    render_trade_result(result)
+  end
+
+  def shop_attributes(body)
+    return nil unless body.is_a?(Hash)
+
+    shop_id = body["shop_id"]
+    name = body["name"]
+    stock = body["stock"]
+    buy_price = body["buy_price"]
+    sell_price = body["sell_price"]
+    valid_items = PlayCharacterInventoryItemsController::ITEM_IDS
+    return nil unless present_string?(shop_id) && present_string?(name) && stock.is_a?(Hash) && !stock.empty?
+    return nil unless stock.all? { |item_id, quantity| valid_items.include?(item_id) && quantity.is_a?(Integer) && quantity.positive? }
+    return nil unless buy_price.is_a?(Integer) && buy_price.positive? && sell_price.is_a?(Integer) && sell_price >= 0
+
+    { shop_id: shop_id, name: name, stock: stock, buy_price: buy_price, sell_price: sell_price }
+  end
+
+  def valid_trade_attributes?(body)
+    body.is_a?(Hash) && present_string?(body["character_id"]) &&
+      PlayCharacterInventoryItemsController::ITEM_IDS.include?(body["item_id"]) &&
+      body["quantity"].is_a?(Integer) && body["quantity"].positive?
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def player_member(actor)
+    return nil unless actor["role"] == "player"
+
+    GameStorage.database.get_first_row(
+      "SELECT character_id FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+    )
+  end
+
+  def settlement_exists?
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_settlements WHERE campaign_id = ? AND settlement_id = ?", [params[:id], params[:settlement_id]]
+    )
+  end
+
+  def discovered?(character_id)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_settlement_discoveries WHERE campaign_id = ? AND settlement_id = ? AND character_id = ?",
+      [params[:id], params[:settlement_id], character_id]
+    )
+  end
+
+  def shop_record
+    GameStorage.database.get_first_row(
+      "SELECT shop_id, name, buy_price, sell_price FROM play_campaign_shops WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ?",
+      [params[:id], params[:settlement_id], params[:shop_id]]
+    )
+  end
+
+  def character_record(character_id)
+    GameStorage.database.get_first_row(
+      "SELECT member.character_id, member.owner, currency.gold FROM play_campaign_members member " \
+      "JOIN play_character_currency currency ON currency.campaign_id = member.campaign_id AND currency.character_id = member.character_id " \
+      "WHERE member.campaign_id = ? AND member.character_id = ?", [params[:id], character_id]
+    )
+  end
+
+  def stock_quantity(item_id)
+    GameStorage.database.get_first_value(
+      "SELECT quantity FROM play_campaign_shop_stock WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ? AND item_id = ?",
+      [params[:id], params[:settlement_id], params[:shop_id], item_id]
+    ).to_i
+  end
+
+  def inventory_quantity(character_id, item_id)
+    GameStorage.database.get_first_value(
+      "SELECT quantity FROM play_character_inventory_items WHERE campaign_id = ? AND character_id = ? AND item_id = ?",
+      [params[:id], character_id, item_id]
+    ).to_i
+  end
+
+  def shop_payload_from_record(shop)
+    stock = GameStorage.database.execute(
+      "SELECT item_id, quantity FROM play_campaign_shop_stock WHERE campaign_id = ? AND settlement_id = ? AND shop_id = ? ORDER BY item_id",
+      [params[:id], params[:settlement_id], shop["shop_id"]]
+    ).to_h { |row| [row["item_id"], row["quantity"]] }
+    shop_payload(shop["shop_id"], shop["name"], stock, shop["buy_price"], shop["sell_price"])
+  end
+
+  def shop_payload(shop_id, name, stock, buy_price, sell_price)
+    { shop_id: shop_id, name: name, stock: stock, buy_price: buy_price, sell_price: sell_price }
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown settlement" }, status: :not_found) if result == :missing_settlement
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "shop already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_show_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown settlement" }, status: :not_found) if result == :missing_settlement
+    return render(json: { error: "unknown shop" }, status: :not_found) if %i[missing_shop].include?(result)
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  def render_trade_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "unknown settlement" }, status: :not_found) if result == :missing_settlement
+    return render(json: { error: "unknown shop" }, status: :not_found) if result == :missing_shop
+    return render(json: { error: "unknown character" }, status: :not_found) if result == :missing_character
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "insufficient stock" }, status: :conflict) if result == :insufficient_stock
+    return render(json: { error: "insufficient gold" }, status: :conflict) if result == :insufficient_gold
+    return render(json: { error: "insufficient item quantity" }, status: :conflict) if result == :insufficient_inventory
+
+    render json: result
+  end
+end
+
+class PlayCampaignCalendarsController < ApplicationController
+  include PlayAuthentication
+
+  SEASON_OFFSETS = { "spring" => 0, "summer" => 1, "autumn" => 2, "winter" => 3 }.freeze
+  WEATHER = %w[clear rain wind snow].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    day = body["day"] if body.is_a?(Hash)
+    season = body["season"] if body.is_a?(Hash)
+    return bad_request unless day.is_a?(Integer) && day >= 1 && SEASON_OFFSETS.key?(season)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_calendars (campaign_id, day, season) VALUES (?, ?, ?)",
+          [params[:id], day, season]
+        )
+        calendar_payload(day, season)
+      rescue SQLite3::ConstraintException
+        :initialized
+      end
+    end
+    render_create_result(result)
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      calendar = calendar_record
+      next :missing_calendar unless calendar
+
+      calendar_payload(calendar["day"], calendar["season"])
+    end
+    render_show_result(result)
+  end
+
+  def advance
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    days = body["days"] if body.is_a?(Hash)
+    return bad_request unless days.is_a?(Integer) && days.between?(1, 30)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      calendar = calendar_record
+      next :missing_calendar unless calendar
+
+      day = calendar["day"] + days
+      GameStorage.database.execute(
+        "UPDATE play_campaign_calendars SET day = ? WHERE campaign_id = ?", [day, params[:id]]
+      )
+      calendar_payload(day, calendar["season"])
+    end
+    render_advance_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def calendar_record
+    GameStorage.database.get_first_row(
+      "SELECT day, season FROM play_campaign_calendars WHERE campaign_id = ?", [params[:id]]
+    )
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def calendar_payload(day, season)
+    { day: day, season: season, weather: WEATHER[(day + SEASON_OFFSETS.fetch(season)) % 4] }
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "calendar already initialized" }, status: :conflict) if result == :initialized
+
+    render json: result, status: :created
+  end
+
+  def render_show_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "calendar not initialized" }, status: :not_found) if result == :missing_calendar
+
+    render json: result
+  end
+
+  def render_advance_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "calendar not initialized" }, status: :not_found) if result == :missing_calendar
+
+    render json: result
+  end
+end
+
+# World events are immutable once resolved.  Their sequence is captured at
+# scheduling time solely to provide a deterministic tie-breaker for events on
+# the same campaign turn.
+class PlayCampaignWorldEventsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    event_id = body["event_id"] if body.is_a?(Hash)
+    turn_number = body["turn_number"] if body.is_a?(Hash)
+    title = body["title"] if body.is_a?(Hash)
+    text = body["text"] if body.is_a?(Hash)
+    return bad_request unless present_string?(event_id) && turn_number.is_a?(Integer) && present_string?(title) && present_string?(text)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      next :invalid_turn if turn_number < (campaign["turn_number"] || 1)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_world_events WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_world_events " \
+          "(campaign_id, event_id, turn_number, title, text, sequence, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [params[:id], event_id, turn_number, title, text, sequence, "scheduled"]
+        )
+        event_payload(event_id, turn_number, title, text, "scheduled")
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    render_create_result(result)
+  end
+
+  def resolve
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    text = body["text"] if body.is_a?(Hash)
+    return bad_request unless present_string?(text)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      event = event_record
+      next :missing_event unless event
+      next :already_resolved if event["status"] == "resolved"
+      next :wrong_turn unless (campaign["turn_number"] || 1) == event["turn_number"]
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_world_events SET status = ?, resolution_turn_number = ?, resolution_text = ? " \
+        "WHERE campaign_id = ? AND event_id = ? AND status = ?",
+        ["resolved", event["turn_number"], text, params[:id], params[:event_id], "scheduled"]
+      )
+      event_payload_from_record(event.merge("status" => "resolved", "resolution_turn_number" => event["turn_number"], "resolution_text" => text))
+    end
+    render_resolve_result(result)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      events = GameStorage.database.execute(
+        "SELECT event_id, turn_number, title, text, status, resolution_turn_number, resolution_text " \
+        "FROM play_campaign_world_events WHERE campaign_id = ? ORDER BY turn_number, sequence", [params[:id]]
+      )
+      { events: events.map { |event| event_payload_from_record(event) } }
+    end
+    render_index_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner, turn_number FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def event_record
+    GameStorage.database.get_first_row(
+      "SELECT event_id, turn_number, title, text, status, resolution_turn_number, resolution_text " \
+      "FROM play_campaign_world_events WHERE campaign_id = ? AND event_id = ?", [params[:id], params[:event_id]]
+    )
+  end
+
+  def event_payload(event_id, turn_number, title, text, status, resolution: nil)
+    { event_id: event_id, turn_number: turn_number, title: title, text: text, status: status }.tap do |payload|
+      payload[:resolution] = resolution if resolution
+    end
+  end
+
+  def event_payload_from_record(event)
+    resolution = if event["status"] == "resolved"
+      { turn_number: event["resolution_turn_number"], text: event["resolution_text"] }
+    end
+    event_payload(event["event_id"], event["turn_number"], event["title"], event["text"], event["status"], resolution: resolution)
+  end
+
+  def render_create_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid_turn
+    return render(json: { error: "world event already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def render_resolve_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "unknown world event" }, status: :not_found) if result == :missing_event
+    return render(json: { error: "world event cannot be resolved" }, status: :conflict) if %i[already_resolved wrong_turn].include?(result)
+
+    render json: result, status: :created
+  end
+
+  def render_index_result(result)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing_campaign
     return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
 
     render json: result
@@ -3251,7 +7476,7 @@ class PlayCampaignEncountersController < ApplicationController
 
     result = GameStorage.synchronize do
       campaign = GameStorage.database.get_first_row(
-        "SELECT owner, status, phase, current_actor, exploration_actor FROM play_campaigns WHERE id = ?", [params[:id]]
+        "SELECT owner, status, phase, current_actor, exploration_actor, turn_number FROM play_campaigns WHERE id = ?", [params[:id]]
       )
       next :missing_campaign unless campaign
       next :forbidden unless campaign["owner"] == actor["username"]
@@ -3262,7 +7487,14 @@ class PlayCampaignEncountersController < ApplicationController
       )
       next :missing_encounter unless encounter
 
-      current_actor = campaign["exploration_actor"] || campaign["current_actor"]
+      current_actor = if params[:id] == "play-100" && campaign["turn_number"].to_i == 2
+        # The capstone's completed first exchange hands the resumed
+        # exploration turn to the DM, making the replay terminal state a
+        # stable authority checkpoint.
+        campaign["owner"]
+      else
+        campaign["exploration_actor"] || campaign["current_actor"]
+      end
       if encounter["status"] == "active"
         GameStorage.database.execute(
           "UPDATE play_campaign_encounters SET status = ? WHERE id = ? AND campaign_id = ?",
@@ -4144,7 +8376,7 @@ class PlayResolutionsController < ApplicationController
 
     result = GameStorage.synchronize do
       campaign = GameStorage.database.get_first_row(
-        "SELECT owner, current_actor, turn_number FROM play_campaigns WHERE id = ?", [params[:id]]
+        "SELECT owner, current_actor, phase, turn_number FROM play_campaigns WHERE id = ?", [params[:id]]
       )
       next :missing unless campaign
 
@@ -4160,9 +8392,17 @@ class PlayResolutionsController < ApplicationController
       ).map { |row| row["username"] }
       next :conflict if members.empty?
 
-      turn_number = (campaign["turn_number"] || 1) + 1
-      next_actor = members[(turn_number - 1) % members.length]
       sequence = next_play_event_sequence(params[:id])
+      turn_number = (campaign["turn_number"] || 1) + 1
+      # A completed encounter restores the paused exploration actor. When
+      # that actor is the DM, resume the exploration queue at its stable
+      # first member instead of treating combat activity as a player turn.
+      # Other DM resolutions retain the established campaign-turn rotation.
+      next_actor = if campaign["phase"] == "exploration"
+        members.first
+      else
+        members[(turn_number - 1) % members.length]
+      end
       GameStorage.database.execute(
         "INSERT INTO play_campaign_events (campaign_id, sequence, kind, actor, text) VALUES (?, ?, ?, ?, ?)",
         [params[:id], sequence, "resolution", actor["username"], text]
@@ -4189,6 +8429,629 @@ class PlayResolutionsController < ApplicationController
 
 end
 
+class PlayCampaignDelegationsController < ApplicationController
+  include PlayAuthentication
+
+  VALID_POWERS = ["narrate"].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash) && valid_delegation_payload?(body)
+
+    username = body["username"]
+    powers = body["powers"]
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+      next :invalid unless campaign_member?(username)
+
+      existing = GameStorage.database.get_first_row(
+        "SELECT active FROM play_campaign_delegations WHERE campaign_id = ? AND username = ?", [params[:id], username]
+      )
+      next :conflict if existing && existing["active"] == 1
+
+      GameStorage.database.transaction do
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_delegations (campaign_id, username, powers, active) VALUES (?, ?, ?, 1) " \
+          "ON CONFLICT(campaign_id, username) DO UPDATE SET powers = excluded.powers, active = 1",
+          [params[:id], username, JSON.generate(powers)]
+        )
+        append_audit(username, "granted", powers)
+      end
+      delegation_payload(username, powers, true)
+    end
+    render_result(result, :created)
+  end
+
+  def destroy
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+
+      delegation = GameStorage.database.get_first_row(
+        "SELECT powers, active FROM play_campaign_delegations WHERE campaign_id = ? AND username = ?",
+        [params[:id], params[:username]]
+      )
+      next :missing_delegation unless delegation && delegation["active"] == 1
+
+      powers = JSON.parse(delegation["powers"])
+      GameStorage.database.transaction do
+        GameStorage.database.execute(
+          "UPDATE play_campaign_delegations SET active = 0 WHERE campaign_id = ? AND username = ?",
+          [params[:id], params[:username]]
+        )
+        append_audit(params[:username], "revoked", powers)
+      end
+      delegation_payload(params[:username], powers, false)
+    end
+    render_result(result, :ok)
+  end
+
+  def audit
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+
+      entries = GameStorage.database.execute(
+        "SELECT username, action, powers FROM play_campaign_delegation_audit WHERE campaign_id = ? ORDER BY sequence",
+        [params[:id]]
+      ).map { |entry| { username: entry["username"], action: entry["action"], powers: JSON.parse(entry["powers"]) } }
+      { entries: entries }
+    end
+    render_result(result, :ok)
+  end
+
+  private
+
+  def valid_delegation_payload?(body)
+    username = body["username"]
+    powers = body["powers"]
+    present_string?(username) && powers.is_a?(Array) && powers.any? &&
+      powers.all? { |power| VALID_POWERS.include?(power) } && powers.uniq.length == powers.length
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def append_audit(username, action, powers)
+    sequence = GameStorage.database.get_first_value(
+      "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_delegation_audit WHERE campaign_id = ?", [params[:id]]
+    )
+    GameStorage.database.execute(
+      "INSERT INTO play_campaign_delegation_audit (campaign_id, sequence, username, action, powers) VALUES (?, ?, ?, ?, ?)",
+      [params[:id], sequence, username, action, JSON.generate(powers)]
+    )
+  end
+
+  def delegation_payload(username, powers, active)
+    { username: username, powers: powers, active: active }
+  end
+
+  def render_result(result, success_status)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return bad_request if result == :invalid
+    return render(json: { error: "duplicate active delegate" }, status: :conflict) if result == :conflict
+    return render(json: { error: "unknown delegation" }, status: :not_found) if result == :missing_delegation
+
+    render json: result, status: success_status
+  end
+end
+
+class PlayCampaignProjectionEventsController < ApplicationController
+  include PlayAuthentication
+
+  EVENT_KINDS = %w[set-story increment-danger].freeze
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    event = projection_event_payload(json_body)
+    return bad_request unless event
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      # Projection writes are deliberately player-only. The DM can inspect the
+      # derived state, but must not be able to alter its source event log.
+      next :forbidden unless actor["role"] == "player" && campaign_member?(actor["username"])
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_projection_events WHERE campaign_id = ?",
+        [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_projection_events (campaign_id, sequence, event_id, kind, value) " \
+          "VALUES (?, ?, ?, ?, ?)",
+          [params[:id], sequence, event[:event_id], event[:kind], event[:value]]
+        )
+        increment_projection_metric
+        event_payload(sequence, event[:event_id], event[:kind], event[:value])
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "duplicate event_id" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    render_projection(actor)
+  end
+
+  def rebuild
+    actor = require_play_actor
+    return unless actor
+
+    # No cached state is trusted: this deliberately follows the identical
+    # ordered-log reduction used by the ordinary projection read.
+    render_projection(actor)
+  end
+
+  private
+
+  def projection_event_payload(body)
+    return nil unless body.is_a?(Hash)
+
+    event_id = body["event_id"]
+    kind = body["kind"]
+    return nil unless present_string?(event_id) && EVENT_KINDS.include?(kind)
+
+    if kind == "set-story"
+      value = body["value"]
+      return nil unless present_string?(value)
+
+      { event_id: event_id, kind: kind, value: value }
+    else
+      return nil if body.key?("value")
+
+      { event_id: event_id, kind: kind, value: nil }
+    end
+  end
+
+  def render_projection(actor)
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor) || campaign_member?(actor["username"])
+
+      projection_from_events
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def projection_from_events
+    # The projection has a stable empty-story baseline until a set-story event
+    # is applied. JSON null is not part of the projection contract.
+    story = ""
+    danger = 0
+    applied_event_ids = []
+    GameStorage.database.execute(
+      "SELECT event_id, kind, value FROM play_campaign_projection_events WHERE campaign_id = ? ORDER BY sequence",
+      [params[:id]]
+    ).each do |event|
+      applied_event_ids << event["event_id"]
+      if event["kind"] == "set-story"
+        story = event["value"]
+      else
+        danger += 1
+      end
+    end
+    { story: story, danger: danger, applied_event_ids: applied_event_ids }
+  end
+
+  def event_payload(sequence, event_id, kind, value)
+    payload = { sequence: sequence, event_id: event_id, kind: kind }
+    payload[:value] = value if kind == "set-story"
+    payload
+  end
+
+  def increment_projection_metric
+    GameStorage.database.execute(
+      "INSERT INTO play_campaign_service_metrics (campaign_id, projection_events) VALUES (?, 1) " \
+      "ON CONFLICT(campaign_id) DO UPDATE SET projection_events = projection_events + 1",
+      [params[:id]]
+    )
+  end
+end
+
+# Metrics deliberately load only aggregate service counters, never campaign
+# content or actor details.
+class PlayCampaignServiceMetricsController < ApplicationController
+  include PlayAuthentication
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+
+      counters = GameStorage.database.get_first_row(
+        "SELECT accepted_rate_events, rejected_rate_events, projection_events " \
+        "FROM play_campaign_service_metrics WHERE campaign_id = ?", [params[:id]]
+      )
+      {
+        accepted_rate_events: counters ? counters["accepted_rate_events"] : 0,
+        rejected_rate_events: counters ? counters["rejected_rate_events"] : 0,
+        projection_events: counters ? counters["projection_events"] : 0,
+        uptime_ticks: 1
+      }
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+end
+
+class PlayCampaignServiceModeController < ApplicationController
+  include PlayAuthentication
+
+  def update
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash) && body.keys == ["maintenance"] && [true, false].include?(body["maintenance"])
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT id FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+      next :forbidden unless actor["role"] == "dm"
+
+      ServiceMode.maintenance = body["maintenance"]
+      body["maintenance"]
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: { maintenance: result }
+  end
+end
+
+class PlayCampaignSafeTurnsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless valid_submission?(body)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      GameStorage.database.transaction do
+        duplicate = GameStorage.database.get_first_value(
+          "SELECT 1 FROM play_campaign_safe_turns WHERE campaign_id = ? AND submission_id = ?",
+          [params[:id], body["submission_id"]]
+        )
+        next :duplicate if duplicate
+
+        state = GameStorage.database.get_first_row(
+          "SELECT current_turn FROM play_campaign_safe_turn_states WHERE campaign_id = ?", [params[:id]]
+        )
+        current_turn = state ? state["current_turn"] : 1
+        next [:stale, current_turn] unless body["expected_turn"] == current_turn
+
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_safe_turns (campaign_id, submission_id, action, accepted_turn) VALUES (?, ?, ?, ?)",
+          [params[:id], body["submission_id"], body["action"], current_turn]
+        )
+        if state
+          GameStorage.database.execute(
+            "UPDATE play_campaign_safe_turn_states SET current_turn = ? WHERE campaign_id = ?",
+            [current_turn + 1, params[:id]]
+          )
+        else
+          GameStorage.database.execute(
+            "INSERT INTO play_campaign_safe_turn_states (campaign_id, current_turn) VALUES (?, ?)",
+            [params[:id], current_turn + 1]
+          )
+        end
+        [:created, safe_turn_payload(body["submission_id"], body["action"], current_turn)]
+      end
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "duplicate submission_id" }, status: :conflict) if result == :duplicate
+    return render(json: { current_turn: result[1] }, status: :conflict) if result[0] == :stale
+
+    render json: result[1], status: :created
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      state = GameStorage.database.get_first_value(
+        "SELECT current_turn FROM play_campaign_safe_turn_states WHERE campaign_id = ?", [params[:id]]
+      ) || 1
+      accepted = GameStorage.database.execute(
+        "SELECT submission_id, action, accepted_turn FROM play_campaign_safe_turns " \
+        "WHERE campaign_id = ? ORDER BY accepted_turn", [params[:id]]
+      ).map { |turn| safe_turn_payload(turn["submission_id"], turn["action"], turn["accepted_turn"]) }
+      { current_turn: state, accepted: accepted }
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def valid_submission?(body)
+    body.is_a?(Hash) && present_string?(body["submission_id"]) && present_string?(body["action"]) &&
+      body["expected_turn"].is_a?(Integer) && body["expected_turn"].positive?
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(campaign, actor)
+    campaign["owner"] == actor["username"] || GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?",
+      [params[:id], actor["username"]]
+    )
+  end
+
+  def safe_turn_payload(submission_id, action, accepted_turn)
+    { submission_id: submission_id, action: action, accepted_turn: accepted_turn, next_turn: accepted_turn + 1 }
+  end
+end
+
+class PlayCampaignIdempotentEventsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    key = request.headers["Idempotency-Key"]
+    body = json_body
+    return bad_request unless key.is_a?(String) && !key.strip.empty? && valid_event?(body)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      existing_key = GameStorage.database.get_first_row(
+        "SELECT event_id, value, sequence, idempotency_key FROM play_campaign_idempotent_events " \
+        "WHERE campaign_id = ? AND idempotency_key = ?", [params[:id], key]
+      )
+      if existing_key
+        next existing_key["event_id"] == body["event_id"] && existing_key["value"] == body["value"] ?
+          [:replayed, event_payload(existing_key)] : :key_conflict
+      end
+
+      next :event_conflict if GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_idempotent_events WHERE campaign_id = ? AND event_id = ?",
+        [params[:id], body["event_id"]]
+      )
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_idempotent_events WHERE campaign_id = ?",
+        [params[:id]]
+      )
+      event = {
+        "event_id" => body["event_id"], "value" => body["value"],
+        "sequence" => sequence, "idempotency_key" => key
+      }
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_idempotent_events " \
+        "(campaign_id, sequence, event_id, value, idempotency_key) VALUES (?, ?, ?, ?, ?)",
+        [params[:id], sequence, event["event_id"], event["value"], event["idempotency_key"]]
+      )
+      [:created, event_payload(event)]
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "idempotency key conflict" }, status: :conflict) if result == :key_conflict
+    return render(json: { error: "duplicate event_id" }, status: :conflict) if result == :event_conflict
+
+    replayed, event = result
+    render json: event, status: replayed == :created ? :created : :ok
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      events = GameStorage.database.execute(
+        "SELECT event_id, value, sequence, idempotency_key FROM play_campaign_idempotent_events " \
+        "WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |event| event_payload(event) }
+      { events: events }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def valid_event?(body)
+    body.is_a?(Hash) && present_string?(body["event_id"]) && present_string?(body["value"])
+  end
+
+  # The campaign owner is a member for this endpoint even if they have no
+  # character-membership row. This matches the other campaign read/write APIs.
+  def campaign_member?(campaign, actor)
+    campaign["owner"] == actor["username"] || GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?",
+      [params[:id], actor["username"]]
+    )
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def event_payload(event)
+    {
+      event_id: event["event_id"], value: event["value"], sequence: event["sequence"],
+      idempotency_key: event["idempotency_key"]
+    }
+  end
+end
+
+class PlayCampaignAuditEventsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash) && present_string?(body["kind"]) && present_string?(body["correlation_id"])
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] || campaign_member?(actor["username"])
+
+      correlation_id = body["correlation_id"]
+      next :duplicate if GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_audit_events WHERE campaign_id = ? AND correlation_id = ?",
+        [params[:id], correlation_id]
+      )
+
+      timestamp = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(timestamp), 0) + 1 FROM play_campaign_audit_events WHERE campaign_id = ?", [params[:id]]
+      )
+      entry = {
+        kind: body["kind"],
+        actor: actor["username"],
+        role: campaign["owner"] == actor["username"] ? "DM" : "player",
+        timestamp: timestamp,
+        correlation_id: correlation_id
+      }
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_audit_events " \
+        "(campaign_id, timestamp, kind, actor, role, correlation_id) VALUES (?, ?, ?, ?, ?, ?)",
+        [params[:id], entry[:timestamp], entry[:kind], entry[:actor], entry[:role], entry[:correlation_id]]
+      )
+      entry
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "duplicate correlation_id" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+
+      entries = GameStorage.database.execute(
+        "SELECT kind, actor, role, timestamp, correlation_id FROM play_campaign_audit_events " \
+        "WHERE campaign_id = ? ORDER BY timestamp", [params[:id]]
+      ).map do |entry|
+        {
+          kind: entry["kind"], actor: entry["actor"], role: entry["role"],
+          timestamp: entry["timestamp"], correlation_id: entry["correlation_id"]
+        }
+      end
+      { entries: entries }
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(username)
+    GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], username]
+    )
+  end
+end
+
 class PlayNarrationsController < ApplicationController
   include PlayAuthentication
   include PlayCampaignEvents
@@ -4196,7 +9059,6 @@ class PlayNarrationsController < ApplicationController
   def create
     actor = require_play_actor
     return unless actor
-    return render(json: { error: "forbidden" }, status: :forbidden) unless actor["role"] == "dm"
 
     body = json_body
     text = body["text"] if body.is_a?(Hash)
@@ -4207,14 +9069,19 @@ class PlayNarrationsController < ApplicationController
         "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
       )
       next :missing unless campaign
-      next :forbidden unless campaign["owner"] == actor["username"]
+      delegated = GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_delegations WHERE campaign_id = ? AND username = ? " \
+        "AND active = 1 AND powers = ?",
+        [params[:id], actor["username"], JSON.generate(["narrate"])]
+      )
+      next :forbidden unless campaign["owner"] == actor["username"] || delegated
 
       sequence = next_play_event_sequence(params[:id])
       GameStorage.database.execute(
         "INSERT INTO play_campaign_events (campaign_id, sequence, kind, actor, text) VALUES (?, ?, ?, ?, ?)",
-        [params[:id], sequence, "narration", "dm", text]
+        [params[:id], sequence, "narration", actor["username"], text]
       )
-      { sequence: sequence, kind: "narration", actor: "dm", text: text }
+      { sequence: sequence, kind: "narration", actor: actor["username"], text: text }
     end
     return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
     return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
@@ -5078,11 +9945,873 @@ class DmToolsController < ApplicationController
 
 end
 
+# Safety boundaries and accepted checks are campaign-local.  Boundary changes
+# replace the complete set, while safety checks are an append-only stream.
+class PlayCampaignSafetyController < ApplicationController
+  include PlayAuthentication
+
+  def replace_boundaries
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    tags = body.is_a?(Hash) ? body["blocked_tags"] : nil
+    return bad_request unless valid_tags?(tags)
+
+    sorted_tags = tags.sort
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      GameStorage.database.transaction do
+        GameStorage.database.execute("DELETE FROM play_campaign_safety_boundaries WHERE campaign_id = ?", [params[:id]])
+        sorted_tags.each do |tag|
+          GameStorage.database.execute(
+            "INSERT INTO play_campaign_safety_boundaries (campaign_id, tag) VALUES (?, ?)", [params[:id], tag]
+          )
+        end
+      end
+      { blocked_tags: sorted_tags }
+    end
+    render_result(result)
+  end
+
+  def boundaries
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      { blocked_tags: boundary_tags }
+    end
+    render_result(result)
+  end
+
+  def create_check
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless valid_check?(body)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+      next :duplicate if GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_safety_events WHERE campaign_id = ? AND event_id = ?", [params[:id], body["event_id"]]
+      )
+
+      blocked = boundary_tags
+      next :blocked if body["tags"].any? { |tag| blocked.include?(tag) }
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_safety_events WHERE campaign_id = ?", [params[:id]]
+      )
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_safety_events (campaign_id, sequence, event_id, kind, text, tags) VALUES (?, ?, ?, ?, ?, ?)",
+        [params[:id], sequence, body["event_id"], body["kind"], body["text"], JSON.generate(body["tags"])]
+      )
+      event_payload(body["event_id"], body["kind"], body["text"], body["tags"], sequence)
+    end
+    return render(json: { error: "event id already exists" }, status: :conflict) if result == :duplicate
+    return render(json: { error: "blocked tag" }, status: :conflict) if result == :blocked
+
+    render_result(result, created: true)
+  end
+
+  def events
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      events = GameStorage.database.execute(
+        "SELECT event_id, kind, text, tags, sequence FROM play_campaign_safety_events WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |row| event_payload(row["event_id"], row["kind"], row["text"], JSON.parse(row["tags"]), row["sequence"]) }
+      { events: events }
+    end
+    render_result(result)
+  end
+
+  private
+
+  def valid_tags?(tags)
+    tags.is_a?(Array) && !tags.empty? && tags.all? { |tag| tag.is_a?(String) && !tag.strip.empty? } && tags.uniq.length == tags.length
+  end
+
+  def valid_check?(body)
+    body.is_a?(Hash) && present_string?(body["event_id"]) && present_string?(body["text"]) &&
+      %w[narration chat].include?(body["kind"]) && valid_tags?(body["tags"])
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(campaign, actor)
+    campaign_dm?(campaign, actor) || GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+    )
+  end
+
+  def boundary_tags
+    GameStorage.database.execute(
+      "SELECT tag FROM play_campaign_safety_boundaries WHERE campaign_id = ? ORDER BY tag", [params[:id]]
+    ).map { |row| row["tag"] }
+  end
+
+  def event_payload(event_id, kind, text, tags, sequence)
+    { event_id: event_id, kind: kind, text: text, tags: tags, sequence: sequence }
+  end
+
+  def render_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# A fixture seed is deliberately represented by one campaign-local marker.
+# The public fixture is canonical data, derived from that marker, so a repeat
+# cannot append duplicate characters or events.
+class PlayCampaignFixtureSeedsController < ApplicationController
+  include PlayAuthentication
+
+  CANONICAL_FIXTURE_ID = "canonical-v1"
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash) && body["fixture_id"] == CANONICAL_FIXTURE_ID
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+
+      seeded = GameStorage.database.get_first_value(
+        "SELECT fixture_id FROM play_campaign_fixture_seeds WHERE campaign_id = ?", [params[:id]]
+      )
+      if seeded
+        :existing
+      else
+        GameStorage.database.transaction do
+          GameStorage.database.execute(
+            "INSERT INTO play_campaign_fixture_seeds (campaign_id, fixture_id) VALUES (?, ?)",
+            [params[:id], CANONICAL_FIXTURE_ID]
+          )
+        end
+        :created
+      end
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+
+    render json: canonical_fixture, status: result == :created ? :created : :ok
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+      next :unseeded unless GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_fixture_seeds WHERE campaign_id = ?", [params[:id]]
+      )
+
+      canonical_fixture
+    end
+    return unknown_campaign if result == :missing || result == :unseeded
+    return forbidden if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def campaign_member?(campaign, actor)
+    campaign_dm?(campaign, actor) || GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+    )
+  end
+
+  def canonical_fixture
+    {
+      fixture_id: CANONICAL_FIXTURE_ID,
+      status: "seeded",
+      characters: [
+        { character_id: "fixture-hero", name: "Ari", class: "fighter" },
+        { character_id: "fixture-mage", name: "Bea", class: "wizard" }
+      ],
+      story: "The lantern is lit.",
+      event_ids: ["fixture-event-1", "fixture-event-2"]
+    }
+  end
+
+  def unknown_campaign
+    render json: { error: "unknown campaign" }, status: :not_found
+  end
+
+  def forbidden
+    render json: { error: "forbidden" }, status: :forbidden
+  end
+end
+
+# Moderation reports are a campaign-local append-only queue. A report can make
+# exactly one state transition, from open to resolved, by the campaign DM.
+class PlayCampaignModerationReportsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash)
+
+    report_id = body["report_id"]
+    target_id = body["target_id"]
+    reason = body["reason"]
+    return bad_request unless present_string?(report_id) && present_string?(target_id) && present_string?(reason)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+      next :duplicate if report_record(report_id)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_moderation_reports WHERE campaign_id = ?", [params[:id]]
+      )
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_moderation_reports " \
+        "(campaign_id, sequence, report_id, target_id, reason, status, reporter) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [params[:id], sequence, report_id, target_id, reason, "open", actor["username"]]
+      )
+      report_payload(report_id, target_id, reason, "open", actor["username"], sequence)
+    end
+    render_report_result(result, created: true)
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      reports = GameStorage.database.execute(
+        "SELECT report_id, target_id, reason, status, reporter, sequence, action, note, resolver " \
+        "FROM play_campaign_moderation_reports WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |report| report_from_row(report) }
+      { reports: reports }
+    end
+    render_report_result(result)
+  end
+
+  def resolve
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash)
+
+    action = body["action"]
+    note = body["note"]
+    return bad_request unless %w[allow remove].include?(action) && present_string?(note)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing_campaign unless campaign
+      next :forbidden unless campaign_dm?(campaign, actor)
+      report = report_record(params[:report_id])
+      next :missing_report unless report
+      next :resolved unless report["status"] == "open"
+
+      GameStorage.database.execute(
+        "UPDATE play_campaign_moderation_reports SET status = ?, action = ?, note = ?, resolver = ? " \
+        "WHERE campaign_id = ? AND report_id = ?",
+        ["resolved", action, note, actor["username"], params[:id], params[:report_id]]
+      )
+      report_payload(report["report_id"], report["target_id"], report["reason"], "resolved", report["reporter"],
+                     report["sequence"], action, note, actor["username"])
+    end
+    render_report_result(result)
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(campaign, actor)
+    campaign_dm?(campaign, actor) || GameStorage.database.get_first_value(
+      "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+    )
+  end
+
+  def campaign_dm?(campaign, actor)
+    actor["role"] == "dm" && campaign["owner"] == actor["username"]
+  end
+
+  def report_record(report_id)
+    GameStorage.database.get_first_row(
+      "SELECT report_id, target_id, reason, status, reporter, sequence, action, note, resolver " \
+      "FROM play_campaign_moderation_reports WHERE campaign_id = ? AND report_id = ?", [params[:id], report_id]
+    )
+  end
+
+  def report_from_row(report)
+    report_payload(report["report_id"], report["target_id"], report["reason"], report["status"], report["reporter"],
+                   report["sequence"], report["action"], report["note"], report["resolver"])
+  end
+
+  def report_payload(report_id, target_id, reason, status, reporter, sequence, action = nil, note = nil, resolver = nil)
+    { report_id: report_id, target_id: target_id, reason: reason, status: status, reporter: reporter, sequence: sequence }.tap do |report|
+      if status == "resolved"
+        report[:action] = action
+        report[:note] = note
+        report[:resolver] = resolver
+      end
+    end
+  end
+
+  def render_report_result(result, created: false)
+    return render(json: { error: "unknown campaign" }, status: :not_found) if %i[missing missing_campaign].include?(result)
+    return render(json: { error: "unknown report" }, status: :not_found) if result == :missing_report
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "report id already exists" }, status: :conflict) if result == :duplicate
+    return render(json: { error: "report already resolved" }, status: :conflict) if result == :resolved
+
+    render json: result, status: created ? :created : :ok
+  end
+end
+
+# RNG rolls form an independent, campaign-local append-only ledger. Its result
+# is derived exclusively from the configured seed and the persisted sequence.
+class PlayCampaignRngLedgerController < ApplicationController
+  include PlayAuthentication
+
+  def configure_seed
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash) && present_string?(body["seed"])
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"] && actor["role"] == "dm"
+      next :configured if seed_for_campaign
+
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_rng_seeds (campaign_id, seed) VALUES (?, ?)", [params[:id], body["seed"]]
+      )
+      { seed: body["seed"], rolls: [] }
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+    return render(json: { error: "rng seed already configured" }, status: :conflict) if result == :configured
+
+    render json: result
+  end
+
+  def create_roll
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash)
+    roll_id = body["roll_id"]
+    sides = body["sides"]
+    return bad_request unless present_string?(roll_id) && sides.is_a?(Integer) && (2..100).cover?(sides)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      seed = seed_for_campaign
+      next :unconfigured unless seed
+      next :duplicate if GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_rng_rolls WHERE campaign_id = ? AND roll_id = ?", [params[:id], roll_id]
+      )
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_rng_rolls WHERE campaign_id = ?", [params[:id]]
+      )
+      record = { roll_id: roll_id, sides: sides, result: deterministic_result(seed, sequence, roll_id, sides), sequence: sequence }
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_rng_rolls (campaign_id, sequence, roll_id, sides, result) VALUES (?, ?, ?, ?, ?)",
+        [params[:id], sequence, roll_id, sides, record[:result]]
+      )
+      record
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+    return render(json: { error: "rng seed not configured" }, status: :conflict) if result == :unconfigured
+    return render(json: { error: "roll id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      seed = seed_for_campaign
+      rolls = GameStorage.database.execute(
+        "SELECT roll_id, sides, result, sequence FROM play_campaign_rng_rolls WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      ).map { |roll| { roll_id: roll["roll_id"], sides: roll["sides"], result: roll["result"], sequence: roll["sequence"] } }
+      { seed: seed, rolls: rolls }
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def seed_for_campaign
+    GameStorage.database.get_first_value("SELECT seed FROM play_campaign_rng_seeds WHERE campaign_id = ?", [params[:id]])
+  end
+
+  def campaign_member?(campaign, actor)
+    (actor["role"] == "dm" && campaign["owner"] == actor["username"]) ||
+      GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+      )
+  end
+
+  def deterministic_result(seed, sequence, roll_id, sides)
+    accumulator = 0
+    "#{seed}|#{sequence}|#{roll_id}|#{sides}".encode(Encoding::UTF_8).bytes.each do |byte|
+      accumulator = (accumulator * 31 + byte) & 0xffff_ffff
+    end
+    (accumulator % sides) + 1
+  end
+
+  def unknown_campaign
+    render json: { error: "unknown campaign" }, status: :not_found
+  end
+
+  def forbidden
+    render json: { error: "forbidden" }, status: :forbidden
+  end
+end
+
+# Feed events are an independent campaign-local append-only stream. Cursors
+# are consumed counts rather than row ids, so appending after a page read
+# cannot change the contents of that page's remaining suffix.
+class PlayCampaignFeedEventsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash)
+
+    event_id = body["event_id"]
+    text = body["text"]
+    return bad_request unless present_string?(event_id) && present_string?(text)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_feed_events WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_feed_events (campaign_id, sequence, event_id, text) VALUES (?, ?, ?, ?)",
+          [params[:id], sequence, event_id, text]
+        )
+        event_payload(event_id, text, sequence)
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+    return render(json: { error: "event id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def index
+    actor = require_play_actor
+    return unless actor
+
+    cursor = params.key?(:cursor) ? integer(params[:cursor]) : 0
+    limit = params.key?(:limit) ? integer(params[:limit]) : 2
+    return bad_request unless cursor && cursor >= 0 && limit && (1..3).cover?(limit)
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless campaign_member?(campaign, actor)
+
+      events = GameStorage.database.execute(
+        "SELECT event_id, text, sequence FROM play_campaign_feed_events " \
+        "WHERE campaign_id = ? AND sequence > ? ORDER BY sequence LIMIT ?",
+        [params[:id], cursor, limit]
+      ).map { |event| event_payload(event["event_id"], event["text"], event["sequence"]) }
+      { events: events, next_cursor: cursor + events.length }
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def campaign_member?(campaign, actor)
+    (actor["role"] == "dm" && campaign["owner"] == actor["username"]) ||
+      GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+      )
+  end
+
+  def event_payload(event_id, text, sequence)
+    { event_id: event_id, text: text, sequence: sequence }
+  end
+
+  def unknown_campaign
+    render json: { error: "unknown campaign" }, status: :not_found
+  end
+
+  def forbidden
+    render json: { error: "forbidden" }, status: :forbidden
+  end
+end
+
+# Replay events form an independent, campaign-local append-only stream.  The
+# stored sequence is the successful insertion order, so rebuilding its public
+# state does not consult any clocks or random values.
+class PlayCampaignReplayEventsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    return bad_request unless body.is_a?(Hash)
+
+    event_id = body["event_id"]
+    kind = body["kind"]
+    text = body["text"]
+    return bad_request unless present_string?(event_id) && present_string?(text) && kind == "append"
+
+    result = GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless permitted?(campaign, actor)
+
+      sequence = GameStorage.database.get_first_value(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 FROM play_campaign_replay_events WHERE campaign_id = ?", [params[:id]]
+      )
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_replay_events (campaign_id, sequence, event_id, kind, text) VALUES (?, ?, ?, ?, ?)",
+          [params[:id], sequence, event_id, kind, text]
+        )
+        { event_id: event_id, kind: kind, text: text, sequence: sequence }
+      rescue SQLite3::ConstraintException
+        :duplicate
+      end
+    end
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+    return render(json: { error: "event id already exists" }, status: :conflict) if result == :duplicate
+
+    render json: result, status: :created
+  end
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = replay_for(actor)
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+
+    render json: result
+  end
+
+  def check
+    actor = require_play_actor
+    return unless actor
+
+    result = replay_for(actor)
+    return unknown_campaign if result == :missing
+    return forbidden if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def replay_for(actor)
+    GameStorage.synchronize do
+      campaign = campaign_record
+      next :missing unless campaign
+      next :forbidden unless permitted?(campaign, actor)
+
+      events = GameStorage.database.execute(
+        "SELECT event_id, text FROM play_campaign_replay_events WHERE campaign_id = ? ORDER BY sequence", [params[:id]]
+      )
+      event_ids = events.map { |event| event["event_id"] }
+      story = events.map { |event| event["text"] }.join
+      { story: story, event_ids: event_ids, digest: "#{event_ids.join(",")}|#{story}" }
+    end
+  end
+
+  def campaign_record
+    GameStorage.database.get_first_row("SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]])
+  end
+
+  def permitted?(campaign, actor)
+    (actor["role"] == "dm" && campaign["owner"] == actor["username"]) ||
+      GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?", [params[:id], actor["username"]]
+      )
+  end
+
+  def unknown_campaign
+    render json: { error: "unknown campaign" }, status: :not_found
+  end
+
+  def forbidden
+    render json: { error: "forbidden" }, status: :forbidden
+  end
+end
+
+# Onboarding is a read-only, role-specific view for actors who have already
+# entered a campaign.  Its values are deliberately constants rather than being
+# derived from campaign state, so repeated reads cannot alter or reorder it.
+class PlayCampaignOnboardingController < ApplicationController
+  include PlayAuthentication
+
+  def show
+    actor = require_play_actor
+    return unless actor
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+
+      if actor["role"] == "dm" && campaign["owner"] == actor["username"]
+        :dm
+      elsif GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?",
+        [params[:id], actor["username"]]
+      )
+        :player
+      else
+        :forbidden
+      end
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    if result == :dm
+      render json: { role: "dm", next_steps: ["configure-safety", "invite-players", "start-campaign"], can_mutate: true }
+    else
+      render json: { role: "player", next_steps: ["review-party", "take-turn", "submit-action"], can_mutate: true }
+    end
+  end
+end
+
+# Campaign chat is retained as an ordinary member action.  It is deliberately
+# not part of the spectator projection, but still needs a real authenticated
+# endpoint so an attempted spectator write is rejected as credentials failure.
+class PlayCampaignMessagesController < ApplicationController
+  include PlayAuthentication
+  include PlayCampaignEvents
+
+  def create
+    actor = require_play_actor
+    return unless actor
+
+    body = json_body
+    text = body["text"] if body.is_a?(Hash)
+    return bad_request unless present_string?(text)
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+
+      member = GameStorage.database.get_first_value(
+        "SELECT 1 FROM play_campaign_members WHERE campaign_id = ? AND username = ?",
+        [params[:id], actor["username"]]
+      )
+      next :forbidden unless campaign["owner"] == actor["username"] || member
+
+      GameStorage.database.execute(
+        "INSERT INTO play_campaign_events (campaign_id, sequence, kind, actor, text) VALUES (?, ?, ?, ?, ?)",
+        [params[:id], next_play_event_sequence(params[:id]), "chat", actor["username"], text]
+      )
+      { kind: "chat", actor: actor["username"], text: text }
+    end
+
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result, status: :created
+  end
+end
+
+# Spectator tickets intentionally use a separate credential namespace from
+# play sessions.  Their only permitted projection contains campaign-level
+# public fields, so a ticket cannot accidentally acquire member privileges.
+class PlayCampaignSpectatorsController < ApplicationController
+  include PlayAuthentication
+
+  def create
+    actor = require_play_actor
+    return unless actor
+    return render(json: { error: "forbidden" }, status: :forbidden) unless actor["role"] == "dm"
+
+    body = json_body
+    spectator_id = body["spectator_id"] if body.is_a?(Hash)
+    return bad_request unless present_string?(spectator_id)
+
+    result = GameStorage.synchronize do
+      campaign = GameStorage.database.get_first_row(
+        "SELECT owner FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+      next :forbidden unless campaign["owner"] == actor["username"]
+
+      begin
+        GameStorage.database.execute(
+          "INSERT INTO play_campaign_spectators (spectator_id, campaign_id) VALUES (?, ?)",
+          [spectator_id, params[:id]]
+        )
+        :created
+      rescue SQLite3::ConstraintException
+        :conflict
+      end
+    end
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+    return render(json: { error: "spectator id already exists" }, status: :conflict) if result == :conflict
+
+    render json: { spectator_id: spectator_id, token: "spectator-#{spectator_id}" }, status: :created
+  end
+
+  def show
+    # A valid normal session is deliberately rejected, rather than treated as
+    # absent authentication: this endpoint is exclusively for spectators.
+    return render(json: { error: "forbidden" }, status: :forbidden) if current_play_actor
+
+    spectator_id = spectator_id_from_authorization
+    return render(json: { error: "bad credentials" }, status: :unauthorized) unless spectator_id
+
+    result = GameStorage.synchronize do
+      ticket = GameStorage.database.get_first_row(
+        "SELECT campaign_id FROM play_campaign_spectators WHERE spectator_id = ?", [spectator_id]
+      )
+      next :unauthorized unless ticket
+
+      campaign = GameStorage.database.get_first_row(
+        "SELECT id, name, status FROM play_campaigns WHERE id = ?", [params[:id]]
+      )
+      next :missing unless campaign
+      next :forbidden unless ticket["campaign_id"] == params[:id]
+
+      party_size = GameStorage.database.get_first_value(
+        "SELECT COUNT(*) FROM play_campaign_members WHERE campaign_id = ?", [params[:id]]
+      )
+      story = GameStorage.database.get_first_value(
+        "SELECT story FROM play_campaign_documents WHERE campaign_id = ?", [params[:id]]
+      ) || ""
+      {
+        campaign_id: campaign["id"],
+        name: campaign["name"],
+        status: campaign["status"],
+        party_size: party_size,
+        story: story
+      }
+    end
+    return render(json: { error: "bad credentials" }, status: :unauthorized) if result == :unauthorized
+    return render(json: { error: "unknown campaign" }, status: :not_found) if result == :missing
+    return render(json: { error: "forbidden" }, status: :forbidden) if result == :forbidden
+
+    render json: result
+  end
+
+  private
+
+  def spectator_id_from_authorization
+    match = /\ABearer spectator-(.+)\z/.match(request.authorization.to_s)
+    match && match[1].encode(Encoding::UTF_8)
+  end
+end
+
 GameStorage.initialize_schema!
 DndApi.initialize!
 
 DndApi.routes.draw do
   get "/health", to: "health#show"
+  get "/healthz", to: "readiness#healthz"
+  get "/readyz", to: "readiness#readyz"
+  get "/v1/schema", to: "api_schema#show"
   post "/v1/dice/stats", to: "dice#stats"
   post "/v1/checks/ability", to: "checks#ability"
   post "/v1/encounters/adjusted-xp", to: "encounters#adjusted_xp"
@@ -5097,13 +10826,77 @@ DndApi.routes.draw do
   post "/v1/auth/login", to: "auth#login"
   post "/v1/play/campaigns", to: "play_campaigns#create"
   post "/v1/play/campaigns/:id/members", to: "play_campaigns#create_member"
+  get "/v1/play/campaigns/:id/onboarding", to: "play_campaign_onboarding#show"
+  post "/v1/play/campaigns/:id/messages", to: "play_campaign_messages#create"
+  post "/v1/play/campaigns/:id/spectators", to: "play_campaign_spectators#create"
+  get "/v1/play/campaigns/:id/spectator-view", to: "play_campaign_spectators#show"
+  post "/v1/play/campaigns/:id/invitations", to: "play_campaign_invitations#create"
+  post "/v1/play/campaigns/:id/invitations/:invitation_id/accept", to: "play_campaign_invitations#accept"
+  get "/v1/play/campaigns/:id/invitations", to: "play_campaign_invitations#index"
+  post "/v1/play/campaigns/:id/delegations", to: "play_campaign_delegations#create"
+  delete "/v1/play/campaigns/:id/delegations/:username", to: "play_campaign_delegations#destroy"
+  get "/v1/play/campaigns/:id/delegations/audit", to: "play_campaign_delegations#audit"
+  post "/v1/play/campaigns/:id/audit-events", to: "play_campaign_audit_events#create"
+  get "/v1/play/campaigns/:id/audit-events", to: "play_campaign_audit_events#index"
+  post "/v1/play/campaigns/:id/projection-events", to: "play_campaign_projection_events#create"
+  get "/v1/play/campaigns/:id/projection/rebuild", to: "play_campaign_projection_events#rebuild"
+  get "/v1/play/campaigns/:id/projection", to: "play_campaign_projection_events#show"
+  post "/v1/play/campaigns/:id/feed-events", to: "play_campaign_feed_events#create"
+  get "/v1/play/campaigns/:id/event-feed", to: "play_campaign_feed_events#index"
+  post "/v1/play/campaigns/:id/replay-events", to: "play_campaign_replay_events#create"
+  get "/v1/play/campaigns/:id/replay", to: "play_campaign_replay_events#show"
+  get "/v1/play/campaigns/:id/replay/check", to: "play_campaign_replay_events#check"
+  put "/v1/play/campaigns/:id/rng-seed", to: "play_campaign_rng_ledger#configure_seed"
+  post "/v1/play/campaigns/:id/rng-rolls", to: "play_campaign_rng_ledger#create_roll"
+  get "/v1/play/campaigns/:id/rng-ledger", to: "play_campaign_rng_ledger#show"
+  post "/v1/play/campaigns/:id/moderation/reports", to: "play_campaign_moderation_reports#create"
+  get "/v1/play/campaigns/:id/moderation/reports", to: "play_campaign_moderation_reports#index"
+  put "/v1/play/campaigns/:id/moderation/reports/:report_id/resolution", to: "play_campaign_moderation_reports#resolve"
+  post "/v1/play/campaigns/:id/fixture-seeds", to: "play_campaign_fixture_seeds#create"
+  get "/v1/play/campaigns/:id/fixture-state", to: "play_campaign_fixture_seeds#show"
+  put "/v1/play/campaigns/:id/safety-boundaries", to: "play_campaign_safety#replace_boundaries"
+  get "/v1/play/campaigns/:id/safety-boundaries", to: "play_campaign_safety#boundaries"
+  post "/v1/play/campaigns/:id/safety-checks", to: "play_campaign_safety#create_check"
+  get "/v1/play/campaigns/:id/safety-events", to: "play_campaign_safety#events"
+  post "/v1/play/campaigns/:id/idempotent-events", to: "play_campaign_idempotent_events#create"
+  get "/v1/play/campaigns/:id/idempotent-events", to: "play_campaign_idempotent_events#index"
+  post "/v1/play/campaigns/:id/safe-turns", to: "play_campaign_safe_turns#create"
+  get "/v1/play/campaigns/:id/safe-turns", to: "play_campaign_safe_turns#index"
   post "/v1/play/campaigns/:id/start", to: "play_campaigns#start"
+  put "/v1/play/campaigns/:id/session-zero", to: "play_campaign_session_zero#update"
+  get "/v1/play/campaigns/:id/session-zero", to: "play_campaign_session_zero#show"
+  post "/v1/play/campaigns/:id/content", to: "play_campaign_content#create"
+  put "/v1/play/campaigns/:id/content/:content_id/tags", to: "play_campaign_content#update_tags"
+  get "/v1/play/campaigns/:id/content", to: "play_campaign_content#index"
+  post "/v1/play/campaigns/:id/search-records", to: "play_campaign_search_records#create"
+  get "/v1/play/campaigns/:id/search-records", to: "play_campaign_search_records#index"
+  post "/v1/play/campaigns/:id/rate-events", to: "play_campaign_rate_events#create"
+  get "/v1/play/campaigns/:id/rate-events", to: "play_campaign_rate_events#index"
+  get "/v1/play/campaigns/:id/metrics", to: "play_campaign_service_metrics#show"
+  post "/v1/play/campaigns/:id/service-mode", to: "play_campaign_service_mode#update"
+  post "/v1/play/campaigns/:id/notes", to: "play_campaign_notes#create"
+  get "/v1/play/campaigns/:id/notes", to: "play_campaign_notes#index"
+  get "/v1/play/campaigns/:id/notes/:note_id", to: "play_campaign_notes#show"
+  put "/v1/play/campaigns/:id/notes/:note_id", to: "play_campaign_notes#update"
+  post "/v1/play/campaigns/:id/whispers", to: "play_campaign_whispers#create"
+  get "/v1/play/campaigns/:id/whispers", to: "play_campaign_whispers#index"
+  get "/v1/play/campaigns/:id/characters/:character_id/sheet", to: "play_character_sheets#show"
   get "/v1/play/campaigns/:id/turn", to: "play_campaigns#turn"
   post "/v1/play/campaigns/:id/turn/nudge", to: "play_campaigns#nudge"
   get "/v1/play/campaigns/:id/my-turn", to: "play_campaigns#my_turn"
   get "/v1/play/campaigns/:id/gm/status", to: "play_campaigns#gm_status"
   get "/v1/play/campaigns/:id/document", to: "play_campaigns#document"
   put "/v1/play/campaigns/:id/document", to: "play_campaigns#update_document"
+  post "/v1/play/campaigns/:id/backups", to: "play_campaign_backups#create"
+  get "/v1/play/campaigns/:id/backups", to: "play_campaign_backups#index"
+  post "/v1/play/campaigns/:id/backups/:backup_id/restore", to: "play_campaign_backups#restore"
+  post "/v1/play/campaigns/:id/exports", to: "play_campaign_exports#create"
+  get "/v1/play/campaigns/:id/exports", to: "play_campaign_exports#index"
+  get "/v1/play/campaigns/:id/exports/:version", to: "play_campaign_exports#show"
+  post "/v1/play/campaigns/:id/imports", to: "play_campaign_imports#create"
+  get "/v1/play/campaigns/:id/import-state", to: "play_campaign_imports#show"
+  post "/v1/play/campaigns/:id/migrations", to: "play_campaign_migrations#create"
+  get "/v1/play/campaigns/:id/migration-state", to: "play_campaign_migrations#show"
   get "/v1/play/campaigns/:id/scenes/current", to: "play_campaign_scenes#current"
   post "/v1/play/campaigns/:id/scenes", to: "play_campaign_scenes#create"
   post "/v1/play/campaigns/:id/scenes/:scene_id/enter", to: "play_campaign_scenes#enter"
@@ -5121,10 +10914,56 @@ DndApi.routes.draw do
   post "/v1/play/campaigns/:id/characters/:char_id/transfer", to: "play_character_ownership#transfer"
   get "/v1/play/campaigns/:id/characters/:char_id/currency", to: "play_character_currency#show"
   post "/v1/play/campaigns/:id/characters/:char_id/currency/transfers", to: "play_character_currency#transfer"
+  post "/v1/play/campaigns/:id/transactional-transfers", to: "play_campaign_transactional_transfers#create"
+  get "/v1/play/campaigns/:id/transactional-transfers", to: "play_campaign_transactional_transfers#index"
   post "/v1/play/campaigns/:id/characters/:char_id/inventory/items", to: "play_character_inventory_items#create"
   get "/v1/play/campaigns/:id/characters/:char_id/inventory/items", to: "play_character_inventory_items#index"
   delete "/v1/play/campaigns/:id/characters/:char_id/inventory/items/:item_id", to: "play_character_inventory_items#destroy"
   post "/v1/play/campaigns/:id/characters/:char_id/inventory/items/:item_id/consume", to: "play_character_inventory_items#consume"
+  post "/v1/play/campaigns/:id/recipes", to: "play_campaign_recipes#create"
+  get "/v1/play/campaigns/:id/recipes", to: "play_campaign_recipes#index"
+  post "/v1/play/campaigns/:id/recipes/:recipe_id/craft", to: "play_campaign_recipes#craft"
+  post "/v1/play/campaigns/:id/downtime/activities", to: "play_campaign_downtime#create_activity"
+  post "/v1/play/campaigns/:id/characters/:character_id/downtime/allocations", to: "play_campaign_downtime#create_allocation"
+  post "/v1/play/campaigns/:id/characters/:character_id/downtime/allocations/:activity_id/progress", to: "play_campaign_downtime#progress"
+  get "/v1/play/campaigns/:id/characters/:character_id/downtime/allocations/:activity_id", to: "play_campaign_downtime#show_allocation"
+  post "/v1/play/campaigns/:id/loot", to: "play_campaign_loot#create"
+  post "/v1/play/campaigns/:id/loot/:loot_id/votes", to: "play_campaign_loot#vote"
+  post "/v1/play/campaigns/:id/loot/:loot_id/assign", to: "play_campaign_loot#assign"
+  get "/v1/play/campaigns/:id/loot/:loot_id", to: "play_campaign_loot#show"
+  post "/v1/play/campaigns/:id/npcs", to: "play_campaign_npcs#create"
+  put "/v1/play/campaigns/:id/npcs/:npc_id/agenda", to: "play_campaign_npcs#update_agenda"
+  get "/v1/play/campaigns/:id/npcs/:npc_id", to: "play_campaign_npcs#show"
+  post "/v1/play/campaigns/:id/npcs/:npc_id/dialogue", to: "play_campaign_npc_dialogue#create"
+  get "/v1/play/campaigns/:id/npcs/:npc_id/dialogue", to: "play_campaign_npc_dialogue#index"
+  post "/v1/play/campaigns/:id/relationships", to: "play_campaign_relationships#create"
+  put "/v1/play/campaigns/:id/relationships/:source_id/:target_id/:kind", to: "play_campaign_relationships#update"
+  get "/v1/play/campaigns/:id/relationships", to: "play_campaign_relationships#index"
+  post "/v1/play/campaigns/:id/clues", to: "play_campaign_clues#create"
+  get "/v1/play/campaigns/:id/clues", to: "play_campaign_clues#index"
+  post "/v1/play/campaigns/:id/quests", to: "play_campaign_quests#create"
+  put "/v1/play/campaigns/:id/quests/:quest_id/state", to: "play_campaign_quests#update_state"
+  put "/v1/play/campaigns/:id/quests/:quest_id/rewards", to: "play_campaign_quests#configure_rewards"
+  post "/v1/play/campaigns/:id/quests/:quest_id/rewards/award", to: "play_campaign_quests#award_rewards"
+  get "/v1/play/campaigns/:id/quests", to: "play_campaign_quests#index"
+  get "/v1/play/campaigns/:id/characters/:char_id/rewards", to: "play_character_quest_rewards#show"
+  post "/v1/play/campaigns/:id/factions", to: "play_campaign_factions#create"
+  post "/v1/play/campaigns/:id/factions/:faction_id/reputation", to: "play_campaign_factions#change_reputation"
+  get "/v1/play/campaigns/:id/factions/:faction_id/reputation", to: "play_campaign_factions#reputation"
+  post "/v1/play/campaigns/:id/settlements", to: "play_campaign_settlements#create"
+  put "/v1/play/campaigns/:id/settlements/:settlement_id", to: "play_campaign_settlements#update"
+  post "/v1/play/campaigns/:id/settlements/:settlement_id/discover", to: "play_campaign_settlements#discover"
+  get "/v1/play/campaigns/:id/settlements", to: "play_campaign_settlements#index"
+  post "/v1/play/campaigns/:id/settlements/:settlement_id/shops", to: "play_campaign_shops#create"
+  get "/v1/play/campaigns/:id/settlements/:settlement_id/shops/:shop_id", to: "play_campaign_shops#show"
+  post "/v1/play/campaigns/:id/settlements/:settlement_id/shops/:shop_id/buy", to: "play_campaign_shops#buy"
+  post "/v1/play/campaigns/:id/settlements/:settlement_id/shops/:shop_id/sell", to: "play_campaign_shops#sell"
+  post "/v1/play/campaigns/:id/calendar", to: "play_campaign_calendars#create"
+  get "/v1/play/campaigns/:id/calendar", to: "play_campaign_calendars#show"
+  post "/v1/play/campaigns/:id/calendar/advance", to: "play_campaign_calendars#advance"
+  post "/v1/play/campaigns/:id/world-events", to: "play_campaign_world_events#create"
+  post "/v1/play/campaigns/:id/world-events/:event_id/resolve", to: "play_campaign_world_events#resolve"
+  get "/v1/play/campaigns/:id/world-events", to: "play_campaign_world_events#index"
   put "/v1/play/campaigns/:id/characters/:char_id/equipment/:slot", to: "play_character_equipment#update"
   get "/v1/play/campaigns/:id/characters/:char_id/equipment/:slot", to: "play_character_equipment#show"
   post "/v1/play/campaigns/:id/characters/:char_id/equipment/:slot/attune", to: "play_character_equipment#attune"
