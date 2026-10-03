@@ -127,7 +127,17 @@ instead of mixing the two as identical task types.
 
 Set `FIREWORKS_API_KEY` in the environment before running `pi`-backed models.
 The key is passed to `pi` through the child-process environment, not as a
-command-line argument.
+command-line argument. Neither harness (this one or
+`experiments/dnd-rest-benchmark/rest_harness.py`) reads `~/.secrets`; `pi`
+otherwise uses the key in its own `~/.pi/agent/models.json`.
+
+`pi` is not routed through the exe.dev `fireworks` integration
+(`https://fireworks.int.exe.xyz`). The runs use `pi`'s `anthropic-messages`
+wire API, and `pi` always sends an `x-api-key` header. The integration injects
+the Fireworks key but does not replace that header, so a placeholder key is
+rejected with 401 (checked 2026-10-03). Switching `pi` to the OpenAI-compatible
+API would avoid this, but it would change the wire format the recorded runs
+used, so the direct Fireworks endpoint stays.
 
 ## Outputs
 
